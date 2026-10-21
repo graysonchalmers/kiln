@@ -1,0 +1,86 @@
+---
+name: kiln-3d-assets
+description: Create low-poly and voxel 3D game assets (characters, props, trees, rocks, buildings, items, dioramas, asset packs) with kiln, a compact JavaScript DSL that exports GLB for Godot / Unity / Unreal / Three.js, renders previews an agent can read, and beauty-renders with Blender. Use when asked to make, design or iterate on 3D models for a game.
+---
+
+# kiln: 3D game assets as code
+
+You write a small `.kx.js` file; kiln builds flat-shaded low-poly meshes and greedy-meshed voxels,
+exports a GLB per model and packs (one GLB, one named node per model), and renders previews you
+can read. Needs Node ≥ 22.18 and `npm install` once in this skill's directory. Blender (optional)
+does beauty renders and turntable videos.
+
+`KILN` below means `node <this skill's directory>/bin/kiln.js`.
+
+## Workflow
+
+1. Write `models.kx.js` (template below; more in `examples/` and `showcase/`).
+2. Build what you're working on: `KILN build models.kx.js --only crate,tree`. Each line prints
+   dimensions (w×h×d) and the triangle count.
+3. **Look at it**: read `out/_preview/<name>.png`: hero, front, right and top views, with ground grid
+   (spacing printed in the header), cast shadow and a material legend. Check proportions against
+   the printed dimensions; `KILN info models.kx.js <name>` lists bounds, triangles per material and
+   build steps.
+4. Fix with small edits (a position, a radius, a rotation) and rebuild. Repeat.
+5. Let the user look: start `KILN serve models.kx.js` in the background and give them the URL
+   (drag to orbit, step through the build, rebuilds on save).
+6. Ship: GLBs are in `out/models/` and `out/<pack>.glb`. Portfolio shots:
+   `KILN render models.kx.js <name> --size 1920x1080` (Blender), add `--frames 180` for a turntable MP4.
+
+Errors name file:line:col and suggest fixes. One broken model doesn't stop the others.
+
+## Template
+
+```js
+pal({ bark: "#6e4535", leaf: "#3d8c48", leafL: "#74c45a", stone: "#646985", wood: "#9c6a4d", woodD: "#6e4535",
+  flame: { color: "#ff9b2f", emit: "#ffa030", glow: 6 },            // emissive
+  gold: { color: "#ffb43a", metal: 0.2, rough: 0.3 },
+  s: "#f0a882", t: "#3b67c0", k: "#3b2622" })                          // 1-char keys for voxels
+
+model("pine",
+  cyl(0.12, 0.7, { mat: "bark", sides: 5 }),                          // boxes/cyls/cones sit on y = 0
+  [[0.8, 0.5, 1.1], [0.6, 1.05, 0.95], [0.4, 1.55, 0.8]].map(([r, y, h], i) =>
+    cone(r, h, { mat: i % 2 ? "leaf" : "leafL", sides: 7, pos: [0, y, 0], rot: [0, i * 23, 0], jitter: 0.035 })))
+
+model("crate", box(0.6, 0.6, 0.6, "wood"),
+  sym("x", sym("z", box(0.08, 0.62, 0.08, { mat: "woodD", pos: [0.28, -0.01, 0.28] }))))   // 4 corner posts
+
+model("rock", rock(0.5, { mat: "stone", seed: 3 }))
+model("gem", voxels([`.t.\nttt\n.t.`, `.t.`], { size: 0.1 }))      // layers bottom to top, rows back to front
+
+model("camp", stamp("crate", { pos: [1, 0, 0], rot: [0, 30, 0] }),
+  scatter("pine", { area: [-3, -3, 3, 3], count: 6, scale: [0.7, 1.1] }))
+
+pack("kit", ["pine", "crate", "rock", "gem"])
+```
+
+## Essentials
+
+- **Units**: meters, Y up, +Z is the front, rotations in degrees. Every model is re-centered with
+  its base on y = 0 (`pivot: "center" | "origin"` to change).
+- **Shapes** (last argument = material key or `{ mat, pos, rot, scale, jitter, seed, ... }`):
+  `box(w, h, d)`, `cyl(r, h, { sides, top })`, `cone(r, h)`, `sphere(r, { detail })`,
+  `rock(r, { rough, squash, seed })`, `lathe([r0, y0, r1, y1, ...])`, `extrude([x0, y0, ...], depth)`,
+  `prism(w, h, d)` (gable roof), `wedge(w, h, d)` (ramp).
+  Boxes, cylinders, cones, lathes, prisms and wedges sit on their base; spheres and rocks are centered.
+- **Voxels**: `voxels([layer, ...], { size })`; each layer is a top-down map (rows back → front,
+  "." empty, 1-char palette keys). `voxfn([nx, ny, nz], (x, y, z) => key | null, { size })` for
+  procedural voxels. Greedy meshing keeps triangle counts low.
+- **Structure**: `tf({ pos, rot, scale }, ...items)`, `sym("x" | "z", ...items)` (mirror copy),
+  `stamp(name, { pos, rot, scale, swap })`, `scatter(name, { area, count, scale, rot, y, seed })`,
+  `group(name, [members])` (random pick), variants with `{ base, swap }`.
+- **Materials**: `pal({ key: "#hex" | { color, rough, metal, emit, glow } })`. GLB gets PBR materials;
+  emissive uses `KHR_materials_emissive_strength`.
+
+Full API: [reference.md](reference.md).
+
+## Habits that make better low-poly assets
+
+- Shape language first: a few big primitives that read at a glance, then 2–3 detail parts.
+- Low counts: 6–8 sides for trunks and rocks, `detail: 1` spheres; props 50–800 tris, characters
+  under 1k. `jitter` (0.02–0.08) makes primitives feel hand-made.
+- 2–3 tones per material (leaf / leafL / leafD) placed by where light falls: lighter on top.
+- Never leave coplanar faces touching (they flicker in engines): make trim stand 1–3 cm proud.
+- Use `sym` for anything symmetric and `stamp`/`scatter` for repeats; keep one palette per pack so
+  assets sit together.
+- Check the front and top views: rotations about the wrong axis show up there first.
