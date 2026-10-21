@@ -1,7 +1,7 @@
 // glTF 2.0 binary (GLB) writer: one node per model, one primitive per material, flat normals.
 import { type ClipDef, partValues } from "./anim.ts";
 import { type Face, type Joint, type Light, faceNormal, triangulate } from "./mesh.ts";
-import { type Palette, srgbToLinear } from "./palette.ts";
+import { type Palette, boxUV, srgbToLinear } from "./palette.ts";
 import type { V3 } from "./util.ts";
 
 export interface GlbModel {
@@ -38,8 +38,17 @@ export function glb(models: GlbModel[]): Uint8Array {
   const chunks: Uint8Array[] = [];
   let byteLength = 0;
   const bufferViews: Record<string, unknown>[] = [], accessors: Record<string, unknown>[] = [];
-  const SIZE = { SCALAR: 1, VEC3: 3, VEC4: 4 };
-  const push = (data: Float32Array, kind: "VEC3" | "VEC4" | "SCALAR", min?: number[], max?: number[], vertex = true): number => {
+  const SIZE = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 };
+  /** Raw bytes into the binary chunk (4-byte aligned); returns the bufferView. */
+  const blob = (bytes: Uint8Array, target?: number): number => {
+    bufferViews.push({ buffer: 0, byteOffset: byteLength, byteLength: bytes.length, ...(target ? { target } : {}) });
+    chunks.push(bytes);
+    byteLength += bytes.length;
+    const pad = (4 - (byteLength % 4)) % 4;
+    if (pad) { chunks.push(new Uint8Array(pad)); byteLength += pad; }
+    return bufferViews.length - 1;
+  };
+  const push = (data: Float32Array, kind: "VEC2" | "VEC3" | "VEC4" | "SCALAR", min?: number[], max?: number[], vertex = true): number => {
     const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
     bufferViews.push({ buffer: 0, byteOffset: byteLength, byteLength: bytes.length, ...(vertex ? { target: 34962 } : {}) });
     chunks.push(bytes);
@@ -52,6 +61,16 @@ export function glb(models: GlbModel[]): Uint8Array {
 
   // Materials are shared by key across models (first definition wins).
   const matIndex = new Map<string, number>(), materials: Record<string, unknown>[] = [];
+  const images: Record<string, unknown>[] = [], textures: Record<string, unknown>[] = [], texOf = new Map<Uint8Array, number>();
+  /** An embedded PNG as a texture (repeat-wrapped, mipmapped), shared when the same bytes repeat. */
+  const texture = (bytes: Uint8Array): number => {
+    const hit = texOf.get(bytes);
+    if (hit !== undefined) return hit;
+    images.push({ bufferView: blob(bytes), mimeType: "image/png" });
+    textures.push({ source: images.length - 1, sampler: 0 });
+    texOf.set(bytes, textures.length - 1);
+    return textures.length - 1;
+  };
   let emissiveStrength = false;
   const material = (key: string, pal: Palette): number => {
     let i = matIndex.get(key);
@@ -61,6 +80,18 @@ export function glb(models: GlbModel[]): Uint8Array {
       name: key,
       pbrMetallicRoughness: { baseColorFactor: [...srgbToLinear(m.color), 1], metallicFactor: m.metal, roughnessFactor: m.rough },
     };
+    if (m.tex?.bytes) {
+      // loom maps: albedo (tinted by color), ORM = occlusion R + roughness G + metalness B, GL normal
+      const t = m.tex.bytes, orm = texture(t.orm);
+      mat.pbrMetallicRoughness = { baseColorFactor: [...srgbToLinear(m.color), 1], baseColorTexture: { index: texture(t.albedo) }, metallicFactor: 1, roughnessFactor: 1, metallicRoughnessTexture: { index: orm } };
+      mat.occlusionTexture = { index: orm };
+      mat.normalTexture = { index: texture(t.normal), scale: m.tex.bump };
+      if (t.emissive) {
+        mat.emissiveTexture = { index: texture(t.emissive) };
+        mat.emissiveFactor = [1, 1, 1];
+        if ((m.glow ?? 1) > 1) { mat.extensions = { KHR_materials_emissive_strength: { emissiveStrength: m.glow } }; emissiveStrength = true; }
+      }
+    }
     if (m.emit) {
       mat.emissiveFactor = srgbToLinear(m.emit);
       if ((m.glow ?? 1) > 1) { mat.extensions = { KHR_materials_emissive_strength: { emissiveStrength: m.glow } }; emissiveStrength = true; }
@@ -85,11 +116,14 @@ export function glb(models: GlbModel[]): Uint8Array {
     if (!byMat.size) return undefined;
     const primitives: Record<string, unknown>[] = [];
     for (const [key, tris] of byMat) {
-      const pos = new Float32Array(tris.length * 9), nrm = new Float32Array(tris.length * 9);
+      const tex = pal.get(key).tex;
+      const pos = new Float32Array(tris.length * 9), nrm = new Float32Array(tris.length * 9), uv = tex ? new Float32Array(tris.length * 6) : undefined;
       const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
       tris.forEach((t, i) => {
         const n = faceNormal(t.v);
         t.v.forEach((p, k) => {
+          // UVs from the model-space position (before re-centering), so tiles line up across meshes
+          if (uv && tex) { const [u, v] = boxUV(p, n, tex.uv); uv[i * 6 + k * 2] = u; uv[i * 6 + k * 2 + 1] = v; }
           for (let c = 0; c < 3; c++) {
             const x = p[c] - origin[c];
             pos[i * 9 + k * 3 + c] = x;
@@ -99,7 +133,9 @@ export function glb(models: GlbModel[]): Uint8Array {
           }
         });
       });
-      primitives.push({ attributes: { POSITION: push(pos, "VEC3", min, max), NORMAL: push(nrm, "VEC3") }, material: material(key, pal), mode: 4 });
+      const attributes: Record<string, number> = { POSITION: push(pos, "VEC3", min, max), NORMAL: push(nrm, "VEC3") };
+      if (uv) attributes.TEXCOORD_0 = push(uv, "VEC2");
+      primitives.push({ attributes, material: material(key, pal), mode: 4 });
     }
     meshes.push({ name, primitives });
     return meshes.length - 1;
@@ -177,6 +213,7 @@ export function glb(models: GlbModel[]): Uint8Array {
     nodes, meshes, materials, accessors, bufferViews, buffers: [{ byteLength }],
   };
   if (animations.length) json.animations = animations;
+  if (textures.length) Object.assign(json, { images, textures, samplers: [{ magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 }] });
   const used = [...(emissiveStrength ? ["KHR_materials_emissive_strength"] : []), ...(lights.length ? ["KHR_lights_punctual"] : [])];
   if (used.length) json.extensionsUsed = used;
   if (lights.length) json.extensions = { KHR_lights_punctual: { lights } };

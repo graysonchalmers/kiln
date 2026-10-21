@@ -84,6 +84,8 @@ pack("kit", ["pine", "crate", "rock", "gem"])
 - **Lights**: `light({ type: "point" | "spot", color, power (W), pos, dir, angle })`. Lights travel with
   stamps and mirrors and export to GLB. Keep them outside closed meshes (a bulb sphere shadows its own light),
   and give lit surfaces mid-tone, non-metal colors or the light won't show.
+- **Textures**: `pal({ brick: { tex: "../loom/out/brick_wall", uv: 1.5 } })` uses a loom material
+  (seamless PBR maps) with box-projected UVs, `uv` meters per tile; the GLB embeds every map.
 - **Materials**: `pal({ key: "#hex" | { color, rough, metal, emit, glow } })`. GLB gets PBR materials;
   emissive uses `KHR_materials_emissive_strength`.
 

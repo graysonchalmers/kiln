@@ -2,7 +2,7 @@
 // world-fixed key + fill light, hemispheric ambient, emissive glow, a ground grid with a cast
 // shadow, and 2x supersampling. It is the agent's eyes; Blender is the beauty renderer.
 import { type Face, type Bounds, type Light, faceNormal, triangulate } from "./mesh.ts";
-import { type Palette, srgbToLinear } from "./palette.ts";
+import { type Palette, boxUV, srgbToLinear } from "./palette.ts";
 import { type V3, add, cross, dot, len, norm, scl, sub } from "./util.ts";
 
 export interface ViewOpts {
@@ -95,7 +95,7 @@ export function pick(faces: Face[], b: Bounds, o: ViewOpts, x: number, y: number
 }
 
 export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts = {}): Uint8Array {
-  const S = 2, { W, H, center, radius, eye, proj } = viewCamera(b, o, S);
+  const S = 2, { W, H, center, radius, eye, proj, fwd, right, up, f } = viewCamera(b, o, S);
 
   const lights = o.lights ?? [], night = lights.length > 0;
   const img = new Float32Array(W * H * 3), zb = new Float32Array(W * H).fill(Infinity), ground = new Uint8Array(W * H);
@@ -156,12 +156,12 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
     }
   }
 
-  const lin = new Map<string, { c: [number, number, number]; e?: [number, number, number]; metal: number }>();
+  const lin = new Map<string, { c: [number, number, number]; e?: [number, number, number]; metal: number; tex?: import("./palette.ts").TexRef }>();
   for (const t of tris) {
     let m = lin.get(t.mat);
     if (!m) {
       const mm = pal.get(t.mat);
-      m = { c: srgbToLinear(mm.color), e: mm.emit ? (srgbToLinear(mm.emit).map((x) => x * Math.min(1, (mm.glow ?? 3) / 3)) as [number, number, number]) : undefined, metal: mm.metal };
+      m = { c: srgbToLinear(mm.color), e: mm.emit ? (srgbToLinear(mm.emit).map((x) => x * Math.min(1, (mm.glow ?? 3) / 3)) as [number, number, number]) : undefined, metal: mm.tex ? mm.metal * 0.5 : mm.metal, tex: mm.tex?.albedo ? mm.tex : undefined };
       lin.set(t.mat, m);
     }
     const n = faceNormal(t.v);
@@ -175,10 +175,19 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
     const spec = m.metal > 0 && !night ? m.metal * 0.6 * Math.max(0, dot(nn, norm(add(LIGHT, norm(sub(eye, c0)))))) ** 24 : 0;
     const pl: V3 = night ? punctual(lights, scl(add(add(t.v[0], t.v[1]), t.v[2]), 1 / 3), nn) : [0, 0, 0];
     const col = m.c.map((v, k) => v * (lightAmt + pl[k]) * (1 - m!.metal * 0.4) + spec + (m!.e ? m!.e[k] * (night ? 1.4 : 1) : 0)) as V3;
+    const tx = m.tex, al = tx?.albedo;
     raster(p[0], p[1], p[2], (i, z) => {
       if (z >= zb[i]) return;
       zb[i] = z;
-      img[i * 3] = col[0]; img[i * 3 + 1] = col[1]; img[i * 3 + 2] = col[2];
+      if (al && tx) {
+        // back from the pixel and its depth to the surface point, then the box-projected texel
+        const px = (i % W) + 0.5, py = Math.floor(i / W) + 0.5, a = ((px - W / 2) * z) / f, bb = (-(py - H / 2) * z) / f;
+        const wp: V3 = [eye[0] + right[0] * a + up[0] * bb + fwd[0] * z, eye[1] + right[1] * a + up[1] * bb + fwd[1] * z, eye[2] + right[2] * a + up[2] * bb + fwd[2] * z];
+        const [u, v] = boxUV(wp, n, tx.uv), N = al.n;
+        const xi = ((Math.floor(u * N) % N) + N) % N, yi = ((Math.floor(v * N) % N) + N) % N, k = (yi * N + xi) * 3;
+        const em = tx.emissive, g = night ? 2.2 : 1.2;
+        img[i * 3] = col[0] * al.data[k] + (em ? em.data[k] * g : 0); img[i * 3 + 1] = col[1] * al.data[k + 1] + (em ? em.data[k + 1] * g : 0); img[i * 3 + 2] = col[2] * al.data[k + 2] + (em ? em.data[k + 2] * g : 0);
+      } else { img[i * 3] = col[0]; img[i * 3 + 1] = col[1]; img[i * 3 + 2] = col[2]; }
     });
   }
 

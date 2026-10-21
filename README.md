@@ -15,6 +15,19 @@ builds, errors with exact locations, and a live viewer.
 Everything below is code in [`showcase/`](showcase/), rendered by kiln and Blender. No modeling
 by hand, no image models.
 
+### THE DRAGON'S HOARD: textured with loom
+
+[![The Dragon's Hoard: an isometric vault with mossy brick walls, a wet cobblestone floor, a glowing lava pit, a wooden chest with rusted iron bands, a hoard of hammered gold and a dragon egg in an arched niche](docs/media/dragon_hoard.png)](docs/media/dragon_hoard.mp4)
+
+▶ **[Watch the camera push-in](docs/media/dragon_hoard.mp4)** · source: [`dragon_hoard.kx.js`](showcase/dragon_hoard.kx.js)
+
+Every surface is a seamless PBR material from [**loom**](https://github.com/uilianks/loom): mossy brick,
+wet cobblestone, stained concrete, worn wood, rusted iron, lava rock (emissive), dragon scales and
+hammered gold. A palette entry points at the loom output (`{ tex: T + "brick_wall", uv: 1.5 }`); kiln
+box-projects UVs onto every face and embeds albedo, normal, ORM and emissive in the GLB, so Blender
+(and any engine) renders real relief, roughness and glow. Lit only by the scene: a lava pit, two torches,
+the egg's glow and a spot on the niche.
+
 ### LAST CUP: a cyberpunk noir diorama
 
 ![LAST CUP: camera push-in toward a lonely robot in a rainy neon coffee shop](docs/media/last_cup_3d.gif)

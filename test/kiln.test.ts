@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -9,6 +9,10 @@ import { cross, dot } from "../src/core/util.ts";
 import { loadSource } from "../src/node/load.ts";
 import { writeOutputs } from "../src/node/output.ts";
 import { serve } from "../src/node/server.ts";
+import { deflateSync } from "node:zlib";
+import { glb } from "../src/core/gltf.ts";
+import { png } from "../src/core/png.ts";
+import { loadProject } from "../src/node/load.ts";
 
 const throwsMsg = (fn: () => unknown, re: RegExp) => assert.throws(fn, (e: Error) => re.test(e.message));
 const near = (a: number, b: number, tol: number) => assert.ok(Math.abs(a - b) <= tol, `${a} not within ${tol} of ${b}`);
@@ -194,6 +198,39 @@ model("pair", { pivot: "origin" }, box(1, 1, 1, { mat: "r", pos: [0, 0, 1] }), b
     assert.equal((await post({ name: "pair", view: { yaw: 0 } })).status, 400);
   } finally {
     s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("loom textures: GLB gets UVs, embedded maps and PBR texture slots; the preview samples the albedo", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kiln-tex-"));
+  try {
+    // a minimal loom output folder: 4×4 maps and a manifest
+    const lm = join(dir, "red_tiles");
+    mkdirSync(lm);
+    const solid = (r: number, g: number, b: number) => png(4, 4, new Uint8Array(16 * 4).map((_, i) => [r, g, b, 255][i % 4]), (x) => deflateSync(x));
+    writeFileSync(join(lm, "red_tiles_albedo.png"), solid(255, 0, 0));
+    writeFileSync(join(lm, "red_tiles_normal.png"), solid(128, 128, 255));
+    writeFileSync(join(lm, "red_tiles_orm.png"), solid(255, 200, 0));
+    writeFileSync(join(lm, "red_tiles.material.json"), JSON.stringify({ name: "red_tiles", normal: "gl", maps: { albedo: "red_tiles_albedo.png", normal: "red_tiles_normal.png", orm: "red_tiles_orm.png", emissive: null } }));
+    const file = join(dir, "a.kx.js");
+    writeFileSync(file, `pal({ t: { tex: "red_tiles", uv: 0.5, bump: 0.8 } })\nmodel("cube", box(1, 1, 1, "t"))`);
+    const p = loadProject(file), b = p.build("cube");
+    const bytes = glb([{ name: "cube", faces: b.faces, pal: b.pal }]);
+    const len = new DataView(bytes.buffer).getUint32(12, true), json = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + len)));
+    assert.ok(json.meshes[0].primitives[0].attributes.TEXCOORD_0 !== undefined, "UVs");
+    assert.equal(json.images.length, 3, "albedo, normal, ORM (ORM shared by metallicRoughness and occlusion)");
+    const mat = json.materials[0];
+    assert.ok(mat.pbrMetallicRoughness.baseColorTexture && mat.pbrMetallicRoughness.metallicRoughnessTexture && mat.occlusionTexture, "PBR slots");
+    assert.equal(mat.normalTexture.scale, 0.8);
+    assert.deepEqual(json.samplers[0], { magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 });
+    // the preview: textured red, not the default white tint
+    const rgba = renderView(b.faces, b.pal, b.bounds, { w: 64, h: 64, ground: false });
+    const c = (32 * 64 + 32) * 4;
+    assert.ok(rgba[c] > rgba[c + 1] * 2 && rgba[c] > 60, `center pixel should be red, got ${[rgba[c], rgba[c + 1], rgba[c + 2]]}`);
+    writeFileSync(file, `pal({ t: { tex: "missing_folder" } })\nmodel("cube", box(1, 1, 1, "t"))`);
+    throwsMsg(() => loadProject(file), /no loom material at 'missing_folder'/);
+  } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });

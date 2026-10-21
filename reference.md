@@ -18,6 +18,14 @@ pal({
 })
 ```
 
+**Textures from loom**: `{ tex: "path/to/loom/out/brick_wall", uv: 1.5, bump: 1, color: "#fff" }` uses a
+[loom](https://github.com/uilianks/loom) material (its output folder, or the `.material.json` in it,
+relative to the model file). Every face gets box-projected UVs from its dominant axis, `uv` meters per
+texture tile, so tiles line up across faces and keep their size on any shape. The GLB embeds the albedo
+(tinted by `color`), the ORM map (glTF metallic-roughness from G/B, occlusion from R), the GL normal map
+(`bump` = strength) and the emissive map, all repeat-wrapped; `glow` > 1 boosts the emission. The
+preview rasterizer samples the albedo and emissive, so the viewer shows the texture too.
+
 The default palette has keys `0`–`f` (sweetie16). Voxel grids need single-character keys.
 Every model keeps the palette active where it was defined.
 
