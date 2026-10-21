@@ -5,8 +5,7 @@ layers, lights, mirrors and scatters. kiln builds flat-shaded meshes, exports **
 Unity, Unreal and Three.js, renders previews an AI agent can read, and hands off to **Blender**
 for beauty renders, turntables and camera-move videos.
 
-Third sibling of [**vex**](https://github.com/uilianks/vex) (vector art, skeletal animation) and
-[**chirp**](https://github.com/uilianks/chirp) (game audio), inspired by
+Part of a family with [**vex**](https://github.com/uilianks/vex) (vector art, skeletal animation), [**pxl**](https://github.com/uilianks/pxl) (pixel art), [**chirp**](https://github.com/uilianks/chirp) (game audio) and [**loom**](https://github.com/uilianks/loom) (seamless textures and PBR materials), inspired by
 [**claude-pxl**](https://github.com/crsolver/claude-pxl): sandboxed source files, lazy cached
 builds, errors with exact locations, and a live viewer.
 
