@@ -51,6 +51,25 @@ animate("last_cup", "sip", { frames: 240, fps: 24 }, {
 })
 ```
 
+### LAST CUP, isometric
+
+[![LAST CUP isometric: a cutaway cafe at night, a robot by the rainy window, red and cyan neon](docs/media/last_cup_iso.png)](docs/media/last_cup_iso.mp4)
+
+▶ **[10 s with sound](docs/media/last_cup_iso.mp4)** · source: [`last_cup_iso.kx.js`](showcase/last_cup_iso.kx.js)
+
+The [pxl](https://github.com/uilianks/pxl/tree/main/showcase) isometric pixel-art room rebuilt in 3D: a
+cutaway cube seen from the front-right corner with a long lens (45° yaw, 30° pitch, true isometric).
+The window is in the left wall with rain falling past it, and the counter, CRT and a vertical CAFE
+sign are on the back wall. A hooded sleeper is slumped on the bar, another robot's dead head lies on the
+floor, and the puddles hold the neon. The `night` clip plays rain, the dying F, smoke, the swaying bulb
+and one slow sip; the soundtrack is chirp's `last_cup_iso_3d` mix, timed to the same frames.
+
+```sh
+kiln render showcase/last_cup_iso.kx.js last_cup_iso --mood night --fog 0.02 --yaw 45 --pitch 30 \
+  --lens 135 --focus 0.1,1.3,0.1 --zoom 1.5 --no-ground --frames 240 --clip night --still-camera \
+  --audio ../chirp/showcase/out/sfx/last_cup_iso_3d.wav
+```
+
 ### Forest Kit 3D: a game-ready asset pack
 
 ![Floating island turntable](docs/media/island_turntable.gif)
