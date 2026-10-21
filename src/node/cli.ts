@@ -19,6 +19,8 @@ const USAGE = `kiln — low-poly and voxel 3D game assets as code
       Beauty render with headless Blender (EEVEE). --frames N renders a turntable MP4 (ffmpeg).
       --mood night: dark world, dim moon and haze; the model's light() items light the scene.
       --focus x,y,z aims the camera at a point (model coordinates, see kiln info); --zoom N moves it closer.
+      With --frames: --yaw-to / --pitch-to / --zoom-to make an eased camera move instead of a turntable;
+      --audio FILE muxes a soundtrack into the MP4.
   kiln info   <models.kx.js> <name>
       Dimensions, triangle count, materials and build steps.
   kiln serve  <models.kx.js> [--port 4340] [--out DIR | --no-out]
@@ -28,7 +30,7 @@ const USAGE = `kiln — low-poly and voxel 3D game assets as code
 Model files may be .js or .ts. Default out dir: <model file dir>/out.`;
 
 interface Args { cmd?: string; file?: string; rest: string[]; out?: string | false; only?: string[]; preview?: boolean; turntable?: boolean;
-  port?: number; size?: [number, number]; yaw?: number; pitch?: number; samples?: number; ground?: boolean; transparent?: boolean; frames?: number; mood?: "day" | "night"; fog?: number; lens?: number; zoom?: number; focus?: [number, number, number] }
+  port?: number; size?: [number, number]; yaw?: number; pitch?: number; samples?: number; ground?: boolean; transparent?: boolean; frames?: number; mood?: "day" | "night"; fog?: number; lens?: number; zoom?: number; focus?: [number, number, number]; yawTo?: number; pitchTo?: number; zoomTo?: number; audio?: string }
 
 function parse(argv: string[]): Args {
   const a: Args = { rest: [] };
@@ -58,6 +60,10 @@ function parse(argv: string[]): Args {
     } else if (v === "--fog") a.fog = Number(val());
     else if (v === "--lens") a.lens = Number(val());
     else if (v === "--zoom") a.zoom = Number(val());
+    else if (v === "--yaw-to") a.yawTo = Number(val());
+    else if (v === "--pitch-to") a.pitchTo = Number(val());
+    else if (v === "--zoom-to") a.zoomTo = Number(val());
+    else if (v === "--audio") a.audio = resolve(val());
     else if (v === "--focus") {
       const f = val().split(",").map(Number);
       if (f.length !== 3 || f.some((x) => !Number.isFinite(x))) throw new KilnError("--focus must be x,y,z (model coordinates)");
@@ -96,14 +102,17 @@ export async function main(argv: string[]): Promise<number> {
         const turn = (a.frames ?? 1) > 1;
         const out = typeof a.out === "string" ? resolve(a.out) : join(dirname(file), "out", "renders", name + (turn ? ".mp4" : ".png"));
         mkdirSync(dirname(out), { recursive: true });
-        const ro = { w: a.size?.[0], h: a.size?.[1], yaw: a.yaw, pitch: a.pitch, samples: a.samples, ground: a.ground, transparent: a.transparent, mood: a.mood, fog: a.fog, lens: a.lens, zoom: a.zoom, focus: a.focus };
+        const ro = { w: a.size?.[0], h: a.size?.[1], yaw: a.yaw, pitch: a.pitch, samples: a.samples, ground: a.ground, transparent: a.transparent, mood: a.mood, fog: a.fog, lens: a.lens, zoom: a.zoom, focus: a.focus,
+          move: a.yawTo !== undefined || a.pitchTo !== undefined || a.zoomTo !== undefined
+            ? { yaw: a.yawTo ?? a.yaw ?? 35, pitch: a.pitchTo ?? a.pitch ?? 22, zoom: a.zoomTo ?? a.zoom ?? 1 } : undefined };
         if (!turn) blenderRender(bytes, out, ro);
         else {
           // Turntable: frames in one Blender session, then an MP4 (needs ffmpeg).
           const dir = mkdtempSync(join(dirname(out), ".frames-"));
           try {
             blenderRender(bytes, join(dir, "f%04d.png"), { ...ro, frames: a.frames });
-            const r = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-framerate", "30", "-i", join(dir, "f%04d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-movflags", "+faststart", out]);
+            const audio = a.audio ? ["-i", a.audio, "-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", "192k", "-shortest"] : [];
+            const r = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-framerate", "30", "-i", join(dir, "f%04d.png"), ...audio, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-movflags", "+faststart", out]);
             if (r.error) throw new KilnError("--frames writes an MP4 and needs ffmpeg on PATH");
             if (r.status !== 0) throw new KilnError(`ffmpeg failed: ${String(r.stderr).trim()}`);
           } finally { rmSync(dir, { recursive: true, force: true }); }

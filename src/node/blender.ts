@@ -76,9 +76,9 @@ cam.data.lens = a["lens"]
 dist = rad / math.sin(math.atan(18 / cam.data.lens)) * 1.05 * (max(a["w"], a["h"]) / min(a["w"], a["h"]) if a["w"] < a["h"] else 1) / a["zoom"]
 if a["focus"]:
     f = a["focus"]; ctr = Vector((f[0], -f[2], f[1]))     # glTF Y-up -> Blender Z-up
-def aim(yaw_deg):
-    yaw, pitch = math.radians(yaw_deg), math.radians(a["pitch"])
-    cam.location = ctr + Vector((math.sin(yaw) * math.cos(pitch), -math.cos(yaw) * math.cos(pitch), math.sin(pitch))) * dist
+def aim(yaw_deg, pitch_deg=None, d=None):
+    yaw, pitch = math.radians(yaw_deg), math.radians(a["pitch"] if pitch_deg is None else pitch_deg)
+    cam.location = ctr + Vector((math.sin(yaw) * math.cos(pitch), -math.cos(yaw) * math.cos(pitch), math.sin(pitch))) * (dist if d is None else d)
     cam.rotation_euler = (ctr - cam.location).to_track_quat("-Z", "Y").to_euler()
 aim(a["yaw"])
 # Bloom for emissive parts: a Fog Glow glare in the compositor (API differs across versions).
@@ -106,7 +106,16 @@ try:
     bloom(); print("KILN_BLOOM ok")
 except Exception as e:
     print("KILN_BLOOM skipped", e)
-if a["frames"] > 1:
+if a["frames"] > 1 and a["move"]:
+    # Camera move: ease from (yaw, pitch, zoom) to the *_to values.
+    m = a["move"]; base = dist * a["zoom"]
+    for i in range(a["frames"]):
+        t = i / (a["frames"] - 1); e = t * t * (3 - 2 * t)
+        lerp = lambda x, y: x + (y - x) * e
+        aim(lerp(a["yaw"], m["yaw"]), lerp(a["pitch"], m["pitch"]), base / lerp(a["zoom"], m["zoom"]))
+        sc.render.filepath = a["out"] % i
+        bpy.ops.render.render(write_still=True)
+elif a["frames"] > 1:
     for i in range(a["frames"]):
         aim(a["yaw"] + 360 * i / a["frames"])
         sc.render.filepath = a["out"] % i
@@ -137,6 +146,8 @@ export interface RenderOpts {
   zoom?: number;
   /** Look at this point (model coordinates, Y up) instead of the bounds center. */
   focus?: [number, number, number];
+  /** Camera move instead of a turntable: ease yaw / pitch / zoom to these over the frames. */
+  move?: { yaw: number; pitch: number; zoom: number };
 }
 
 /** Render a GLB to a PNG with Blender (EEVEE). Returns Blender's log on failure. */
@@ -149,7 +160,8 @@ export function blenderRender(glbBytes: Uint8Array, outPng: string, o: RenderOpt
     writeFileSync(script, SCRIPT);
     const args = JSON.stringify({ glb: glbPath, out: outPng, w: o.w ?? 1600, h: o.h ?? 1200, yaw: o.yaw ?? 35, pitch: o.pitch ?? 22,
       samples: o.samples ?? 64, ground: o.ground !== false, transparent: !!o.transparent, frames: o.frames ?? 1,
-      mood: o.mood ?? "day", fog: o.fog ?? 0.03, lens: o.lens ?? 70, zoom: o.zoom ?? 1, focus: o.focus ?? null });
+      mood: o.mood ?? "day", fog: o.fog ?? 0.03, lens: o.lens ?? 70, zoom: o.zoom ?? 1, focus: o.focus ?? null,
+      move: o.move ? { yaw: o.move.yaw, pitch: o.move.pitch, zoom: o.move.zoom } : null });
     const r = spawnSync(cmd[0], [...cmd.slice(1), "--background", "--factory-startup", "--python", script, "--", args], { encoding: "utf8", timeout: 600000 });
     if (r.error) throw new KilnError(`could not start Blender: ${r.error.message}`);
     if (process.env.KILN_DEBUG) console.error(String(r.stdout).split("\n").filter((l) => l.startsWith("KILN_")).join("\n"));
