@@ -26,6 +26,8 @@ does beauty renders and turntable videos.
    (drag to orbit, step through the build, rebuilds on save).
 6. Ship: GLBs are in `out/models/` and `out/<pack>.glb`. Portfolio shots:
    `KILN render models.kx.js <name> --size 1920x1080` (Blender), add `--frames 180` for a turntable MP4.
+   Lit scenes: `--mood night`; framing: `--focus x,y,z --zoom N`; camera moves: `--frames 300 --yaw-to ... --zoom-to ...`,
+   plus `--audio file.wav`. Blender writes only inside your home directory if it's the flatpak.
 
 Errors name file:line:col and suggest fixes. One broken model doesn't stop the others.
 
@@ -69,6 +71,9 @@ pack("kit", ["pine", "crate", "rock", "gem"])
 - **Structure**: `tf({ pos, rot, scale }, ...items)`, `sym("x" | "z", ...items)` (mirror copy),
   `stamp(name, { pos, rot, scale, swap })`, `scatter(name, { area, count, scale, rot, y, seed })`,
   `group(name, [members])` (random pick), variants with `{ base, swap }`.
+- **Lights**: `light({ type: "point" | "spot", color, power (W), pos, dir, angle })`. Lights travel with
+  stamps and mirrors and export to GLB. Keep them outside closed meshes (a bulb sphere shadows its own light),
+  and give lit surfaces mid-tone, non-metal colors or the light won't show.
 - **Materials**: `pal({ key: "#hex" | { color, rough, metal, emit, glow } })`. GLB gets PBR materials;
   emissive uses `KHR_materials_emissive_strength`.
 

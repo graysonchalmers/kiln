@@ -83,6 +83,17 @@ and coplanar faces of one material merge (greedy meshing).
 | `scatter(name, { area: [x0, z0, x1, z1], count, scale: [min, max], rot, y, seed, swap })` | Random copies, reproducible. `rot`: `[min, max]` degrees around Y, default random 0–360, `false` for none. |
 | lists, `null`, `false` | Flattened / skipped. |
 
+## Lights
+
+```js
+light({ type: "point" | "spot", color: "#ffbe78", power: 20, pos: [0, 0, 0], dir: [0, -1, 0], angle: 35, range })
+```
+
+`power` is in watts (Blender's unit); `angle` is the spot's cone half-angle in degrees. Lights are
+items like shapes: they move with `tf`, `sym`, `stamp`, `scatter` and the model pivot, and export
+as `KHR_lights_punctual` (child nodes of the model). Keep a light outside closed meshes such as a
+bulb sphere, or that mesh will shadow it. When a model has lights, previews render at night.
+
 ## Output and commands
 
 `kiln build file.kx.js [--out DIR] [--only a,b] [--turntable] [--no-preview]`
@@ -96,7 +107,15 @@ and coplanar faces of one material merge (greedy meshing).
 
 `kiln render file.kx.js <model|pack> [--out FILE] [--size WxH] [--yaw] [--pitch] [--samples] [--no-ground] [--transparent] [--frames N]`
 renders with headless Blender (EEVEE, AgX, sun + sky lights, compositor bloom). `--frames N` renders
-a turntable MP4 (needs ffmpeg). Blender is found via `$KILN_BLENDER`, `blender` on PATH, or the
+a turntable MP4 (needs ffmpeg).
+
+| Flag | Meaning |
+|---|---|
+| `--mood night` | Dark world, faint moonlight and volumetric haze (`--fog`, default 0.03); the model's lights do the work. |
+| `--focus x,y,z` | Aim at a point in model coordinates (Y up) instead of the bounds center. |
+| `--zoom N`, `--lens MM` | Move the camera N times closer than fit-to-bounds; focal length (default 70). |
+| `--yaw-to`, `--pitch-to`, `--zoom-to` | With `--frames`: an eased camera move from the start values to these, instead of a turntable. |
+| `--audio FILE` | Mux a soundtrack into the MP4 (e.g. a chirp WAV). | Blender is found via `$KILN_BLENDER`, `blender` on PATH, or the
 `org.blender.Blender` flatpak.
 
 `kiln info file.kx.js <name>` prints bounds, triangles per material and build steps.
