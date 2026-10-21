@@ -94,6 +94,30 @@ items like shapes: they move with `tf`, `sym`, `stamp`, `scatter` and the model 
 as `KHR_lights_punctual` (child nodes of the model). Keep a light outside closed meshes such as a
 bulb sphere, or that mesh will shadow it. When a model has lights, previews render at night.
 
+## Animation
+
+```js
+model("windmill", ...,
+  part("sails", { pivot: [0, 2.3, 0.6] }, ...items),            // a named node rotating about its pivot
+  part("lantern", { pivot: [1.1, 1.3, 0.9] }, ...items,
+    part("flame", { pivot: [1.1, 1.06, 0.9] }, ...items)))       // nested parts inherit their parent's motion
+animate("windmill", "turn", { frames: 48, fps: 24 }, {
+  sails: { rot: [[0, [0, 0, 0], "linear"], [48, [0, 0, -360]]] },
+  flame: { scale: [[0, 1, "step"], [7, 0.5, "step"], [9, 1]] },
+})
+```
+
+| Part | Meaning |
+|---|---|
+| `part(name, { pivot, parent? }, ...items)` | Items become a named node (glTF node) that rotates, moves and scales about `pivot`. Lights inside move with it. |
+| `animate(model, clip, { frames, fps = 24 }, tracks)` | Keyframed clip: `{ part: { rot, move, scale } }`. |
+| keys | `[[frame, value, ease?], ...]`, frames 0..`frames`; `rot` is `[x, y, z]` degrees (a number = around Y), `move` `[dx, dy, dz]`, `scale` a number or `[x, y, z]`. Eases: `inOut` (default), `linear`, `in`, `out`, `step`. |
+| axes | Rotations are about the final model's axes, through the pivot. A model stamped with `rot: [0, -90, 0]` turns its "forward" axis too: check the clip strip. |
+| `stamp(name, { as })` | Prefixes the stamped model's parts (`lamp1.sway`) so several copies can animate separately. `sym` copies get a `~m` suffix. Scattered copies are static. |
+
+Clips export as glTF animations (one sample per frame, linear). `kiln build` writes
+`out/_preview/<model>.<clip>.png`: 8 posed frames. Hide a part by scaling it to 0.001 (blinking signs, flames).
+
 ## Output and commands
 
 `kiln build file.kx.js [--out DIR] [--only a,b] [--turntable] [--no-preview]`
@@ -115,7 +139,10 @@ a turntable MP4 (needs ffmpeg).
 | `--focus x,y,z` | Aim at a point in model coordinates (Y up) instead of the bounds center. |
 | `--zoom N`, `--lens MM` | Move the camera N times closer than fit-to-bounds; focal length (default 70). |
 | `--yaw-to`, `--pitch-to`, `--zoom-to` | With `--frames`: an eased camera move from the start values to these, instead of a turntable. |
-| `--audio FILE` | Mux a soundtrack into the MP4 (e.g. a chirp WAV). | Blender is found via `$KILN_BLENDER`, `blender` on PATH, or the
+| `--audio FILE` | Mux a soundtrack into the MP4 (e.g. a chirp WAV). |
+| `--clip NAME` | Play an `animate()` clip: looping over `--frames` (the video uses the clip's fps), or one pose with `--clip-frame N`. |
+| `--still-camera` | With `--frames` and no camera move: keep the camera fixed (otherwise it orbits). |
+| `--bloom N` | Glow strength around emissive materials (default 3, 0 = off). | Blender is found via `$KILN_BLENDER`, `blender` on PATH, or the
 `org.blender.Blender` flatpak.
 
 `kiln info file.kx.js <name>` prints bounds, triangles per material and build steps.

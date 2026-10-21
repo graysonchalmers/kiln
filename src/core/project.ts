@@ -1,8 +1,9 @@
 // Project: the registry a model file fills in (the DSL), plus the lazy, cached, cycle-checked
 // builder that turns definitions into face lists.
 import { KilnError, didYouMean, wrap } from "./errors.ts";
-import { type Bounds, type Face, type Light, type Part, bounds, jitter, recolor, transform, transformLights, transformPart, triCount } from "./mesh.ts";
+import { type Bounds, type Face, type Joint, type Light, type Part, bounds, renameParts, jitter, recolor, transform, transformLights, transformPart, triCount } from "./mesh.ts";
 import { Palette, normHex } from "./palette.ts";
+import { type ClipDef, checkTracks } from "./anim.ts";
 import { box, cyl, extrude, lathe, prism, rock, sphere, wedge } from "./prims.ts";
 import { gridFn, meshGrid, parseLayers } from "./voxel.ts";
 import { type M, type V3, globRe, hash, mul, rng, rotM, scaleM, translate } from "./util.ts";
@@ -14,7 +15,7 @@ export interface Step {
 
 /** Geometry made at definition time, or a reference resolved at build time. */
 interface Geo { __geo: true; faces: Face[]; lights?: Light[]; step: Step }
-interface Ref { __ref: "stamp" | "scatter" | "tf" | "sym"; args: unknown[]; step: Step }
+interface Ref { __ref: "stamp" | "scatter" | "tf" | "sym" | "part"; args: unknown[]; step: Step }
 type Item = Geo | Ref | Item[] | null | undefined | false;
 
 export interface ModelOpts {
@@ -48,6 +49,8 @@ export interface Built {
   tris: number;
   pal: Palette;
   lights: Light[];
+  /** Animatable parts (named nodes with pivots). */
+  joints: Joint[];
 }
 
 const MODEL_OPTS = ["pivot", "base", "swap", "scale"];
@@ -90,6 +93,7 @@ export class Project {
   readonly order: string[] = [];
   readonly groups = new Map<string, { name: string; members: string[]; loc?: string }>();
   readonly packs: PackDef[] = [];
+  readonly clips: ClipDef[] = [];
   readonly files: string[] = [];
   pal = Palette.default();
   includeHook?: (path: string) => void;
@@ -208,6 +212,22 @@ export class Project {
       if (o.range !== undefined) l.range = num(o.range, "range");
       return { __geo: true, faces: [], lights: [l], step: { label: `light(${type} ${color} ${power}W)`, loc } };
     });
+    env.part = (name: unknown, o: unknown, ...items: unknown[]) => at("part", () => {
+      if (typeof name !== "string" || !/^[A-Za-z0-9_.~-]+$/.test(name)) throw new KilnError('part("name", { pivot: [x, y, z], parent? }, ...items): names use letters, digits, _ . ~ -');
+      if (!isPlain(o)) throw new KilnError(`part '${name}' needs { pivot: [x, y, z] }`);
+      checkKeys(`part '${name}'`, o, ["pivot", "parent"]);
+      vec(o.pivot, "pivot", [0, 0, 0]);
+      if (o.pivot === undefined) throw new KilnError(`part '${name}' needs { pivot: [x, y, z] }: the point it rotates about`);
+      if (o.parent !== undefined && typeof o.parent !== "string") throw new KilnError(`part '${name}': parent must be a part name`);
+      return ref("part", [name, o, ...items], `part("${name}")`);
+    });
+    env.animate = (model: unknown, name: unknown, o: unknown, tracks: unknown) => at("animate", (loc) => {
+      if (typeof model !== "string" || typeof name !== "string" || !isPlain(o)) throw new KilnError('animate("model", "clip", { frames, fps }, { part: { rot, move, scale } })');
+      checkKeys("animate", o, ["frames", "fps"]);
+      const frames = num(o.frames, "frames", 1), fps = o.fps === undefined ? 24 : num(o.fps, "fps", 1);
+      if (this.clips.some((c) => c.model === model && c.name === name)) throw new KilnError(`model '${model}' already has a clip '${name}'`);
+      this.clips.push({ model, name, frames, fps, tracks: checkTracks(tracks, frames), loc });
+    });
     env.tf = (o: unknown, ...items: unknown[]) => at("tf", () => {
       if (!isPlain(o)) throw new KilnError("tf({ pos, rot, scale }, ...items)");
       checkKeys("tf", o, PLACE);
@@ -220,7 +240,8 @@ export class Project {
     });
     env.stamp = (name: unknown, o: unknown = {}) => at("stamp", () => {
       if (typeof name !== "string" || !isPlain(o)) throw new KilnError('stamp("name", { pos, rot, scale, swap })');
-      checkKeys("stamp", o, [...PLACE, "swap"]);
+      checkKeys("stamp", o, [...PLACE, "swap", "as"]);
+      if (o.as !== undefined && typeof o.as !== "string") throw new KilnError("stamp `as` must be a name: it prefixes the stamped model's parts");
       for (const [k, v] of Object.entries((o.swap ?? {}) as Record<string, string>)) { mat(k); mat(v); }
       placeM(o);
       return ref("stamp", [name, o], `stamp("${name}")`);
@@ -298,18 +319,20 @@ export class Project {
   }
 
   private buildDef(def: ModelDef): Built {
-    let faces: Face[] = [], lights: Light[] = [];
+    let faces: Face[] = [], lights: Light[] = [], joints: Joint[] = [];
     const steps: Built["steps"] = [];
     if (def.opts.base) {
       const b = this.build(def.opts.base);
       faces.push(...b.faces);
       lights.push(...b.lights);
+      joints.push(...b.joints);
       steps.push({ label: `base '${def.opts.base}'`, loc: def.loc, end: faces.length });
     }
     for (const item of def.items) {
       const part = this.expand(item, 0);
       faces.push(...part.faces);
       lights.push(...part.lights);
+      joints.push(...(part.joints ?? []));
       const st = isGeo(item) || isRef(item) ? item.step : { label: Array.isArray(item) ? `[${item.length} items]` : "item", loc: def.loc };
       steps.push({ label: st.label, loc: st.loc, end: faces.length });
     }
@@ -317,21 +340,29 @@ export class Project {
     if (def.opts.scale !== undefined) {
       const m = scaleM(vec(def.opts.scale, "scale", [1, 1, 1]));
       ({ faces, lights } = transformPart({ faces, lights }, m));
+      joints = transformPart({ faces: [], lights: [], joints }, m).joints!;
     }
     const b = bounds(faces), pivot = def.opts.pivot ?? "bottom";
     if (pivot !== "origin" && faces.length) {
       const t: V3 = [-(b.min[0] + b.max[0]) / 2, pivot === "bottom" ? -b.min[1] : -(b.min[1] + b.max[1]) / 2, -(b.min[2] + b.max[2]) / 2];
       ({ faces, lights } = transformPart({ faces, lights }, translate(t)));
+      joints = transformPart({ faces: [], lights: [], joints }, translate(t)).joints!;
     }
-    return { name: def.name, faces, steps, bounds: bounds(faces), tris: triCount(faces), pal: def.pal, lights };
+    const names = new Set<string>();
+    for (const j of joints) {
+      if (names.has(j.name)) throw new KilnError(`part '${j.name}' appears twice: stamp copies with { as: "name" } so their parts get unique names`);
+      names.add(j.name);
+    }
+    for (const j of joints) if (j.parent && !names.has(j.parent)) throw new KilnError(`part '${j.name}': unknown parent '${j.parent}'${didYouMean(j.parent, names)}`);
+    return { name: def.name, faces, steps, bounds: bounds(faces), tris: triCount(faces), pal: def.pal, lights, joints };
   }
 
   private expand(item: unknown, depth: number): Part {
     if (depth > 64) throw new KilnError("items nest too deep");
     if (item === null || item === undefined || item === false) return { faces: [], lights: [] };
     if (Array.isArray(item)) {
-      const out: Part = { faces: [], lights: [] };
-      for (const v of item) { const p = this.expand(v, depth + 1); out.faces.push(...p.faces); out.lights.push(...p.lights); }
+      const out: Part = { faces: [], lights: [], joints: [] };
+      for (const v of item) { const p = this.expand(v, depth + 1); out.faces.push(...p.faces); out.lights.push(...p.lights); out.joints!.push(...(p.joints ?? [])); }
       return out;
     }
     if (isGeo(item)) return { faces: item.faces, lights: item.lights ?? [] };
@@ -346,8 +377,20 @@ export class Project {
     const a = r.args;
     if (r.__ref === "tf") return transformPart(this.expand(a.slice(1), depth + 1), placeM(a[0] as Record<string, unknown>));
     if (r.__ref === "sym") {
-      const p = this.expand(a.slice(1), depth + 1), q = transformPart(p, scaleM(a[0] === "x" ? [-1, 1, 1] : [1, 1, -1]));
-      return { faces: [...p.faces, ...q.faces], lights: [...p.lights, ...q.lights] };
+      const p = this.expand(a.slice(1), depth + 1);
+      // The mirror copy's parts get a "~m" suffix so both sides can animate independently.
+      const q = renameParts(transformPart(p, scaleM(a[0] === "x" ? [-1, 1, 1] : [1, 1, -1])), (n) => n + "~m");
+      return { faces: [...p.faces, ...q.faces], lights: [...p.lights, ...q.lights], joints: [...(p.joints ?? []), ...(q.joints ?? [])] };
+    }
+    if (r.__ref === "part") {
+      const [name, o] = a as [string, Record<string, unknown>];
+      const p = this.expand(a.slice(2), depth + 1);
+      return {
+        faces: p.faces.map((f) => (f.part ? f : { ...f, part: name })),
+        lights: p.lights.map((l) => (l.part ? l : { ...l, part: name })),
+        joints: [{ name, parent: o.parent as string | undefined, pivot: vec(o.pivot, "pivot", [0, 0, 0]) },
+          ...(p.joints ?? []).map((j) => (j.parent ? j : { ...j, parent: name }))],
+      };
     }
     const name = a[0] as string, o = a[1] as Record<string, unknown>;
     const cands = this.candidates(name);
@@ -355,7 +398,8 @@ export class Project {
     if (r.__ref === "stamp") {
       const b = this.build(pick(rng(hash(`${name}|${JSON.stringify(o.pos ?? 0)}`))));
       const f = o.swap ? recolor(b.faces, o.swap as Record<string, string>) : b.faces;
-      return transformPart({ faces: f, lights: b.lights }, placeM(o));
+      const placed = transformPart({ faces: f, lights: b.lights, joints: b.joints }, placeM(o));
+      return o.as ? renameParts(placed, (n) => `${o.as}.${n}`) : placed;
     }
     // scatter
     const [x0, z0, x1, z1] = o.area as number[];
@@ -368,7 +412,9 @@ export class Project {
       const ry = o.rot === false ? 0 : Array.isArray(o.rot) ? o.rot[0] + rr() * (o.rot[1] - o.rot[0]) : rr() * 360;
       const b = this.build(pick(rr));
       const m = placeM({ pos: [x, Number(o.y ?? 0), z], rot: [0, ry, 0], scale: s });
-      out.faces.push(...transform(o.swap ? recolor(b.faces, o.swap as Record<string, string>) : b.faces, m));
+      // Scattered copies are static set dressing: their parts fold into the body.
+      const fs = (o.swap ? recolor(b.faces, o.swap as Record<string, string>) : b.faces).map((f) => (f.part ? { ...f, part: undefined } : f));
+      out.faces.push(...transform(fs, m));
       out.lights.push(...transformLights(b.lights, m));
     }
     return out;

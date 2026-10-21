@@ -6,6 +6,15 @@ import { type M, type V3, apply, det, dot, hash, norm, rng } from "./util.ts";
 export interface Face {
   v: V3[];
   mat: string;
+  /** Animated part this face belongs to (none = the model's static body). */
+  part?: string;
+}
+
+/** An animatable part: a named node that rotates / moves / scales about its pivot. */
+export interface Joint {
+  name: string;
+  parent?: string;
+  pivot: V3;
 }
 
 /** Newell normal (robust for any planar polygon), counter-clockwise = outward. */
@@ -37,12 +46,24 @@ export interface Light {
   /** Spot cone half-angle in degrees. */
   angle?: number;
   range?: number;
+  part?: string;
 }
 
 /** Geometry plus the lights that travel with it through stamps, mirrors and transforms. */
 export interface Part {
   faces: Face[];
   lights: Light[];
+  joints?: Joint[];
+}
+
+/** Rename every part in a bundle (stamp `as`, mirrored copies, scatter instances). */
+export function renameParts(p: Part, fn: (n: string) => string): Part {
+  if (!p.joints?.length) return p;
+  return {
+    faces: p.faces.map((f) => (f.part ? { ...f, part: fn(f.part) } : f)),
+    lights: p.lights.map((l) => (l.part ? { ...l, part: fn(l.part) } : l)),
+    joints: p.joints.map((j) => ({ name: fn(j.name), parent: j.parent && fn(j.parent), pivot: j.pivot })),
+  };
 }
 
 export function transformLights(lights: Light[], m: M): Light[] {
@@ -53,19 +74,19 @@ export function transformLights(lights: Light[], m: M): Light[] {
 }
 
 export function transformPart(p: Part, m: M): Part {
-  return { faces: transform(p.faces, m), lights: transformLights(p.lights, m) };
+  return { faces: transform(p.faces, m), lights: transformLights(p.lights, m), joints: p.joints?.map((j) => ({ ...j, pivot: apply(m, j.pivot) })) };
 }
 
 export function transform(faces: Face[], m: M): Face[] {
   const flip = det(m) < 0;
   return faces.map((f) => {
     const v = f.v.map((p) => apply(m, p));
-    return { v: flip ? v.reverse() : v, mat: f.mat };
+    return { ...f, v: flip ? v.reverse() : v };
   });
 }
 
 export function recolor(faces: Face[], swap: Record<string, string>): Face[] {
-  return faces.map((f) => (swap[f.mat] ? { v: f.v, mat: swap[f.mat] } : f));
+  return faces.map((f) => (swap[f.mat] ? { ...f, mat: swap[f.mat] } : f));
 }
 
 /** Move welded vertices together by up to `amount` (deterministic): the classic low-poly wobble. */
@@ -82,7 +103,7 @@ export function jitter(faces: Face[], amount: number, seed: number): Face[] {
     return o;
   };
   // Polygons with more than 3 corners would turn non-planar: triangulate first.
-  return triangulate(faces).map((f) => ({ v: f.v.map(at), mat: f.mat }));
+  return triangulate(faces).map((f) => ({ ...f, v: f.v.map(at) }));
 }
 
 /** Fan triangulation (faces are convex). */
@@ -90,7 +111,7 @@ export function triangulate(faces: Face[]): Face[] {
   const out: Face[] = [];
   for (const f of faces) {
     if (f.v.length === 3) { out.push(f); continue; }
-    for (let i = 1; i < f.v.length - 1; i++) out.push({ v: [f.v[0], f.v[i], f.v[i + 1]], mat: f.mat });
+    for (let i = 1; i < f.v.length - 1; i++) out.push({ ...f, v: [f.v[0], f.v[i], f.v[i + 1]] });
   }
   return out;
 }

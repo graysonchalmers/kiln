@@ -71,6 +71,10 @@ pack("kit", ["pine", "crate", "rock", "gem"])
 - **Structure**: `tf({ pos, rot, scale }, ...items)`, `sym("x" | "z", ...items)` (mirror copy),
   `stamp(name, { pos, rot, scale, swap })`, `scatter(name, { area, count, scale, rot, y, seed })`,
   `group(name, [members])` (random pick), variants with `{ base, swap }`.
+- **Animation**: `part(name, { pivot }, ...items)` makes a named, animatable node; `animate(model, clip, { frames, fps },
+  { part: { rot: [[frame, [x, y, z], ease?], ...], move, scale } })` exports a glTF animation. Read the
+  `out/_preview/<model>.<clip>.png` strip, then check key poses in Blender with `--clip NAME --clip-frame N`.
+  Rotation axes are the final model's: stamping with a rotation turns them too.
 - **Lights**: `light({ type: "point" | "spot", color, power (W), pos, dir, angle })`. Lights travel with
   stamps and mirrors and export to GLB. Keep them outside closed meshes (a bulb sphere shadows its own light),
   and give lit surfaces mid-tone, non-metal colors or the light won't show.

@@ -133,3 +133,38 @@ test("the preview renderer draws the model in its material color", () => {
   const i = (32 * 64 + 32) * 4;
   assert.ok(img[i] > 120 && img[i + 1] < 40 && img[i + 2] < 40, `center pixel ${img.slice(i, i + 3)} should be red`);
 });
+
+test("parts and clips: posing rotates about the pivot; GLB gets part nodes and animations", async () => {
+  const { poseFaces } = await import("../src/core/anim.ts");
+  const p = loadSource(`model("m", { pivot: "origin" }, box(1, 1, 1, "1"),
+  part("arm", { pivot: [0, 1, 0] }, box(0.2, 1, 0.2, { mat: "2", pos: [0, 1, 0] }),
+    part("hand", { pivot: [0, 2, 0] }, box(0.1, 0.1, 0.1, { mat: "3", pos: [0, 2, 0] }))))
+animate("m", "raise", { frames: 10, fps: 10 }, { arm: { rot: [[0, [0, 0, 0], "linear"], [10, [0, 0, 90]]] } })`);
+  const b = p.build("m");
+  assert.deepEqual(b.joints.map((j) => [j.name, j.parent ?? null]), [["arm", null], ["hand", "arm"]]);
+  // at frame 10 the arm points along -x (90° about z), and the hand follows it
+  const posed = poseFaces(b.faces, b.lights, b.joints, p.clips[0].tracks, 10);
+  const hand = posed.faces.filter((f) => f.part === "hand").flatMap((f) => f.v);
+  near(Math.max(...hand.map((v) => v[0])), -1, 1e-6);
+  near(Math.min(...hand.map((v) => v[0])), -1.1, 1e-6);
+  const dir = mkdtempSync(join(tmpdir(), "kiln-"));
+  try {
+    writeOutputs(p, dir, { preview: false });
+    const buf = readFileSync(join(dir, "models/m.glb"));
+    const json = JSON.parse(buf.toString("utf8", 20, 20 + buf.readUInt32LE(12)));
+    const byName = Object.fromEntries(json.nodes.map((n: { name: string }, i: number) => [n.name, [n, i]]));
+    assert.deepEqual(byName["m.arm"][0].translation, [0, 1, 0]);
+    assert.deepEqual(byName["m.arm.hand"]?.[0]?.translation ?? byName["m.hand"][0].translation, [0, 1, 0]);
+    assert.ok(byName.m[0].children.includes(byName["m.arm"][1]));
+    const anim = json.animations[0];
+    assert.equal(anim.name, "raise");
+    assert.equal(anim.channels[0].target.path, "rotation");
+    assert.equal(json.accessors[anim.samplers[0].input].count, 11);
+    assert.equal(json.accessors[anim.samplers[0].input].max[0], 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  throwsMsg(() => loadSource(`model("m", part("a", { pivot: [0, 0, 0] }, box(1, 1, 1, "1")), part("a", { pivot: [0, 0, 0] }, box(1, 1, 1, "1")))`).build("m"),
+    /part 'a' appears twice: stamp copies with \{ as: "name" \}/);
+  throwsMsg(() => loadSource(`animate("m", "c", { frames: 4 }, { a: { spin: [[0, 1]] } })`), /unknown channel 'spin'/);
+});

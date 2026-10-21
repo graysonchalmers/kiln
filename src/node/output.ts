@@ -8,7 +8,7 @@ import { type GlbModel, glb } from "../core/gltf.ts";
 import { type Face, type Light, bounds, transform, transformLights, triCount } from "../core/mesh.ts";
 import type { Built, PackDef, Project } from "../core/project.ts";
 import { type V3, translate } from "../core/util.ts";
-import { previewPng, viewPng } from "./preview.ts";
+import { clipStrip, previewPng, viewPng } from "./preview.ts";
 
 export interface OutputOptions {
   only?: string[];
@@ -58,7 +58,7 @@ export function packLayout(p: Project, pk: PackDef): { models: GlbModel[]; combi
     }
     z += depth[ri] + gap;
   });
-  return { models, combined: { name: pk.name, faces: all, steps: [], bounds: bounds(all), tris: triCount(all), pal: built[0].pal, lights: allLights } };
+  return { models, combined: { name: pk.name, faces: all, steps: [], bounds: bounds(all), tris: triCount(all), pal: built[0].pal, lights: allLights, joints: [] } };
 }
 
 function turntable(b: Built, out: string): void {
@@ -85,10 +85,15 @@ export function writeOutputs(p: Project, out: string, opts: OutputOptions = {}):
   for (const name of want ? p.order.filter((n) => want.has(n)) : p.exported()) {
     try {
       const b = p.build(name);
-      write(join(out, "models", name + ".glb"), glb([{ name, faces: b.faces, pal: b.pal, lights: b.lights }]));
-      if (opts.preview !== false) write(join(out, "_preview", name + ".png"), previewPng(b));
+      const clips = p.clips.filter((c) => c.model === name);
+      write(join(out, "models", name + ".glb"), glb([{ name, faces: b.faces, pal: b.pal, lights: b.lights, joints: b.joints, clips }]));
+      if (opts.preview !== false) {
+        write(join(out, "_preview", name + ".png"), previewPng(b));
+        for (const c of clips) write(join(out, "_preview", `${name}.${c.name}.png`), clipStrip(b, c));
+      }
       if (opts.turntable) turntable(b, join(out, "_preview", name + ".gif"));
-      lines.push(`model ${name} ${dims(b)} ${b.tris} tris${b.lights.length ? ` ${b.lights.length} light${b.lights.length > 1 ? "s" : ""}` : ""}`);
+      lines.push(`model ${name} ${dims(b)} ${b.tris} tris${b.lights.length ? ` ${b.lights.length} light${b.lights.length > 1 ? "s" : ""}` : ""}` +
+        `${b.joints.length ? ` ${b.joints.length} parts` : ""}${clips.length ? ` clips: ${clips.map((c) => `${c.name} (${c.frames}f @ ${c.fps}fps)`).join(", ")}` : ""}`);
     } catch (e) {
       errors.push(wrap(e));
     }

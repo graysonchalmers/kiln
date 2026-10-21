@@ -92,13 +92,14 @@ model("_shelf",
   [0.62, 0.52, 0.42, 0.32].map((y, i) => box([0.6, 0.45, 0.66, 0.38][i], 0.025, 0.01, { mat: "chalk", pos: [-0.05, y, -0.08] })))
 
 // The pendant lamp: the only warm light in the room.
-model("_lamp",
+// The whole lamp swings from the top of its cord, lights included.
+model("_lamp", part("sway", { pivot: [0, 1.1, 0] },
   cyl(0.006, 0.9, { mat: "steelD", sides: 4, pos: [0, 0.2, 0] }),
   lathe([0.22, 0, 0.14, 0.08, 0.05, 0.2, 0.02, 0.22], { mat: "steelD", sides: 10 }),
   sphere(0.05, { mat: "bulb", pos: [0, 0.03, 0], detail: 1 }),
   // Lights sit just under the bulb: inside it, the bulb's own mesh would shadow them.
   light({ type: "spot", color: "#ffbe78", power: 220, pos: [0, -0.1, 0], dir: [0, -1, 0], angle: 50 }),
-  light({ color: "#ffbe78", power: 8, pos: [0, -0.1, 0] }))
+  light({ color: "#ffbe78", power: 8, pos: [0, -0.1, 0] })))
 
 // COFFEE hangs inside the glass facing the street, so from in here it reads backwards. One F is dead.
 const LETTERS = { C: [0,0, 0.3,0, 0.3,0.07, 0.07,0.07, 0.07,0.43, 0.3,0.43, 0.3,0.5, 0,0.5], O: [0,0, 0.3,0, 0.3,0.5, 0,0.5],
@@ -109,7 +110,11 @@ const letter = (ch, x, mat) => tf({ pos: [x, 0, 0] }, ch === "O"
   : extrude(LETTERS[ch], 0.04, { mat, pos: [-0.15, 0, 0] }))
 model("_sign", { pivot: "origin" },
   tf({ scale: [-1, 1, 1] },       // mirrored: we see its back
-    ["C", "O", "F", "F", "E", "E"].map((ch, i) => letter(ch, -0.95 + i * 0.38, i === 3 ? "rustD" : "neonR"))),
+    // The second F is dead; the first one is dying: a dark tube with a lit copy that blinks (scale 0 = off).
+    ["C", "O", "F", "F", "E", "E"].map((ch, i) => i === 2
+      ? [tf({ pos: [0, 0, -0.006] }, letter(ch, -0.95 + i * 0.38, "rustD")),
+         part("flicker", { pivot: [-0.95 + i * 0.38, 0.25, 0] }, letter(ch, -0.95 + i * 0.38, "neonR"))]
+      : letter(ch, -0.95 + i * 0.38, i === 3 ? "rustD" : "neonR"))),
   sym("x", cyl(0.005, 0.5, { mat: "steelD", sides: 4, pos: [1.0, 0.6, -0.06] })),
   light({ color: "#ff2040", power: 45, pos: [0, 0.25, 0.4] }))
 
@@ -141,9 +146,12 @@ model("_robot", { pivot: "origin" },
     sym("x", prism(0.12, 0.2, 0.06, { mat: "coatD", pos: [0.1, 0.5, 0.13], rot: [-15, 0, 0] })),   // popped collar
     [-0.03, 0, 0.03].map((x) => cyl(0.012, 0.12, { mat: "cable", sides: 4, pos: [x, 0.6, 0.02] })),
     stamp("_head", { pos: [0, 0.72, 0.03], rot: [4, 38, 6] })),
-  // right arm: elbow on the table, mechanical hand around the mug
-  limb([0.2, 1.0, 0.14], [0.22, 0.79, 0.42], 0.055, "coat"), limb([0.22, 0.79, 0.42], [0.13, 0.8, 0.53], 0.048, "coat"),
-  box(0.07, 0.06, 0.08, { mat: "plate", pos: [0.1, 0.77, 0.56] }),
+  // right arm: shoulder -> elbow -> hand -> mug, rigged so he can lift it
+  part("upper", { pivot: [0.2, 1.0, 0.14] }, limb([0.2, 1.0, 0.14], [0.22, 0.79, 0.42], 0.055, "coat"),
+    part("fore", { pivot: [0.22, 0.79, 0.42] }, limb([0.22, 0.79, 0.42], [0.13, 0.8, 0.53], 0.048, "coat"),
+      part("cup", { pivot: [0.12, 0.78, 0.55] },
+        box(0.07, 0.06, 0.08, { mat: "plate", pos: [0.1, 0.77, 0.56] }),
+        stamp("_mug", { pos: [0.12, 0.755, 0.58] })))),
   // left arm: hand resting flat, still
   limb([-0.2, 1.0, 0.12], [-0.17, 0.78, 0.4], 0.055, "coat"), limb([-0.17, 0.78, 0.4], [-0.12, 0.77, 0.52], 0.048, "coat"),
   box(0.08, 0.025, 0.1, { mat: "plate", pos: [-0.11, 0.765, 0.57] }))
@@ -158,7 +166,7 @@ model("_ashtray", cyl(0.07, 0.025, { mat: "ash", sides: 8 }),
 model("_table", { pivot: "origin" },
   cyl(0.06, 0.72, { mat: "steelD", sides: 6 }), cyl(0.28, 0.03, { mat: "steelD", sides: 8 }),
   cyl(0.48, 0.035, { mat: "tabletop", sides: 12, pos: [0, 0.72, 0] }),
-  stamp("_mug", { pos: [-0.08, 0.755, 0.12] }), stamp("_ashtray", { pos: [0.24, 0.755, -0.08] }),
+  stamp("_ashtray", { pos: [0.24, 0.755, -0.08] }),
   box(0.1, 0.004, 0.07, { mat: "cup", pos: [0.08, 0.756, 0.2], rot: [0, 24, 0] }))
 
 model("_chair", { pivot: "origin" },
@@ -205,3 +213,15 @@ model("last_cup",
   stamp("_robot", { pos: [0.6, 0, 0.5], rot: [0, -90, 0] }),
   stamp("_woman", { pos: [-1.9, 0, -D / 2 + 0.38], rot: [0, 180, 0] }),
   stamp("_patron", { pos: [2.6, 0, -0.35], rot: [0, 160, 0] }))
+
+// 10 s at 24 fps. Rotations are about the scene's axes: the robot faces -x, so his
+// "lift forward" is a rotation about z. The cup counter-rotates to keep the coffee level.
+animate("last_cup", "sip", { frames: 240, fps: 24 }, {
+  upper: { rot: [[0, [0, 0, 0]], [48, [0, 0, 0]], [110, [0, 0, -60]], [160, [0, 0, -60]], [214, [0, 0, 0]], [240, [0, 0, 0]]] },
+  fore: { rot: [[0, [0, 0, 0]], [48, [0, 0, 0]], [110, [0, 0, -78]], [124, [0, 0, -85]], [150, [0, 0, -85]], [160, [0, 0, -78]], [214, [0, 0, 0]], [240, [0, 0, 0]]] },
+  // level = -(upper + fore); during the sip, 20° more tips the rim to his mouth
+  cup: { rot: [[0, [0, 0, 0]], [48, [0, 0, 0]], [110, [0, 0, 138]], [124, [0, 0, 125]], [150, [0, 0, 125]], [160, [0, 0, 138]], [214, [0, 0, 0]], [240, [0, 0, 0]]] },
+  sway: { rot: [[0, [1.5, 0, 0.8]], [60, [-1.2, 0, -0.6]], [120, [1.5, 0, 0.8]], [180, [-1.2, 0, -0.6]], [240, [1.5, 0, 0.8]]] },
+  flicker: { scale: [[0, 1, "step"], [31, 0.001, "step"], [34, 1, "step"], [37, 0.001, "step"], [44, 1, "step"], [118, 0.001, "step"],
+    [121, 1, "step"], [176, 0.001, "step"], [190, 1, "step"], [193, 0.001, "step"], [196, 1]] },
+})

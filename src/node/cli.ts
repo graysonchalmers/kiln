@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { KilnError, wrap } from "../core/errors.ts";
+import { KilnError, didYouMean, wrap } from "../core/errors.ts";
 import { glb } from "../core/gltf.ts";
 import { blenderRender } from "./blender.ts";
 import { loadProject } from "./load.ts";
@@ -20,7 +20,8 @@ const USAGE = `kiln — low-poly and voxel 3D game assets as code
       --mood night: dark world, dim moon and haze; the model's light() items light the scene.
       --focus x,y,z aims the camera at a point (model coordinates, see kiln info); --zoom N moves it closer.
       With --frames: --yaw-to / --pitch-to / --zoom-to make an eased camera move instead of a turntable;
-      --audio FILE muxes a soundtrack into the MP4.
+      --audio FILE muxes a soundtrack into the MP4. --clip NAME plays an animate() clip (looping over the frames;
+      --clip-frame N for a still); --still-camera with --frames keeps the camera fixed.
   kiln info   <models.kx.js> <name>
       Dimensions, triangle count, materials and build steps.
   kiln serve  <models.kx.js> [--port 4340] [--out DIR | --no-out]
@@ -30,7 +31,7 @@ const USAGE = `kiln — low-poly and voxel 3D game assets as code
 Model files may be .js or .ts. Default out dir: <model file dir>/out.`;
 
 interface Args { cmd?: string; file?: string; rest: string[]; out?: string | false; only?: string[]; preview?: boolean; turntable?: boolean;
-  port?: number; size?: [number, number]; yaw?: number; pitch?: number; samples?: number; ground?: boolean; transparent?: boolean; frames?: number; mood?: "day" | "night"; fog?: number; lens?: number; zoom?: number; focus?: [number, number, number]; yawTo?: number; pitchTo?: number; zoomTo?: number; audio?: string }
+  port?: number; size?: [number, number]; yaw?: number; pitch?: number; samples?: number; ground?: boolean; transparent?: boolean; frames?: number; mood?: "day" | "night"; fog?: number; lens?: number; zoom?: number; focus?: [number, number, number]; yawTo?: number; pitchTo?: number; zoomTo?: number; audio?: string; bloom?: number; clip?: string; still?: boolean; clipFrame?: number }
 
 function parse(argv: string[]): Args {
   const a: Args = { rest: [] };
@@ -64,6 +65,10 @@ function parse(argv: string[]): Args {
     else if (v === "--pitch-to") a.pitchTo = Number(val());
     else if (v === "--zoom-to") a.zoomTo = Number(val());
     else if (v === "--audio") a.audio = resolve(val());
+    else if (v === "--bloom") a.bloom = Number(val());
+    else if (v === "--clip") a.clip = val();
+    else if (v === "--clip-frame") a.clipFrame = Number(val());
+    else if (v === "--still-camera") a.still = true;
     else if (v === "--focus") {
       const f = val().split(",").map(Number);
       if (f.length !== 3 || f.some((x) => !Number.isFinite(x))) throw new KilnError("--focus must be x,y,z (model coordinates)");
@@ -98,11 +103,14 @@ export async function main(argv: string[]): Promise<number> {
         if (!name) throw new KilnError("render needs a model or pack name");
         const p = loadProject(file);
         const pk = p.packs.find((k) => k.name === name);
-        const bytes = pk ? glb(packLayout(p, pk).models) : (() => { const b = p.build(name); return glb([{ name, faces: b.faces, pal: b.pal, lights: b.lights }]); })();
+        const clip = a.clip ? p.clips.find((c) => c.model === name && c.name === a.clip) : undefined;
+        if (a.clip && !clip) throw new KilnError(`model '${name}' has no clip '${a.clip}'${didYouMean(a.clip, p.clips.filter((c) => c.model === name).map((c) => c.name))}`);
+        const bytes = pk ? glb(packLayout(p, pk).models) : (() => { const b = p.build(name); return glb([{ name, faces: b.faces, pal: b.pal, lights: b.lights, joints: b.joints, clips: clip ? [clip] : [] }]); })();
         const turn = (a.frames ?? 1) > 1;
         const out = typeof a.out === "string" ? resolve(a.out) : join(dirname(file), "out", "renders", name + (turn ? ".mp4" : ".png"));
         mkdirSync(dirname(out), { recursive: true });
-        const ro = { w: a.size?.[0], h: a.size?.[1], yaw: a.yaw, pitch: a.pitch, samples: a.samples, ground: a.ground, transparent: a.transparent, mood: a.mood, fog: a.fog, lens: a.lens, zoom: a.zoom, focus: a.focus,
+        const ro = { w: a.size?.[0], h: a.size?.[1], yaw: a.yaw, pitch: a.pitch, samples: a.samples, ground: a.ground, transparent: a.transparent, mood: a.mood, fog: a.fog, lens: a.lens, zoom: a.zoom, focus: a.focus, bloom: a.bloom, spin: !a.still,
+          clip: clip ? { name: clip.name, fps: clip.fps, frames: clip.frames, frame: a.clipFrame ?? 0 } : undefined,
           move: a.yawTo !== undefined || a.pitchTo !== undefined || a.zoomTo !== undefined
             ? { yaw: a.yawTo ?? a.yaw ?? 35, pitch: a.pitchTo ?? a.pitch ?? 22, zoom: a.zoomTo ?? a.zoom ?? 1 } : undefined };
         if (!turn) blenderRender(bytes, out, ro);
@@ -112,7 +120,7 @@ export async function main(argv: string[]): Promise<number> {
           try {
             blenderRender(bytes, join(dir, "f%04d.png"), { ...ro, frames: a.frames });
             const audio = a.audio ? ["-i", a.audio, "-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", "192k", "-shortest"] : [];
-            const r = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-framerate", "30", "-i", join(dir, "f%04d.png"), ...audio, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-movflags", "+faststart", out]);
+            const r = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-framerate", String(clip?.fps ?? 30), "-i", join(dir, "f%04d.png"), ...audio, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-movflags", "+faststart", out]);
             if (r.error) throw new KilnError("--frames writes an MP4 and needs ffmpeg on PATH");
             if (r.status !== 0) throw new KilnError(`ffmpeg failed: ${String(r.stderr).trim()}`);
           } finally { rmSync(dir, { recursive: true, force: true }); }

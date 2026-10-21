@@ -34,6 +34,23 @@ It's lit only by the scene's own `light()` items: one spot, seven points, and em
 The same scene exists as a 2D illustration in [vex](https://github.com/uilianks/vex) and as a
 soundscape in [chirp](https://github.com/uilianks/chirp): one world across three tools.
 
+### It moves
+
+▶ **[LAST CUP, animated: 10 s with sound](docs/media/last_cup_3d_sip.mp4)**. The robot lifts the mug to his face and
+drinks, the dying F on the sign blinks, and the pendant lamp sways so its light pool drifts across the table,
+all while the camera pushes in. Parts are named nodes with pivots; clips export as glTF animations that
+Blender (and any engine) plays.
+
+```js
+part("upper", { pivot: [0.2, 1.0, 0.14] }, limb(...),
+  part("fore", { pivot: [0.22, 0.79, 0.42] }, limb(...),
+    part("cup", { pivot: [0.12, 0.78, 0.55] }, stamp("_mug", { pos: [0.12, 0.755, 0.58] }))))
+animate("last_cup", "sip", { frames: 240, fps: 24 }, {
+  upper: { rot: [[48, [0, 0, 0]], [110, [0, 0, -60]], [160, [0, 0, -60]], [214, [0, 0, 0]]] },
+  flicker: { scale: [[0, 1, "step"], [31, 0.001, "step"], [34, 1]] },
+})
+```
+
 ### Forest Kit 3D: a game-ready asset pack
 
 ![Floating island turntable](docs/media/island_turntable.gif)
@@ -102,6 +119,8 @@ kiln render scene.kx.js last_cup --mood night --focus 0.1,2.65,2.1 --zoom 1.3 \
   outline, concave ok), gable prism, wedge, plus vertex jitter for a hand-made look.
 - **Voxels:** text layers like pixel art, or a function of (x, y, z); greedy-meshed.
 - **Structure:** transforms, mirror symmetry, stamps, scatter, random groups, material-swap variants.
+- **Animation:** named `part()`s with pivots and keyframed `animate()` clips (rotation, offset, scale, five
+  easings), exported as glTF animations, previewed as frame strips, played in Blender renders.
 - **Lights:** point and spot `light()` items that move with the model through stamps, mirrors and
   scatter. They export as `KHR_lights_punctual`.
 - **Game-ready GLB:** flat normals, PBR materials, emissive strength, one primitive per material,

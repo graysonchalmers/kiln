@@ -1,5 +1,6 @@
 // glTF 2.0 binary (GLB) writer: one node per model, one primitive per material, flat normals.
-import { type Face, type Light, faceNormal, triangulate } from "./mesh.ts";
+import { type ClipDef, partValues } from "./anim.ts";
+import { type Face, type Joint, type Light, faceNormal, triangulate } from "./mesh.ts";
 import { type Palette, srgbToLinear } from "./palette.ts";
 import type { V3 } from "./util.ts";
 
@@ -9,6 +10,19 @@ export interface GlbModel {
   pal: Palette;
   lights?: Light[];
   translation?: V3;
+  /** Animatable parts: each becomes a node rotating about its pivot. */
+  joints?: Joint[];
+  clips?: ClipDef[];
+}
+
+/** Quaternion [x, y, z, w] for kiln's rotation order (X, then Y, then Z), degrees. */
+function quatXYZ(r: V3): number[] {
+  const [hx, hy, hz] = r.map((d) => (d * Math.PI) / 360);
+  const qx = [Math.sin(hx), 0, 0, Math.cos(hx)], qy = [0, Math.sin(hy), 0, Math.cos(hy)], qz = [0, 0, Math.sin(hz), Math.cos(hz)];
+  const m = (a: number[], b: number[]) => [
+    a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1], a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+    a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3], a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]];
+  return m(qz, m(qy, qx));
 }
 
 /** Shortest rotation taking -Z (a glTF light's direction) to `d`, as [x, y, z, w]. */
@@ -24,14 +38,15 @@ export function glb(models: GlbModel[]): Uint8Array {
   const chunks: Uint8Array[] = [];
   let byteLength = 0;
   const bufferViews: Record<string, unknown>[] = [], accessors: Record<string, unknown>[] = [];
-  const push = (data: Float32Array, kind: "VEC3", min?: number[], max?: number[]): number => {
+  const SIZE = { SCALAR: 1, VEC3: 3, VEC4: 4 };
+  const push = (data: Float32Array, kind: "VEC3" | "VEC4" | "SCALAR", min?: number[], max?: number[], vertex = true): number => {
     const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-    bufferViews.push({ buffer: 0, byteOffset: byteLength, byteLength: bytes.length, target: 34962 });
+    bufferViews.push({ buffer: 0, byteOffset: byteLength, byteLength: bytes.length, ...(vertex ? { target: 34962 } : {}) });
     chunks.push(bytes);
     byteLength += bytes.length;
     const pad = (4 - (byteLength % 4)) % 4;
     if (pad) { chunks.push(new Uint8Array(pad)); byteLength += pad; }
-    accessors.push({ bufferView: bufferViews.length - 1, componentType: 5126, count: data.length / 3, type: kind, ...(min ? { min, max } : {}) });
+    accessors.push({ bufferView: bufferViews.length - 1, componentType: 5126, count: data.length / SIZE[kind], type: kind, ...(min ? { min, max } : {}) });
     return accessors.length - 1;
   };
 
@@ -57,14 +72,17 @@ export function glb(models: GlbModel[]): Uint8Array {
   };
 
   const meshes: Record<string, unknown>[] = [], nodes: Record<string, unknown>[] = [], roots: number[] = [];
-  const lights: Record<string, unknown>[] = [];
-  for (const mdl of models) {
+  const lights: Record<string, unknown>[] = [], animations: Record<string, unknown>[] = [];
+
+  /** One mesh from faces, positions relative to `origin`; undefined when there are no faces. */
+  const mesh = (name: string, faces: Face[], pal: Palette, origin: V3): number | undefined => {
     const byMat = new Map<string, Face[]>();
-    for (const f of triangulate(mdl.faces)) {
+    for (const f of triangulate(faces)) {
       const l = byMat.get(f.mat) ?? [];
       l.push(f);
       byMat.set(f.mat, l);
     }
+    if (!byMat.size) return undefined;
     const primitives: Record<string, unknown>[] = [];
     for (const [key, tris] of byMat) {
       const pos = new Float32Array(tris.length * 9), nrm = new Float32Array(tris.length * 9);
@@ -73,31 +91,84 @@ export function glb(models: GlbModel[]): Uint8Array {
         const n = faceNormal(t.v);
         t.v.forEach((p, k) => {
           for (let c = 0; c < 3; c++) {
-            pos[i * 9 + k * 3 + c] = p[c];
+            const x = p[c] - origin[c];
+            pos[i * 9 + k * 3 + c] = x;
             nrm[i * 9 + k * 3 + c] = n[c];
-            if (p[c] < min[c]) min[c] = p[c];
-            if (p[c] > max[c]) max[c] = p[c];
+            if (x < min[c]) min[c] = x;
+            if (x > max[c]) max[c] = x;
           }
         });
       });
-      primitives.push({ attributes: { POSITION: push(pos, "VEC3", min, max), NORMAL: push(nrm, "VEC3") }, material: material(key, mdl.pal), mode: 4 });
+      primitives.push({ attributes: { POSITION: push(pos, "VEC3", min, max), NORMAL: push(nrm, "VEC3") }, material: material(key, pal), mode: 4 });
     }
-    meshes.push({ name: mdl.name, primitives });
-    const children: number[] = [];
-    for (const [i, l] of (mdl.lights ?? []).entries()) {
-      // Watts -> candela, the inverse of Blender's importer, so power survives the round trip.
-      const light: Record<string, unknown> = { name: `${mdl.name}_light_${i}`, type: l.type, color: srgbToLinear(l.color), intensity: (l.power * 683) / (4 * Math.PI) };
-      if (l.range) light.range = l.range;
-      if (l.type === "spot") {
-        const outer = (((l.angle ?? 35) * Math.PI) / 180);
-        light.spot = { outerConeAngle: Math.min(outer, Math.PI / 2), innerConeAngle: Math.min(outer, Math.PI / 2) * 0.7 };
+    meshes.push({ name, primitives });
+    return meshes.length - 1;
+  };
+
+  const lightNode = (mdl: GlbModel, i: number, l: Light, origin: V3): number => {
+    // Watts -> candela, the inverse of Blender's importer, so power survives the round trip.
+    const light: Record<string, unknown> = { name: `${mdl.name}_light_${i}`, type: l.type, color: srgbToLinear(l.color), intensity: (l.power * 683) / (4 * Math.PI) };
+    if (l.range) light.range = l.range;
+    if (l.type === "spot") {
+      const outer = ((l.angle ?? 35) * Math.PI) / 180;
+      light.spot = { outerConeAngle: Math.min(outer, Math.PI / 2), innerConeAngle: Math.min(outer, Math.PI / 2) * 0.7 };
+    }
+    lights.push(light);
+    nodes.push({ name: light.name, translation: [l.pos[0] - origin[0], l.pos[1] - origin[1], l.pos[2] - origin[2]], rotation: quatToDir(l.dir), extensions: { KHR_lights_punctual: { light: lights.length - 1 } } });
+    return nodes.length - 1;
+  };
+
+  for (const mdl of models) {
+    const joints = mdl.joints ?? [], names = new Set(joints.map((j) => j.name));
+    const partOf = (k?: string) => (k && names.has(k) ? k : "");
+    const facesBy = new Map<string, Face[]>(), lightsBy = new Map<string, [number, Light][]>();
+    for (const f of mdl.faces) { const k = partOf(f.part); (facesBy.get(k) ?? facesBy.set(k, []).get(k)!).push(f); }
+    (mdl.lights ?? []).forEach((l, i) => { const k = partOf(l.part); (lightsBy.get(k) ?? lightsBy.set(k, []).get(k)!).push([i, l]); });
+
+    // Nodes: the body at the model's translation, each part a child of its parent at pivot - parent pivot.
+    const nodeOf = new Map<string, number>();
+    const pivotOf = (k: string): V3 => (k ? joints.find((j) => j.name === k)!.pivot : [0, 0, 0]);
+    const build = (k: string): number => {
+      const hit = nodeOf.get(k);
+      if (hit !== undefined) return hit;
+      const pv = pivotOf(k), j = joints.find((x) => x.name === k);
+      const parent = k ? partOf(j!.parent) : undefined;
+      const children = (lightsBy.get(k) ?? []).map(([i, l]) => lightNode(mdl, i, l, pv));
+      const m = mesh(k ? `${mdl.name}.${k}` : mdl.name, facesBy.get(k) ?? [], mdl.pal, pv);
+      const node: Record<string, unknown> = { name: k ? `${mdl.name}.${k}` : mdl.name, ...(m !== undefined ? { mesh: m } : {}) };
+      if (k) {
+        const pp = pivotOf(parent ?? "");
+        node.translation = [pv[0] - pp[0], pv[1] - pp[1], pv[2] - pp[2]];
+      } else if (mdl.translation) node.translation = mdl.translation;
+      nodes.push(node);
+      const idx = nodes.length - 1;
+      nodeOf.set(k, idx);
+      for (const c of joints.filter((x) => partOf(x.parent) === k && x.name !== k)) children.push(build(c.name));
+      if (children.length) node.children = children;
+      return idx;
+    };
+    roots.push(build(""));
+
+    // Animations: one sample per frame (0..frames inclusive), linear between them.
+    for (const clip of mdl.clips ?? []) {
+      const times = new Float32Array(clip.frames + 1).map((_, i) => i / clip.fps);
+      const input = push(times, "SCALAR", [0], [clip.frames / clip.fps], false);
+      const samplers: Record<string, unknown>[] = [], channels: Record<string, unknown>[] = [];
+      for (const [part, keys] of Object.entries(clip.tracks)) {
+        const node = nodeOf.get(part);
+        if (node === undefined) continue;
+        const rest = nodes[node].translation as V3;
+        const vals = Array.from({ length: clip.frames + 1 }, (_, i) => partValues(keys, i));
+        const add = (path: string, data: number[], kind: "VEC3" | "VEC4") => {
+          samplers.push({ input, output: push(new Float32Array(data), kind, undefined, undefined, false), interpolation: "LINEAR" });
+          channels.push({ sampler: samplers.length - 1, target: { node, path } });
+        };
+        if (keys.rot) add("rotation", vals.flatMap((v) => quatXYZ(v.rot)), "VEC4");
+        if (keys.move) add("translation", vals.flatMap((v) => [rest[0] + v.move[0], rest[1] + v.move[1], rest[2] + v.move[2]]), "VEC3");
+        if (keys.scale) add("scale", vals.flatMap((v) => v.scale), "VEC3");
       }
-      lights.push(light);
-      nodes.push({ name: light.name, translation: l.pos, rotation: quatToDir(l.dir), extensions: { KHR_lights_punctual: { light: lights.length - 1 } } });
-      children.push(nodes.length - 1);
+      if (channels.length) animations.push({ name: clip.name, samplers, channels });
     }
-    nodes.push({ name: mdl.name, mesh: meshes.length - 1, ...(children.length ? { children } : {}), ...(mdl.translation ? { translation: mdl.translation } : {}) });
-    roots.push(nodes.length - 1);
   }
 
   const json: Record<string, unknown> = {
@@ -105,6 +176,7 @@ export function glb(models: GlbModel[]): Uint8Array {
     scene: 0, scenes: [{ nodes: roots }],
     nodes, meshes, materials, accessors, bufferViews, buffers: [{ byteLength }],
   };
+  if (animations.length) json.animations = animations;
   const used = [...(emissiveStrength ? ["KHR_materials_emissive_strength"] : []), ...(lights.length ? ["KHR_lights_punctual"] : [])];
   if (used.length) json.extensionsUsed = used;
   if (lights.length) json.extensions = { KHR_lights_punctual: { lights } };

@@ -19,7 +19,17 @@ import bpy, sys, math, json
 from mathutils import Vector
 a = json.loads(sys.argv[sys.argv.index("--") + 1])
 bpy.ops.wm.read_factory_settings(use_empty=True)
+if a["clip"]:
+    bpy.context.scene.render.fps = a["clip"]["fps"]          # glTF seconds -> frames at the clip's rate
 bpy.ops.import_scene.gltf(filepath=a["glb"])
+clip_start = 0
+if a["clip"]:
+    starts = [act.frame_range[0] for act in bpy.data.actions]
+    clip_start = int(round(min(starts))) if starts else 0
+    print("KILN_CLIP", a["clip"]["name"], len(bpy.data.actions), "actions from frame", clip_start)
+def clip_frame(i):
+    if a["clip"]:
+        bpy.context.scene.frame_set(clip_start + (a["clip"]["frame"] + i) % a["clip"]["frames"])
 objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
 for o in objs:
     for p in o.data.polygons: p.use_smooth = False
@@ -94,16 +104,16 @@ def bloom():
         rl = tree.nodes.get("Render Layers") or tree.nodes.new("CompositorNodeRLayers")
         go = tree.nodes.get("Composite") or tree.nodes.new("CompositorNodeComposite")
         gl = tree.nodes.new("CompositorNodeGlare")
-    for k, v in (("glare_type", "FOG_GLOW"), ("quality", "HIGH"), ("threshold", 0.9), ("size", 7)):
+    for k, v in (("glare_type", "FOG_GLOW"), ("quality", "HIGH"), ("threshold", a["bloomThreshold"]), ("size", 8)):
         try: setattr(gl, k, v)
         except Exception: pass
-    for name, v in (("Type", "Fog Glow"), ("Threshold", 0.9), ("Strength", 0.7), ("Size", 0.6)):
+    for name, v in (("Type", "Fog Glow"), ("Threshold", a["bloomThreshold"]), ("Strength", a["bloom"]), ("Size", 0.85)):
         try: gl.inputs[name].default_value = v
         except Exception: pass
     tree.links.new(rl.outputs["Image"], gl.inputs["Image"])
     tree.links.new(gl.outputs["Image"], go.inputs[0])
 try:
-    bloom(); print("KILN_BLOOM ok")
+    if a["bloom"] > 0: bloom(); print("KILN_BLOOM ok")
 except Exception as e:
     print("KILN_BLOOM skipped", e)
 if a["frames"] > 1 and a["move"]:
@@ -113,14 +123,17 @@ if a["frames"] > 1 and a["move"]:
         t = i / (a["frames"] - 1); e = t * t * (3 - 2 * t)
         lerp = lambda x, y: x + (y - x) * e
         aim(lerp(a["yaw"], m["yaw"]), lerp(a["pitch"], m["pitch"]), base / lerp(a["zoom"], m["zoom"]))
+        clip_frame(i)
         sc.render.filepath = a["out"] % i
         bpy.ops.render.render(write_still=True)
 elif a["frames"] > 1:
     for i in range(a["frames"]):
-        aim(a["yaw"] + 360 * i / a["frames"])
+        aim(a["yaw"] + (360 * i / a["frames"] if a["spin"] else 0))
+        clip_frame(i)
         sc.render.filepath = a["out"] % i
         bpy.ops.render.render(write_still=True)
 else:
+    clip_frame(0)
     sc.render.filepath = a["out"]
     bpy.ops.render.render(write_still=True)
 print("KILN_RENDERED", a["out"])
@@ -140,12 +153,18 @@ export interface RenderOpts {
   mood?: "day" | "night";
   /** Haze density for night renders (default 0.03; 0 = off). */
   fog?: number;
+  /** Bloom strength around emissive parts (default 3; 0 = off). */
+  bloom?: number;
   /** Camera lens in mm (default 70). */
   lens?: number;
   /** Move the camera this many times closer than the fit-to-bounds distance (default 1). */
   zoom?: number;
   /** Look at this point (model coordinates, Y up) instead of the bounds center. */
   focus?: [number, number, number];
+  /** Play this clip (looping over the frames), starting at `frame`. */
+  clip?: { name: string; fps: number; frames: number; frame: number };
+  /** With frames and no move: orbit 360° (default true); false holds the camera still. */
+  spin?: boolean;
   /** Camera move instead of a turntable: ease yaw / pitch / zoom to these over the frames. */
   move?: { yaw: number; pitch: number; zoom: number };
 }
@@ -160,8 +179,8 @@ export function blenderRender(glbBytes: Uint8Array, outPng: string, o: RenderOpt
     writeFileSync(script, SCRIPT);
     const args = JSON.stringify({ glb: glbPath, out: outPng, w: o.w ?? 1600, h: o.h ?? 1200, yaw: o.yaw ?? 35, pitch: o.pitch ?? 22,
       samples: o.samples ?? 64, ground: o.ground !== false, transparent: !!o.transparent, frames: o.frames ?? 1,
-      mood: o.mood ?? "day", fog: o.fog ?? 0.03, lens: o.lens ?? 70, zoom: o.zoom ?? 1, focus: o.focus ?? null,
-      move: o.move ? { yaw: o.move.yaw, pitch: o.move.pitch, zoom: o.move.zoom } : null });
+      mood: o.mood ?? "day", fog: o.fog ?? 0.03, lens: o.lens ?? 70, bloom: o.bloom ?? 3, bloomThreshold: 0.75, zoom: o.zoom ?? 1, focus: o.focus ?? null,
+      move: o.move ? { yaw: o.move.yaw, pitch: o.move.pitch, zoom: o.move.zoom } : null, clip: o.clip ?? null, spin: o.spin ?? true });
     const r = spawnSync(cmd[0], [...cmd.slice(1), "--background", "--factory-startup", "--python", script, "--", args], { encoding: "utf8", timeout: 600000 });
     if (r.error) throw new KilnError(`could not start Blender: ${r.error.message}`);
     if (process.env.KILN_DEBUG) console.error(String(r.stdout).split("\n").filter((l) => l.startsWith("KILN_")).join("\n"));

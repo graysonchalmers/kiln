@@ -4,11 +4,28 @@ import { Resvg } from "@resvg/resvg-js";
 import { len, sub } from "../core/util.ts";
 import { png } from "../core/png.ts";
 import type { Built } from "../core/project.ts";
+import { type ClipDef, poseFaces } from "../core/anim.ts";
 import { gridStep, renderView, type ViewOpts } from "../core/render.ts";
 
 export function viewPng(b: Built, o: ViewOpts): Buffer {
   const w = o.w ?? 400, h = o.h ?? 400;
   return Buffer.from(png(w, h, renderView(b.faces, b.pal, b.bounds, { lights: b.lights, ...o }), (x) => deflateSync(x)));
+}
+
+/** A clip as a strip of 8 evenly spaced frames from the hero angle, framed on the rest pose. */
+export function clipStrip(b: Built, c: ClipDef, o: ViewOpts = {}): Buffer {
+  const n = 8, cell = 240, W = cell * n, H = cell + 26;
+  let body = "";
+  for (let k = 0; k < n; k++) {
+    const i = Math.round((k * c.frames) / n);
+    const posed = poseFaces(b.faces, b.lights, b.joints, c.tracks, i);
+    const uri = "data:image/png;base64," + viewPng({ ...b, ...posed }, { yaw: 35, pitch: 20, ...o, w: cell, h: cell, fit: b.bounds }).toString("base64");
+    body += `<image x="${k * cell}" y="26" width="${cell}" height="${cell}" href="${uri}"/>` +
+      `<text x="${k * cell + 6}" y="44" fill="#c9c3dd" font-size="11" font-family="monospace">f${i}</text>`;
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><rect width="100%" height="100%" fill="#14131b"/>` +
+    `<text x="6" y="18" fill="#e9e5f2" font-size="13" font-weight="bold" font-family="monospace">${b.name} · ${c.name} · ${c.frames} frames @ ${c.fps} fps</text>${body}</svg>`;
+  return Buffer.from(new Resvg(svg, { font: { loadSystemFonts: true } }).render().asPng());
 }
 
 const VIEWS: [string, ViewOpts][] = [["hero", { yaw: 35, pitch: 25 }], ["front", { yaw: 0, pitch: 6 }], ["right", { yaw: 90, pitch: 6 }], ["top", { yaw: 0, pitch: 89.5 }]];
