@@ -10,6 +10,7 @@ import type { Project } from "../core/project.ts";
 import { loadProject } from "./load.ts";
 import { dims, writeOutputs } from "./output.ts";
 import { viewPng } from "./preview.ts";
+import { FeedbackError, writeFeedback } from "./feedback.ts";
 
 export interface ServeOptions { port?: number; out?: string | false; log?: (line: string) => void }
 
@@ -90,6 +91,23 @@ export function serve(file: string, opts: ServeOptions = {}): Promise<{ url: str
         const png = viewPng({ ...b, faces, bounds: faces.length ? bounds(faces) : b.bounds }, { yaw: Number(q.get("yaw") ?? 35), pitch: Number(q.get("pitch") ?? 25), w, h, fit: b.bounds });
         res.writeHead(200, { "content-type": "image/png", "cache-control": "no-store" });
         res.end(png);
+      } else if (url.pathname === "/api/feedback" && req.method === "POST") {
+        // Pins and strokes from the viewer's annotate mode, picked on the model, written to <out>/_feedback/.
+        const chunks: Buffer[] = [];
+        let size = 0;
+        req.on("data", (d: Buffer) => { size += d.length; if (size > 32 << 20) req.destroy(); else chunks.push(d); });
+        req.on("end", () => {
+          const reply = (code: number, j: unknown) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(j)); };
+          if (!project) return reply(409, { error: "the model file does not build right now" });
+          try {
+            const r = writeFeedback(project, out ?? join(dirname(abs), "out"), JSON.parse(Buffer.concat(chunks).toString("utf8")));
+            log(`[kiln] feedback: ${r.summary} -> ${r.files.find((f) => f.endsWith(".json"))}`);
+            reply(200, { ok: true, ...r });
+          } catch (e) {
+            reply(e instanceof FeedbackError || e instanceof SyntaxError ? 400 : 500, { error: (e as Error).message });
+          }
+        });
+        return;
       } else if (url.pathname === "/api/glb" && project) {
         const b = project.build(name);
         res.writeHead(200, { "content-type": "model/gltf-binary", "content-disposition": `attachment; filename="${name}.glb"` });

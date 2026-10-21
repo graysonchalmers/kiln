@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -8,6 +8,7 @@ import { renderView } from "../src/core/render.ts";
 import { cross, dot } from "../src/core/util.ts";
 import { loadSource } from "../src/node/load.ts";
 import { writeOutputs } from "../src/node/output.ts";
+import { serve } from "../src/node/server.ts";
 
 const throwsMsg = (fn: () => unknown, re: RegExp) => assert.throws(fn, (e: Error) => re.test(e.message));
 const near = (a: number, b: number, tol: number) => assert.ok(Math.abs(a - b) <= tol, `${a} not within ${tol} of ${b}`);
@@ -167,4 +168,32 @@ animate("m", "raise", { frames: 10, fps: 10 }, { arm: { rot: [[0, [0, 0, 0], "li
   throwsMsg(() => loadSource(`model("m", part("a", { pivot: [0, 0, 0] }, box(1, 1, 1, "1")), part("a", { pivot: [0, 0, 0] }, box(1, 1, 1, "1")))`).build("m"),
     /part 'a' appears twice: stamp copies with \{ as: "name" \}/);
   throwsMsg(() => loadSource(`animate("m", "c", { frames: 4 }, { a: { spin: [[0, 1]] } })`), /unknown channel 'spin'/);
+});
+
+test("serve: feedback pins are picked onto the model: point, material, build step", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kiln-fb-"));
+  const file = join(dir, "a.kx.js");
+  // a red box in front (step 0), a blue one behind it (step 1); seen head-on, the middle is the red one
+  writeFileSync(file, `pal({ r: "#ff0000", b: "#0000ff" })
+model("pair", { pivot: "origin" }, box(1, 1, 1, { mat: "r", pos: [0, 0, 1] }), box(3, 3, 0.2, { mat: "b", pos: [0, -1, -1] }))`);
+  const s = await serve(file, { port: 0, out: join(dir, "out"), log: () => {} });
+  const post = (body: unknown) => fetch(s.url + "api/feedback", { method: "POST", body: JSON.stringify(body) });
+  try {
+    const view = { yaw: 0, pitch: 0, w: 200, h: 200 };
+    const r = await post({ name: "pair", view, comment: "c", pins: [{ x: 100, y: 100, text: "front", color: "#ff3df0" }, { x: 2, y: 2, text: "sky" }],
+      strokes: [{ color: "#2ee6ff", points: [[100, 100], [101, 100], [2, 2]] }] });
+    assert.equal(r.status, 200);
+    const fb = JSON.parse(readFileSync(join(dir, "out", "_feedback", "pair.json"), "utf8"));
+    const hit = fb.pins[0].hit;
+    assert.equal(hit.mat, "r");
+    assert.equal(hit.step.index, 0);
+    assert.ok(Math.abs(hit.point[2] - 1.5) < 1e-6, "the front face of the front box, at z = 1.5");
+    assert.deepEqual(hit.normal, [0, 0, 1]);
+    assert.equal(fb.pins[1].hit, null, "background is a miss");
+    assert.deepEqual([fb.strokes[0].onModel, fb.strokes[0].covers[0].mat], [2, "r"]);
+    assert.equal((await post({ name: "pair", view: { yaw: 0 } })).status, 400);
+  } finally {
+    s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

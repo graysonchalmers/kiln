@@ -41,18 +41,44 @@
   #steps li { padding: 3px 6px; border-radius: 4px; cursor: pointer; display: flex; gap: 6px; }
   #steps li:hover { background: var(--panel2); } #steps li.cur { background: #3a3150; color: var(--accent); }
   #steps .i { color: var(--dim); min-width: 22px; text-align: right; }
+  #ann { position: absolute; pointer-events: none; }
+  body.annotating #ann { pointer-events: auto; cursor: crosshair; }
+  body.annotating #stage { cursor: default; }
+  header button, #annot button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer; font: 12px var(--mono); }
+  header button.on, #annot button.on { color: var(--accent); border-color: var(--accent); }
+  #annot { display: none; padding: 0 12px 12px; border-bottom: 1px solid var(--line); }
+  body.annotating #annot { display: block; }
+  #annot .r { display: flex; gap: 5px; flex-wrap: wrap; margin: 4px 0 8px; }
+  #annot .chip { width: 22px; height: 22px; padding: 0; }
+  #annot textarea { width: 100%; min-height: 54px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: 12px var(--mono); padding: 6px; }
+  #pins { list-style: none; margin: 0 0 8px; padding: 0; font: 11px var(--mono); max-height: 130px; overflow: auto; }
+  #pins li { display: flex; gap: 6px; padding: 2px 0; } #pins b { color: #ffb454; } #pins span { flex: 1; } #pins a { color: var(--bad); cursor: pointer; }
+  #send { width: 100%; margin-top: 6px; font-weight: 700; }
+  #fbstatus { font: 11px var(--mono); color: var(--dim); margin-top: 6px; min-height: 15px; }
 </style>
 </head>
 <body>
 <header><span class="logo">KILN</span><span class="file" id="file"></span><span class="grow"></span>
+  <button id="annotbtn" title="pin notes and draw on the model for Claude (a)">✎ annotate</button>
   <label><input type="checkbox" id="spin"> turntable</label><span class="pill" id="status">connecting</span></header>
 <aside id="list"></aside>
 <main>
-  <div id="stage"><img id="view" alt="" draggable="false"><div id="hint">drag to orbit</div><div id="err"></div></div>
+  <div id="stage"><img id="view" alt="" draggable="false"><canvas id="ann"></canvas><div id="hint">drag to orbit</div><div id="err"></div></div>
   <div id="bar"><button id="play">▶ steps</button><input type="range" id="slider" min="0" max="0" value="0"><span class="file" id="count"></span><a id="dl" href="#">⬇ GLB</a></div>
   <div id="info"></div>
 </main>
-<aside id="side"><h3>Build steps</h3><ul id="steps"></ul></aside>
+<aside id="side">
+  <div id="annot">
+    <h3 style="margin-left:0">Feedback for Claude</h3>
+    <div class="r"><button id="t-pin" class="on" title="click the model (n)">pin</button><button id="t-pen" title="draw over the model (b)">pen</button><button id="t-erase" title="click a pin or stroke (e)">erase</button><button id="t-clear">clear</button></div>
+    <div class="r" id="colors"></div>
+    <div style="font:10px var(--mono);color:var(--dim);margin-bottom:6px">the camera is frozen while annotating; marks belong to this view. Pins and strokes are mapped onto the model's surface when sent.</div>
+    <ol id="pins"></ol>
+    <textarea id="comment" placeholder="overall comment…"></textarea>
+    <button id="send" class="on">send to Claude</button>
+    <div id="fbstatus"></div>
+  </div>
+  <h3>Build steps</h3><ul id="steps"></ul></aside>
 <script src="/app.js"></script>
 </body>
 </html>

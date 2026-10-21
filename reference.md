@@ -146,4 +146,9 @@ a turntable MP4 (needs ffmpeg).
 `org.blender.Blender` flatpak.
 
 `kiln info file.kx.js <name>` prints bounds, triangles per material and build steps.
-`kiln serve file.kx.js [--port 4340] [--no-out]` runs the live viewer. `kiln list file.kx.js` lists everything.
+`kiln serve file.kx.js [--port 4340] [--no-out]` runs the live viewer. Its **annotate** mode (`a`)
+freezes the camera; pins (click, then type a note) and pen strokes are drawn on that view and sent with
+it (`yaw`, `pitch`, size). The server picks each one against the model with the viewer's own camera
+and writes `<out>/_feedback/<model>.json`: `pins` (`text`, `screen`, `hit: { point, normal, mat, part,
+step: { index, label, loc } }` or `null`), `strokes` (`onModel`, `covers`: hits grouped by step,
+material and part with `min`/`max` bounds), `comment`, `view`; plus `<model>.annotated.png`. `kiln list file.kx.js` lists everything.

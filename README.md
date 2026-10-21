@@ -102,6 +102,10 @@ node bin/kiln.js build examples/basics.kx.js          # -> examples/out/models/*
 node bin/kiln.js serve showcase/last_cup.kx.js        # live viewer on http://127.0.0.1:4340
 ```
 
+In the viewer, **✎ annotate** (or `a`) freezes the camera so you can pin notes on the model and draw on
+it, then *send to Claude*. Each pin is mapped onto the model's surface: the feedback says which material,
+part and build step (with its source line) you pointed at, so "check the feedback" is enough.
+
 ```js
 pal({ bark: "#6e4535", leaf: "#3d8c48", leafL: "#74c45a", wood: "#9c6a4d", woodD: "#6e4535",
   bulb: { color: "#ffd28c", emit: "#ffc070", glow: 10 }, t: "#3b67c0" })

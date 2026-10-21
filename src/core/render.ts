@@ -50,8 +50,9 @@ const toSrgb = (c: number) => {
   return Math.round(255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055));
 };
 
-export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts = {}): Uint8Array {
-  const S = 2, W = (o.w ?? 400) * S, H = (o.h ?? 400) * S;
+/** The orbit camera a view uses, at `scale` times the view's pixel size (the rasterizer supersamples). */
+export function viewCamera(b: Bounds, o: ViewOpts = {}, scale = 1) {
+  const W = (o.w ?? 400) * scale, H = (o.h ?? 400) * scale;
   const fit = o.fit ?? b;
   const center: V3 = scl(add(fit.min, fit.max), 0.5);
   const radius = Math.max(0.01, len(sub(fit.max, fit.min)) / 2);
@@ -66,6 +67,35 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
     const d = sub(p, eye), z = dot(d, fwd);
     return [W / 2 + (dot(d, right) / z) * f, H / 2 - (dot(d, up) / z) * f, z];
   };
+  /** The ray through pixel (x, y) of the view. */
+  const ray = (x: number, y: number): V3 => norm(add(fwd, add(scl(right, (x - W / 2) / f), scl(up, -(y - H / 2) / f))));
+  return { W, H, center, radius, eye, fwd, right, up, f, proj, ray };
+}
+
+export interface Pick { face: number; point: V3; normal: V3; mat: string; part?: string }
+
+/** The nearest face under pixel (x, y) of a view (in view pixels), or undefined for background. */
+export function pick(faces: Face[], b: Bounds, o: ViewOpts, x: number, y: number): Pick | undefined {
+  const cam = viewCamera(b, o), dir = cam.ray(x, y);
+  let best: Pick | undefined, bt = Infinity;
+  faces.forEach((fc, i) => {
+    const n = faceNormal(fc.v);
+    for (let k = 1; k + 1 < fc.v.length; k++) {                  // faces are convex: a fan covers them
+      const a = fc.v[0], e1 = sub(fc.v[k], a), e2 = sub(fc.v[k + 1], a), pv = cross(dir, e2), det = dot(e1, pv);
+      if (Math.abs(det) < 1e-12) continue;
+      const tv = sub(cam.eye, a), u = dot(tv, pv) / det;
+      if (u < 0 || u > 1) continue;
+      const qv = cross(tv, e1), v = dot(dir, qv) / det;
+      if (v < 0 || u + v > 1) continue;
+      const t = dot(e2, qv) / det;
+      if (t > 1e-6 && t < bt) { bt = t; best = { face: i, point: add(cam.eye, scl(dir, t)), normal: n, mat: fc.mat, part: fc.part }; }
+    }
+  });
+  return best;
+}
+
+export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts = {}): Uint8Array {
+  const S = 2, { W, H, center, radius, eye, proj } = viewCamera(b, o, S);
 
   const lights = o.lights ?? [], night = lights.length > 0;
   const img = new Float32Array(W * H * 3), zb = new Float32Array(W * H).fill(Infinity), ground = new Uint8Array(W * H);

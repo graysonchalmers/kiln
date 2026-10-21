@@ -24,6 +24,12 @@ does beauty renders and turntable videos.
 4. Fix with small edits (a position, a radius, a rotation) and rebuild. Repeat.
 5. Let the user look: start `KILN serve models.kx.js` in the background and give them the URL
    (drag to orbit, step through the build, rebuilds on save).
+   **Feedback**: the viewer's annotate mode (`a`) freezes the camera and lets the user pin notes and
+   draw strokes on the model, then send them. When they say "check the feedback", read
+   `out/_feedback/<model>.json`: every pin has a `hit` (the surface `point` and `normal` in model space,
+   `mat`, `part`, and the build `step` with its source `loc`, so you know which line made that face),
+   or `null` if it missed the model; strokes list what they `cover` (by step and material, with world
+   bounds). Look at `<model>.annotated.png` for the view. Comments persist between sends: check `time`.
 6. Ship: GLBs are in `out/models/` and `out/<pack>.glb`. Portfolio shots:
    `KILN render models.kx.js <name> --size 1920x1080` (Blender), add `--frames 180` for a turntable MP4.
    Lit scenes: `--mood night`; framing: `--focus x,y,z --zoom N`; camera moves: `--frames 300 --yaw-to ... --zoom-to ...`,
