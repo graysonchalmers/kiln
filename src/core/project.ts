@@ -1,8 +1,8 @@
 // Project: the registry a model file fills in (the DSL), plus the lazy, cached, cycle-checked
 // builder that turns definitions into face lists.
 import { KilnError, didYouMean, wrap } from "./errors.ts";
-import { type Bounds, type Face, bounds, jitter, recolor, transform, triCount } from "./mesh.ts";
-import { Palette } from "./palette.ts";
+import { type Bounds, type Face, type Light, type Part, bounds, jitter, recolor, transform, transformLights, transformPart, triCount } from "./mesh.ts";
+import { Palette, normHex } from "./palette.ts";
 import { box, cyl, extrude, lathe, prism, rock, sphere, wedge } from "./prims.ts";
 import { gridFn, meshGrid, parseLayers } from "./voxel.ts";
 import { type M, type V3, globRe, hash, mul, rng, rotM, scaleM, translate } from "./util.ts";
@@ -13,7 +13,7 @@ export interface Step {
 }
 
 /** Geometry made at definition time, or a reference resolved at build time. */
-interface Geo { __geo: true; faces: Face[]; step: Step }
+interface Geo { __geo: true; faces: Face[]; lights?: Light[]; step: Step }
 interface Ref { __ref: "stamp" | "scatter" | "tf" | "sym"; args: unknown[]; step: Step }
 type Item = Geo | Ref | Item[] | null | undefined | false;
 
@@ -47,6 +47,7 @@ export interface Built {
   bounds: Bounds;
   tris: number;
   pal: Palette;
+  lights: Light[];
 }
 
 const MODEL_OPTS = ["pivot", "base", "swap", "scale"];
@@ -194,6 +195,19 @@ export class Project {
     });
 
     const ref = (kind: Ref["__ref"], args: unknown[], label: string) => at(kind, (loc): Ref => ({ __ref: kind, args, step: { label, loc } }));
+    env.light = (o: unknown = {}) => at("light", (loc): Geo => {
+      if (!isPlain(o)) throw new KilnError('light({ type: "point" | "spot", color, power, pos, dir, angle, range })');
+      checkKeys("light", o, ["type", "color", "power", "pos", "dir", "angle", "range"]);
+      const type = o.type ?? "point";
+      if (type !== "point" && type !== "spot") throw new KilnError('light type must be "point" or "spot"');
+      const color = typeof o.color === "string" ? normHex(o.color) : "#ffffff";
+      const power = o.power === undefined ? 20 : num(o.power, "power");
+      const d = vec(o.dir, "dir", [0, -1, 0]), dl = Math.hypot(...d) || 1;
+      const l: Light = { type, color, power, pos: vec(o.pos, "pos", [0, 0, 0]), dir: [d[0] / dl, d[1] / dl, d[2] / dl] };
+      if (o.angle !== undefined) l.angle = num(o.angle, "angle");
+      if (o.range !== undefined) l.range = num(o.range, "range");
+      return { __geo: true, faces: [], lights: [l], step: { label: `light(${type} ${color} ${power}W)`, loc } };
+    });
     env.tf = (o: unknown, ...items: unknown[]) => at("tf", () => {
       if (!isPlain(o)) throw new KilnError("tf({ pos, rot, scale }, ...items)");
       checkKeys("tf", o, PLACE);
@@ -284,32 +298,43 @@ export class Project {
   }
 
   private buildDef(def: ModelDef): Built {
-    let faces: Face[] = [];
+    let faces: Face[] = [], lights: Light[] = [];
     const steps: Built["steps"] = [];
     if (def.opts.base) {
-      faces.push(...this.build(def.opts.base).faces);
+      const b = this.build(def.opts.base);
+      faces.push(...b.faces);
+      lights.push(...b.lights);
       steps.push({ label: `base '${def.opts.base}'`, loc: def.loc, end: faces.length });
     }
     for (const item of def.items) {
-      faces.push(...this.expand(item, 0));
+      const part = this.expand(item, 0);
+      faces.push(...part.faces);
+      lights.push(...part.lights);
       const st = isGeo(item) || isRef(item) ? item.step : { label: Array.isArray(item) ? `[${item.length} items]` : "item", loc: def.loc };
       steps.push({ label: st.label, loc: st.loc, end: faces.length });
     }
     if (def.opts.swap) faces = recolor(faces, def.opts.swap);
-    if (def.opts.scale !== undefined) faces = transform(faces, scaleM(vec(def.opts.scale, "scale", [1, 1, 1])));
+    if (def.opts.scale !== undefined) {
+      const m = scaleM(vec(def.opts.scale, "scale", [1, 1, 1]));
+      ({ faces, lights } = transformPart({ faces, lights }, m));
+    }
     const b = bounds(faces), pivot = def.opts.pivot ?? "bottom";
     if (pivot !== "origin" && faces.length) {
       const t: V3 = [-(b.min[0] + b.max[0]) / 2, pivot === "bottom" ? -b.min[1] : -(b.min[1] + b.max[1]) / 2, -(b.min[2] + b.max[2]) / 2];
-      faces = transform(faces, translate(t));
+      ({ faces, lights } = transformPart({ faces, lights }, translate(t)));
     }
-    return { name: def.name, faces, steps, bounds: bounds(faces), tris: triCount(faces), pal: def.pal };
+    return { name: def.name, faces, steps, bounds: bounds(faces), tris: triCount(faces), pal: def.pal, lights };
   }
 
-  private expand(item: unknown, depth: number): Face[] {
+  private expand(item: unknown, depth: number): Part {
     if (depth > 64) throw new KilnError("items nest too deep");
-    if (item === null || item === undefined || item === false) return [];
-    if (Array.isArray(item)) return item.flatMap((v) => this.expand(v, depth + 1));
-    if (isGeo(item)) return item.faces;
+    if (item === null || item === undefined || item === false) return { faces: [], lights: [] };
+    if (Array.isArray(item)) {
+      const out: Part = { faces: [], lights: [] };
+      for (const v of item) { const p = this.expand(v, depth + 1); out.faces.push(...p.faces); out.lights.push(...p.lights); }
+      return out;
+    }
+    if (isGeo(item)) return { faces: item.faces, lights: item.lights ?? [] };
     if (isRef(item)) {
       try { return this.resolve(item, depth); } catch (e) { throw wrap(e, (s) => this.locFromStack(s)).within(item.step.label, item.step.loc); }
     }
@@ -317,33 +342,34 @@ export class Project {
     throw new KilnError(`item is ${what}; items are shapes, voxels, tf, sym, stamp, scatter, or lists of those`);
   }
 
-  private resolve(r: Ref, depth: number): Face[] {
+  private resolve(r: Ref, depth: number): Part {
     const a = r.args;
-    if (r.__ref === "tf") return transform(this.expand(a.slice(1), depth + 1), placeM(a[0] as Record<string, unknown>));
+    if (r.__ref === "tf") return transformPart(this.expand(a.slice(1), depth + 1), placeM(a[0] as Record<string, unknown>));
     if (r.__ref === "sym") {
-      const f = this.expand(a.slice(1), depth + 1);
-      return [...f, ...transform(f, scaleM(a[0] === "x" ? [-1, 1, 1] : [1, 1, -1]))];
+      const p = this.expand(a.slice(1), depth + 1), q = transformPart(p, scaleM(a[0] === "x" ? [-1, 1, 1] : [1, 1, -1]));
+      return { faces: [...p.faces, ...q.faces], lights: [...p.lights, ...q.lights] };
     }
     const name = a[0] as string, o = a[1] as Record<string, unknown>;
     const cands = this.candidates(name);
     const pick = (rr: () => number) => cands[Math.floor(rr() * cands.length) % cands.length];
     if (r.__ref === "stamp") {
-      let f = this.build(pick(rng(hash(`${name}|${JSON.stringify(o.pos ?? 0)}`)))).faces;
-      if (o.swap) f = recolor(f, o.swap as Record<string, string>);
-      return transform(f, placeM(o));
+      const b = this.build(pick(rng(hash(`${name}|${JSON.stringify(o.pos ?? 0)}`))));
+      const f = o.swap ? recolor(b.faces, o.swap as Record<string, string>) : b.faces;
+      return transformPart({ faces: f, lights: b.lights }, placeM(o));
     }
     // scatter
     const [x0, z0, x1, z1] = o.area as number[];
     const rr = rng(Number(o.seed ?? hash(`${name}|${(o.area as number[]).join(",")}|${o.count}`)));
-    const out: Face[] = [];
+    const out: Part = { faces: [], lights: [] };
     const sc = o.scale as number | [number, number] | undefined;
     for (let i = 0; i < (o.count as number); i++) {
       const x = x0 + rr() * (x1 - x0), z = z0 + rr() * (z1 - z0);
       const s = Array.isArray(sc) ? sc[0] + rr() * (sc[1] - sc[0]) : sc ?? 1;
       const ry = o.rot === false ? 0 : Array.isArray(o.rot) ? o.rot[0] + rr() * (o.rot[1] - o.rot[0]) : rr() * 360;
-      let f = this.build(pick(rr)).faces;
-      if (o.swap) f = recolor(f, o.swap as Record<string, string>);
-      out.push(...transform(f, placeM({ pos: [x, Number(o.y ?? 0), z], rot: [0, ry, 0], scale: s })));
+      const b = this.build(pick(rr));
+      const m = placeM({ pos: [x, Number(o.y ?? 0), z], rot: [0, ry, 0], scale: s });
+      out.faces.push(...transform(o.swap ? recolor(b.faces, o.swap as Record<string, string>) : b.faces, m));
+      out.lights.push(...transformLights(b.lights, m));
     }
     return out;
   }

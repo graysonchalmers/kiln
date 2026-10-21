@@ -15,8 +15,10 @@ const USAGE = `kiln — low-poly and voxel 3D game assets as code
       Write a GLB per model (out/models), pack GLBs (one node per model), and previews
       (out/_preview: hero/front/right/top with dimensions). --turntable adds GIFs (ffmpeg).
   kiln render <models.kx.js> <model|pack> [--out FILE] [--size 1600x1200] [--yaw 35] [--pitch 22]
-              [--samples 64] [--no-ground] [--transparent] [--frames N]
+              [--samples 64] [--no-ground] [--transparent] [--frames N] [--mood day|night] [--fog 0.03] [--lens 70]
       Beauty render with headless Blender (EEVEE). --frames N renders a turntable MP4 (ffmpeg).
+      --mood night: dark world, dim moon and haze; the model's light() items light the scene.
+      --focus x,y,z aims the camera at a point (model coordinates, see kiln info); --zoom N moves it closer.
   kiln info   <models.kx.js> <name>
       Dimensions, triangle count, materials and build steps.
   kiln serve  <models.kx.js> [--port 4340] [--out DIR | --no-out]
@@ -26,7 +28,7 @@ const USAGE = `kiln — low-poly and voxel 3D game assets as code
 Model files may be .js or .ts. Default out dir: <model file dir>/out.`;
 
 interface Args { cmd?: string; file?: string; rest: string[]; out?: string | false; only?: string[]; preview?: boolean; turntable?: boolean;
-  port?: number; size?: [number, number]; yaw?: number; pitch?: number; samples?: number; ground?: boolean; transparent?: boolean; frames?: number }
+  port?: number; size?: [number, number]; yaw?: number; pitch?: number; samples?: number; ground?: boolean; transparent?: boolean; frames?: number; mood?: "day" | "night"; fog?: number; lens?: number; zoom?: number; focus?: [number, number, number] }
 
 function parse(argv: string[]): Args {
   const a: Args = { rest: [] };
@@ -49,6 +51,18 @@ function parse(argv: string[]): Args {
     else if (v === "--no-ground") a.ground = false;
     else if (v === "--transparent") a.transparent = true;
     else if (v === "--frames") a.frames = Number(val());
+    else if (v === "--mood") {
+      const m = val();
+      if (m !== "day" && m !== "night") throw new KilnError("--mood must be day or night");
+      a.mood = m;
+    } else if (v === "--fog") a.fog = Number(val());
+    else if (v === "--lens") a.lens = Number(val());
+    else if (v === "--zoom") a.zoom = Number(val());
+    else if (v === "--focus") {
+      const f = val().split(",").map(Number);
+      if (f.length !== 3 || f.some((x) => !Number.isFinite(x))) throw new KilnError("--focus must be x,y,z (model coordinates)");
+      a.focus = f as [number, number, number];
+    }
     else if (v === "-h" || v === "--help") a.cmd = "help";
     else if (v.startsWith("--")) throw new KilnError(`unknown flag ${v}\n\n${USAGE}`);
     else if (!a.cmd) a.cmd = v;
@@ -78,11 +92,11 @@ export async function main(argv: string[]): Promise<number> {
         if (!name) throw new KilnError("render needs a model or pack name");
         const p = loadProject(file);
         const pk = p.packs.find((k) => k.name === name);
-        const bytes = pk ? glb(packLayout(p, pk).models) : (() => { const b = p.build(name); return glb([{ name, faces: b.faces, pal: b.pal }]); })();
+        const bytes = pk ? glb(packLayout(p, pk).models) : (() => { const b = p.build(name); return glb([{ name, faces: b.faces, pal: b.pal, lights: b.lights }]); })();
         const turn = (a.frames ?? 1) > 1;
         const out = typeof a.out === "string" ? resolve(a.out) : join(dirname(file), "out", "renders", name + (turn ? ".mp4" : ".png"));
         mkdirSync(dirname(out), { recursive: true });
-        const ro = { w: a.size?.[0], h: a.size?.[1], yaw: a.yaw, pitch: a.pitch, samples: a.samples, ground: a.ground, transparent: a.transparent };
+        const ro = { w: a.size?.[0], h: a.size?.[1], yaw: a.yaw, pitch: a.pitch, samples: a.samples, ground: a.ground, transparent: a.transparent, mood: a.mood, fog: a.fog, lens: a.lens, zoom: a.zoom, focus: a.focus };
         if (!turn) blenderRender(bytes, out, ro);
         else {
           // Turntable: frames in one Blender session, then an MP4 (needs ffmpeg).

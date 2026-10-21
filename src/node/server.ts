@@ -93,7 +93,7 @@ export function serve(file: string, opts: ServeOptions = {}): Promise<{ url: str
       } else if (url.pathname === "/api/glb" && project) {
         const b = project.build(name);
         res.writeHead(200, { "content-type": "model/gltf-binary", "content-disposition": `attachment; filename="${name}.glb"` });
-        res.end(Buffer.from(glb([{ name, faces: b.faces, pal: b.pal }])));
+        res.end(Buffer.from(glb([{ name, faces: b.faces, pal: b.pal, lights: b.lights }])));
       } else { res.writeHead(404); res.end("not found"); }
     } catch (e) { res.writeHead(500); res.end(String(e)); }
   });

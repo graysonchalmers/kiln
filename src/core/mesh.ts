@@ -25,6 +25,37 @@ export function orient(v: V3[], outward: V3): V3[] {
   return dot(faceNormal(v), outward) < 0 ? v.slice().reverse() : v;
 }
 
+/** A punctual light carried with geometry (exported as KHR_lights_punctual). */
+export interface Light {
+  type: "point" | "spot";
+  color: string;
+  /** Watts, Blender-style. */
+  power: number;
+  pos: V3;
+  /** Spot direction (unit). */
+  dir: V3;
+  /** Spot cone half-angle in degrees. */
+  angle?: number;
+  range?: number;
+}
+
+/** Geometry plus the lights that travel with it through stamps, mirrors and transforms. */
+export interface Part {
+  faces: Face[];
+  lights: Light[];
+}
+
+export function transformLights(lights: Light[], m: M): Light[] {
+  return lights.map((l) => {
+    const o = apply(m, [0, 0, 0]), d = apply(m, l.dir);
+    return { ...l, pos: apply(m, l.pos), dir: norm([d[0] - o[0], d[1] - o[1], d[2] - o[2]]) };
+  });
+}
+
+export function transformPart(p: Part, m: M): Part {
+  return { faces: transform(p.faces, m), lights: transformLights(p.lights, m) };
+}
+
 export function transform(faces: Face[], m: M): Face[] {
   const flip = det(m) < 0;
   return faces.map((f) => {

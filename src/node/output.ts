@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { KilnError, didYouMean, wrap } from "../core/errors.ts";
 import { type GlbModel, glb } from "../core/gltf.ts";
-import { type Face, bounds, transform, triCount } from "../core/mesh.ts";
+import { type Face, type Light, bounds, transform, transformLights, triCount } from "../core/mesh.ts";
 import type { Built, PackDef, Project } from "../core/project.ts";
 import { type V3, translate } from "../core/util.ts";
 import { previewPng, viewPng } from "./preview.ts";
@@ -43,7 +43,7 @@ export function packLayout(p: Project, pk: PackDef): { models: GlbModel[]; combi
   for (let i = 0; i < built.length; i += cols) rows.push(built.slice(i, i + cols));
   const depth = rows.map((r) => Math.max(...r.map((b) => size(b)[1])));
   const totalD = depth.reduce((a, d) => a + d, 0) + gap * (rows.length - 1);
-  const models: GlbModel[] = [], all: Face[] = [];
+  const models: GlbModel[] = [], all: Face[] = [], allLights: Light[] = [];
   let z = -totalD / 2;
   rows.forEach((row, ri) => {
     const width = row.reduce((a, b) => a + size(b)[0], 0) + gap * (row.length - 1);
@@ -51,13 +51,14 @@ export function packLayout(p: Project, pk: PackDef): { models: GlbModel[]; combi
     for (const b of row) {
       const [w] = size(b);
       const t: V3 = [x + w / 2 - (b.bounds.min[0] + b.bounds.max[0]) / 2, 0, z + depth[ri] / 2 - (b.bounds.min[2] + b.bounds.max[2]) / 2];
-      models.push({ name: b.name, faces: b.faces, pal: b.pal, translation: t });
+      models.push({ name: b.name, faces: b.faces, pal: b.pal, lights: b.lights, translation: t });
       all.push(...transform(b.faces, translate(t)));
+      allLights.push(...transformLights(b.lights, translate(t)));
       x += w + gap;
     }
     z += depth[ri] + gap;
   });
-  return { models, combined: { name: pk.name, faces: all, steps: [], bounds: bounds(all), tris: triCount(all), pal: built[0].pal } };
+  return { models, combined: { name: pk.name, faces: all, steps: [], bounds: bounds(all), tris: triCount(all), pal: built[0].pal, lights: allLights } };
 }
 
 function turntable(b: Built, out: string): void {
@@ -84,10 +85,10 @@ export function writeOutputs(p: Project, out: string, opts: OutputOptions = {}):
   for (const name of want ? p.order.filter((n) => want.has(n)) : p.exported()) {
     try {
       const b = p.build(name);
-      write(join(out, "models", name + ".glb"), glb([{ name, faces: b.faces, pal: b.pal }]));
+      write(join(out, "models", name + ".glb"), glb([{ name, faces: b.faces, pal: b.pal, lights: b.lights }]));
       if (opts.preview !== false) write(join(out, "_preview", name + ".png"), previewPng(b));
       if (opts.turntable) turntable(b, join(out, "_preview", name + ".gif"));
-      lines.push(`model ${name} ${dims(b)} ${b.tris} tris`);
+      lines.push(`model ${name} ${dims(b)} ${b.tris} tris${b.lights.length ? ` ${b.lights.length} light${b.lights.length > 1 ? "s" : ""}` : ""}`);
     } catch (e) {
       errors.push(wrap(e));
     }

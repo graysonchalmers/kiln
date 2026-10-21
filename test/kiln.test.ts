@@ -101,6 +101,32 @@ pack("all", ["m"])`);
   }
 });
 
+test("lights travel with stamps and export as KHR_lights_punctual", () => {
+  const p = loadSource(`model("lamp", { pivot: "origin" }, box(0.2, 0.2, 0.2, "1"), light({ type: "spot", power: 50, pos: [0, -0.1, 0], dir: [0, -1, 0], angle: 40 }))
+model("room", { pivot: "origin" }, stamp("lamp", { pos: [1, 2, 3] }), sym("x", stamp("lamp", { pos: [2, 2, 0] })))`);
+  const b = p.build("room");
+  assert.equal(b.lights.length, 3);
+  assert.deepEqual(b.lights[0].pos.map((v) => Math.round(v * 100) / 100), [1, 1.9, 3]);
+  assert.deepEqual(b.lights.slice(1).map((l) => l.pos[0]).sort(), [-2, 2]);
+  const dir = mkdtempSync(join(tmpdir(), "kiln-"));
+  try {
+    writeOutputs(p, dir, { preview: false, only: ["room"] });
+    const buf = readFileSync(join(dir, "models/room.glb"));
+    const json = JSON.parse(buf.toString("utf8", 20, 20 + buf.readUInt32LE(12)));
+    assert.ok(json.extensionsUsed.includes("KHR_lights_punctual"));
+    const lights = json.extensions.KHR_lights_punctual.lights;
+    assert.equal(lights.length, 3);
+    near(lights[0].intensity, (50 * 683) / (4 * Math.PI), 1e-6);
+    assert.equal(lights[0].type, "spot");
+    // light nodes are children of the mesh node; -Z rotated to point down
+    const ln = json.nodes.find((n: { extensions?: unknown }) => n.extensions);
+    const [x, y, z, w] = ln.rotation;
+    near(-2 * (y * z - w * x), -1, 1e-6);   // y of R·(0, 0, -1) = -R[1][2]: the spot points straight down
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the preview renderer draws the model in its material color", () => {
   const b = one(`model("m", box(1, 1, 1, "a"))`);
   const img = renderView(b.faces, b.pal, b.bounds, { w: 64, h: 64, ground: false, yaw: 0, pitch: 0 });

@@ -8,7 +8,7 @@ import { gridStep, renderView, type ViewOpts } from "../core/render.ts";
 
 export function viewPng(b: Built, o: ViewOpts): Buffer {
   const w = o.w ?? 400, h = o.h ?? 400;
-  return Buffer.from(png(w, h, renderView(b.faces, b.pal, b.bounds, o), (x) => deflateSync(x)));
+  return Buffer.from(png(w, h, renderView(b.faces, b.pal, b.bounds, { lights: b.lights, ...o }), (x) => deflateSync(x)));
 }
 
 const VIEWS: [string, ViewOpts][] = [["hero", { yaw: 35, pitch: 25 }], ["front", { yaw: 0, pitch: 6 }], ["right", { yaw: 90, pitch: 6 }], ["top", { yaw: 0, pitch: 89.5 }]];

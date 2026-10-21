@@ -1,7 +1,7 @@
 // A small flat-shading software rasterizer: perspective camera orbiting the model, z-buffer,
 // world-fixed key + fill light, hemispheric ambient, emissive glow, a ground grid with a cast
 // shadow, and 2x supersampling. It is the agent's eyes; Blender is the beauty renderer.
-import { type Face, type Bounds, faceNormal, triangulate } from "./mesh.ts";
+import { type Face, type Bounds, type Light, faceNormal, triangulate } from "./mesh.ts";
 import { type Palette, srgbToLinear } from "./palette.ts";
 import { type V3, add, cross, dot, len, norm, scl, sub } from "./util.ts";
 
@@ -14,6 +14,27 @@ export interface ViewOpts {
   ground?: boolean;
   /** Fit to these bounds instead of the faces' own (keeps step replay framing steady). */
   fit?: Bounds;
+  /** Scene lights: when present the view switches to night (dim moon, lights do the work). */
+  lights?: Light[];
+}
+
+/** Light reaching a face from punctual lights (flat: evaluated at the face center). */
+function punctual(lights: Light[], c: V3, n: V3): V3 {
+  const out: V3 = [0, 0, 0];
+  for (const l of lights) {
+    const L = sub(l.pos, c), d2 = Math.max(0.04, dot(L, L)), Ln = scl(L, 1 / Math.sqrt(d2));
+    let k = Math.max(0, dot(n, Ln)) * l.power * 0.034 / d2;
+    if (l.type === "spot") {
+      const outer = Math.cos(((l.angle ?? 35) * Math.PI) / 180), inner = Math.cos(((l.angle ?? 35) * 0.7 * Math.PI) / 180);
+      const cd = -dot(Ln, l.dir);
+      k *= Math.max(0, Math.min(1, (cd - outer) / Math.max(1e-6, inner - outer)));
+    }
+    if (l.range) k *= Math.max(0, 1 - Math.sqrt(d2) / l.range);
+    if (k <= 0) continue;
+    const col = srgbToLinear(l.color);
+    out[0] += col[0] * k; out[1] += col[1] * k; out[2] += col[2] * k;
+  }
+  return out;
 }
 
 const LIGHT = norm([-0.5, 0.85, 0.6]);
@@ -46,6 +67,7 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
     return [W / 2 + (dot(d, right) / z) * f, H / 2 - (dot(d, up) / z) * f, z];
   };
 
+  const lights = o.lights ?? [], night = lights.length > 0;
   const img = new Float32Array(W * H * 3), zb = new Float32Array(W * H).fill(Infinity), ground = new Uint8Array(W * H);
   for (let y = 0; y < H; y++) {
     const t = y / H;
@@ -79,7 +101,8 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
         const cx = Math.round((center[0] + gx) / step) * step, cz = Math.round((center[2] + gz) / step) * step;
         const q: V3[] = [[cx, gy, cz], [cx + step, gy, cz], [cx + step, gy, cz + step], [cx, gy, cz + step]].map((p) => proj(p as V3)) as V3[];
         const fade = Math.max(0, 1 - Math.hypot(cx + step / 2 - center[0], cz + step / 2 - center[2]) / (ext * 0.95));
-        const shade = ((Math.round(cx / step) + Math.round(cz / step)) & 1 ? 0.055 : 0.075) * fade + 0.025 * (1 - fade);
+        let shade = ((Math.round(cx / step) + Math.round(cz / step)) & 1 ? 0.055 : 0.075) * fade + 0.025 * (1 - fade);
+        if (night) shade = shade * 0.35 + punctual(lights, [cx + step / 2, gy, cz + step / 2], [0, 1, 0])[0] * 0.12;
         for (const [i0, i1, i2] of [[0, 1, 2], [0, 2, 3]])
           raster(q[i0], q[i1], q[i2], (i, z) => {
             if (z >= zb[i]) return;
@@ -118,9 +141,10 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
     const nn = dot(n, sub(eye, c0)) < 0 ? scl(n, -1) : n;
     const key = Math.max(0, dot(nn, LIGHT)), fill = Math.max(0, dot(nn, FILL));
     const sky = 0.5 + 0.5 * nn[1];
-    const lightAmt = 0.25 * sky + 0.07 * (1 - sky) + 0.95 * key + 0.22 * fill;
-    const spec = m.metal > 0 ? m.metal * 0.6 * Math.max(0, dot(nn, norm(add(LIGHT, norm(sub(eye, c0)))))) ** 24 : 0;
-    const col = m.c.map((v, k) => v * lightAmt * (1 - m!.metal * 0.4) + spec + (m!.e ? m!.e[k] : 0)) as V3;
+    const lightAmt = night ? 0.05 * sky + 0.02 + 0.1 * key : 0.25 * sky + 0.07 * (1 - sky) + 0.95 * key + 0.22 * fill;
+    const spec = m.metal > 0 && !night ? m.metal * 0.6 * Math.max(0, dot(nn, norm(add(LIGHT, norm(sub(eye, c0)))))) ** 24 : 0;
+    const pl: V3 = night ? punctual(lights, scl(add(add(t.v[0], t.v[1]), t.v[2]), 1 / 3), nn) : [0, 0, 0];
+    const col = m.c.map((v, k) => v * (lightAmt + pl[k]) * (1 - m!.metal * 0.4) + spec + (m!.e ? m!.e[k] * (night ? 1.4 : 1) : 0)) as V3;
     raster(p[0], p[1], p[2], (i, z) => {
       if (z >= zb[i]) return;
       zb[i] = z;
