@@ -6,7 +6,14 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import * as vm from "node:vm";
 import { KilnError, wrap } from "../core/errors.ts";
 import { Project } from "../core/project.ts";
-import { resolveTextures } from "./textures.ts";
+import { decodeRgba, resolveTextures } from "./textures.ts";
+
+/** Read and decode a PNG for voximg() and terrain heightmaps. */
+function readImage(path: string) {
+  let bytes: Buffer;
+  try { bytes = readFileSync(path); } catch { throw new KilnError(`cannot read image '${path}'`); }
+  try { return decodeRgba(bytes); } catch (e) { throw wrap(e).within(`image '${path.replace(/^.*[\\/]/, "")}'`); }
+}
 
 function compile(code: string, file: string): string {
   // Type stripping keeps every line and column in place, so error locations stay exact.
@@ -36,6 +43,8 @@ export function loadProject(file: string): Project {
     }
   };
   p.includeHook = (path) => run(isAbsolute(path) ? path : resolve(dirname(stack[stack.length - 1]), path));
+  p.pathHook = (path) => (isAbsolute(path) ? path : resolve(dirname(stack[stack.length - 1] ?? resolve(file)), path));
+  p.imageHook = readImage;
   run(file);
   resolveTextures(p, dirname(resolve(file)));
   return p;
@@ -46,6 +55,7 @@ export function loadSource(src: string, name = "model.kx.js"): Project {
   const p = new Project();
   const ctx = vm.createContext({ ...p.env(), console, Math });
   p.addFile(name);
+  p.imageHook = readImage;
   try {
     vm.runInContext(compile(src, name), ctx, { filename: name });
   } catch (e) {

@@ -11,9 +11,10 @@ import { serve } from "./server.ts";
 
 const USAGE = `kiln — low-poly and voxel 3D game assets as code
 
-  kiln build  <models.kx.js> [--out DIR] [--only a,b] [--turntable] [--no-preview]
+  kiln build  <models.kx.js> [--out DIR] [--only a,b] [--turntable] [--stl] [--no-preview]
       Write a GLB per model (out/models), pack GLBs (one node per model), and previews
-      (out/_preview: hero/front/right/top with dimensions). --turntable adds GIFs (ffmpeg).
+      (out/_preview: hero/front/right/top with dimensions). --turntable adds GIFs (ffmpeg);
+      --stl adds a binary STL per model (3D printing, CAD).
   kiln render <models.kx.js> <model|pack> [--out FILE] [--size 1600x1200] [--yaw 35] [--pitch 22]
               [--samples 64] [--no-ground] [--transparent] [--frames N] [--mood day|night] [--fog 0.03] [--lens 70]
       Beauty render with headless Blender (EEVEE). --frames N renders a turntable MP4 (ffmpeg).
@@ -30,7 +31,7 @@ const USAGE = `kiln — low-poly and voxel 3D game assets as code
 
 Model files may be .js or .ts. Default out dir: <model file dir>/out.`;
 
-interface Args { cmd?: string; file?: string; rest: string[]; out?: string | false; only?: string[]; preview?: boolean; turntable?: boolean;
+interface Args { cmd?: string; file?: string; rest: string[]; out?: string | false; only?: string[]; preview?: boolean; turntable?: boolean; stl?: boolean;
   port?: number; size?: [number, number]; yaw?: number; pitch?: number; samples?: number; ground?: boolean; transparent?: boolean; frames?: number; mood?: "day" | "night"; fog?: number; lens?: number; zoom?: number; focus?: [number, number, number]; yawTo?: number; pitchTo?: number; zoomTo?: number; audio?: string; bloom?: number; clip?: string; still?: boolean; clipFrame?: number }
 
 function parse(argv: string[]): Args {
@@ -43,6 +44,7 @@ function parse(argv: string[]): Args {
     else if (v === "--only") a.only = val().split(",").map((s) => s.trim()).filter(Boolean);
     else if (v === "--no-preview") a.preview = false;
     else if (v === "--turntable") a.turntable = true;
+    else if (v === "--stl") a.stl = true;
     else if (v === "--port") a.port = Number(val());
     else if (v === "--size") {
       const m = /^(\d+)x(\d+)$/.exec(val());
@@ -92,7 +94,7 @@ export async function main(argv: string[]): Promise<number> {
   try {
     switch (a.cmd) {
       case "build": {
-        const r = writeOutputs(loadProject(file), outDir, { only: a.only, preview: a.preview, turntable: a.turntable });
+        const r = writeOutputs(loadProject(file), outDir, { only: a.only, preview: a.preview, turntable: a.turntable, stl: a.stl });
         for (const l of r.lines) console.log(l);
         for (const e of r.errors) console.error("error: " + e.message);
         console.log(`-> ${outDir}${r.errors.length ? ` (${r.errors.length} error${r.errors.length > 1 ? "s" : ""})` : ""}`);

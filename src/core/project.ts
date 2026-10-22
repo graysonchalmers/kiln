@@ -4,8 +4,8 @@ import { KilnError, didYouMean, wrap } from "./errors.ts";
 import { type Bounds, type Face, type Joint, type Light, type Part, bounds, renameParts, jitter, recolor, transform, transformLights, transformPart, triCount } from "./mesh.ts";
 import { Palette, normHex } from "./palette.ts";
 import { type ClipDef, checkTracks } from "./anim.ts";
-import { box, cyl, extrude, lathe, prism, rock, sphere, wedge } from "./prims.ts";
-import { gridFn, meshGrid, parseLayers } from "./voxel.ts";
+import { box, cyl, extrude, lathe, prism, rock, sphere, terrain, torus, tube, wedge } from "./prims.ts";
+import { type Grid, gridFn, meshGrid, parseLayers } from "./voxel.ts";
 import { type M, type V3, globRe, hash, mul, rng, rotM, scaleM, translate } from "./util.ts";
 
 export interface Step {
@@ -58,7 +58,19 @@ const PLACE = ["pos", "rot", "scale"];
 const SHAPE_OPTS: Record<string, string[]> = {
   box: [], cyl: ["sides", "top"], cone: ["sides"], sphere: ["detail"], rock: ["detail", "rough", "squash", "seed"],
   lathe: ["sides"], extrude: [], prism: [], wedge: [], voxels: ["size"], voxfn: ["size"],
+  torus: ["sides", "rings"], tube: ["sides", "closed"], terrain: ["res", "height", "fn", "heightmap"],
+  voximg: ["size", "depth", "alpha", "flat"],
 };
+/** Shapes whose material comes from inside (voxel keys, a terrain's mat function). */
+const NO_MAT = ["voxels", "voxfn", "voximg"];
+
+/** A decoded raster for voximg() and terrain heightmaps: 8-bit RGBA, plus the first channel at 16 bits when the file has it. */
+export interface Rgba {
+  w: number;
+  h: number;
+  rgba: Uint8Array;
+  hi?: Uint16Array;
+}
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const isGeo = (v: unknown): v is Geo => isObj(v) && "__geo" in v;
@@ -97,6 +109,11 @@ export class Project {
   readonly files: string[] = [];
   pal = Palette.default();
   includeHook?: (path: string) => void;
+  /** Set by a loader: resolves a path written in a model file against that file. */
+  pathHook: (path: string) => string = (p) => p;
+  /** Set by a loader: reads and decodes a PNG by its resolved path. */
+  imageHook?: (path: string) => Rgba;
+  private images = new Map<string, Rgba>();
 
   private cache = new Map<string, Built>();
   private building = new Set<string>();
@@ -142,8 +159,24 @@ export class Project {
       if (typeof v === "string") return { mat: mat(v), o: {} };
       if (!isPlain(v)) throw new KilnError(`needs a material: "${[...this.pal.mats.keys()][0]}" or { mat, pos, rot, scale, ... }`);
       checkKeys("options", v, ["mat", ...PLACE, "jitter", "seed", ...SHAPE_OPTS[kind].filter((k) => k !== "seed")]);
-      if (v.mat === undefined && !["voxels", "voxfn"].includes(kind)) throw new KilnError(`${kind} needs { mat: "key" }`);
+      if (v.mat === undefined && !NO_MAT.includes(kind)) throw new KilnError(`${kind} needs { mat: "key" }${kind === "terrain" ? " or { mat: (h, slope, x, z) => key }" : ""}`);
+      if (typeof v.mat === "function") {
+        if (kind !== "terrain") throw new KilnError(`${kind}: mat must be a palette key`);
+        return { mat: "", o: v };
+      }
       return { mat: v.mat === undefined ? "" : mat(v.mat), o: v };
+    };
+    /** A decoded PNG by path written in the model file, cached. */
+    const image = (src: unknown, what: string): Rgba => {
+      if (typeof src !== "string" || !src) throw new KilnError(`${what}: the image is a PNG path relative to the model file`);
+      const abs = this.pathHook(src);
+      let img = this.images.get(abs);
+      if (!img) {
+        if (!this.imageHook) throw new KilnError(`${what}: images are not available here (no image loader)`);
+        img = this.imageHook(abs);
+        this.images.set(abs, img);
+      }
+      return img;
     };
     const geo = (kind: string, args: unknown[], make: (mat: string, o: Record<string, unknown>) => Face[]): Geo => at(kind, (loc) => {
       const { mat: m, o } = style(kind, args[args.length - 1]);
@@ -196,6 +229,67 @@ export class Project {
     env.voxfn = (size: unknown, fn: unknown, s: unknown = {}) => geo("voxfn", [size, fn, s], (_m, o) => {
       if (typeof fn !== "function") throw new KilnError("voxfn([nx, ny, nz], (x, y, z) => key | null, { size })");
       return meshGrid(gridFn(vec(size, "size", [1, 1, 1]), fn as (x: number, y: number, z: number) => unknown, isKey), Number(o.size ?? 1));
+    });
+    env.voximg = (src: unknown, s: unknown = {}) => geo("voximg", [src, s], (_m, o) => {
+      // Every opaque pixel becomes a column of `depth` voxels in a material made from its color.
+      const img = image(src, "voximg");
+      const alpha = Number(o.alpha ?? 128), depth = Math.max(1, Math.round(Number(o.depth ?? 1))), flat = !!o.flat;
+      if (img.w * img.h * depth > 4_000_000) throw new KilnError(`voximg: ${img.w}×${img.h}×${depth} is more than 4M voxels; shrink the image or the depth`);
+      const defs: Record<string, string> = {};
+      const keyOf = (i: number): string | null => {
+        if (img.rgba[i * 4 + 3] < alpha) return null;
+        const hex = [0, 1, 2].map((k) => img.rgba[i * 4 + k].toString(16).padStart(2, "0")).join("");
+        const key = "px_" + hex;
+        if (!this.pal.has(key)) defs[key] = "#" + hex;
+        return key;
+      };
+      const g: Grid = flat ? { nx: img.w, ny: depth, nz: img.h, cells: new Array(img.w * img.h * depth).fill(null) }
+        : { nx: img.w, ny: img.h, nz: depth, cells: new Array(img.w * img.h * depth).fill(null) };
+      for (let iy = 0; iy < img.h; iy++)
+        for (let ix = 0; ix < img.w; ix++) {
+          const key = keyOf(iy * img.w + ix);
+          if (!key) continue;
+          for (let k = 0; k < depth; k++) {
+            if (flat) g.cells[ix + g.nx * (iy + g.nz * k)] = key;
+            else g.cells[ix + g.nx * (k + g.nz * (img.h - 1 - iy))] = key;
+          }
+        }
+      if (Object.keys(defs).length) this.pal = this.pal.extend(defs);
+      return meshGrid(g, Number(o.size ?? 0.1));
+    });
+    env.torus = (R: unknown, r: unknown, s: unknown) => geo("torus", [R, r, s], (m, o) => torus(num(R, "R", 1e-9), num(r, "r", 1e-9), Number(o.rings ?? 24), Number(o.sides ?? 12), m));
+    env.tube = (path: unknown, r: unknown, s: unknown) => geo("tube", [path, r, s], (m, o) => {
+      if (!Array.isArray(path) || path.length % 3 || path.length < 6 || !path.every((v) => typeof v === "number" && Number.isFinite(v)))
+        throw new KilnError("tube path: a flat list [x0, y0, z0, x1, y1, z1, ...] of at least 2 points");
+      const pts: V3[] = [];
+      for (let i = 0; i < path.length; i += 3) pts.push([path[i], path[i + 1], path[i + 2]]);
+      return tube(pts, num(r, "r", 1e-9), Number(o.sides ?? 8), !!o.closed, m);
+    });
+    env.terrain = (w: unknown, d: unknown, s: unknown) => geo("terrain", [w, d, s], (m, o) => {
+      const res = o.res === undefined ? [32, 32] : typeof o.res === "number" ? [o.res, o.res] : o.res;
+      if (!Array.isArray(res) || res.length !== 2 || !res.every((v) => Number.isInteger(v) && v >= 1)) throw new KilnError("terrain res: cells per side, a whole number or [nx, nz]");
+      const height = num(o.height ?? 1, "height");
+      let fn: (x: number, z: number) => number;
+      if (typeof o.fn === "function") fn = o.fn as typeof fn;
+      else if (o.heightmap !== undefined) {
+        // the image spans the terrain: top row = back (-z); 16-bit gray (loom's height maps) keeps its precision
+        const img = image(o.heightmap, "terrain heightmap"), W = num(w, "w", 1e-9), D = num(d, "d", 1e-9);
+        const at = (x: number, y: number) => {
+          const i = Math.min(img.h - 1, Math.max(0, y)) * img.w + Math.min(img.w - 1, Math.max(0, x));
+          return img.hi ? img.hi[i] / 65535 : img.rgba[i * 4] / 255;
+        };
+        fn = (x, z) => {
+          const u = (x / W + 0.5) * img.w - 0.5, v = (z / D + 0.5) * img.h - 0.5, x0 = Math.floor(u), y0 = Math.floor(v), fx = u - x0, fy = v - y0;
+          return (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) + (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
+        };
+      } else throw new KilnError("terrain needs fn: (x, z) => height 0..1, or heightmap: \"file.png\"");
+      const matFn = typeof o.mat === "function" ? (o.mat as (h: number, slope: number, x: number, z: number) => unknown) : () => m;
+      const matOf = (h: number, slope: number, x: number, z: number): string => {
+        const k = matFn(h, slope, x, z);
+        if (typeof k !== "string") throw new KilnError(`terrain mat function returned ${JSON.stringify(k)}; return a palette key`);
+        return mat(k);
+      };
+      return terrain(num(w, "w", 1e-9), num(d, "d", 1e-9), res[0], res[1], height, fn, matOf);
     });
 
     const ref = (kind: Ref["__ref"], args: unknown[], label: string) => at(kind, (loc): Ref => ({ __ref: kind, args, step: { label, loc } }));

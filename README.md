@@ -152,7 +152,11 @@ kiln render scene.kx.js last_cup --mood night --focus 0.1,2.65,2.1 --zoom 1.3 \
 
 - **Low-poly primitives:** box, cylinder (tapering), cone, icosphere, rock, lathe, extrude (any
   outline, concave ok), gable prism, wedge, plus vertex jitter for a hand-made look.
-- **Voxels:** text layers like pixel art, or a function of (x, y, z); greedy-meshed.
+- **Voxels:** text layers like pixel art, a function of (x, y, z), or `voximg()`: a pixel-art PNG
+  extruded into voxels with one material per color; greedy-meshed.
+- **Tubes and terrain:** `torus`, `tube` along a path (pipes, cables, branches; mitered, twist-free)
+  and `terrain` heightfields from a function or a loom height map, with materials picked per triangle
+  by height and slope. `--stl` exports for 3D printing.
 - **Structure:** transforms, mirror symmetry, stamps, scatter, random groups, material-swap variants.
 - **Animation:** named `part()`s with pivots and keyframed `animate()` clips (rotation, offset, scale, five
   easings), exported as glTF animations, previewed as frame strips, played in Blender renders.

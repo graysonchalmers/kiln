@@ -30,7 +30,7 @@ does beauty renders and turntable videos.
    `mat`, `part`, and the build `step` with its source `loc`, so you know which line made that face),
    or `null` if it missed the model; strokes list what they `cover` (by step and material, with world
    bounds). Look at `<model>.annotated.png` for the view. Comments persist between sends: check `time`.
-6. Ship: GLBs are in `out/models/` and `out/<pack>.glb`. Portfolio shots:
+6. Ship: GLBs are in `out/models/` and `out/<pack>.glb` (`--stl` adds printable STLs). Portfolio shots:
    `KILN render models.kx.js <name> --size 1920x1080` (Blender), add `--frames 180` for a turntable MP4.
    Lit scenes: `--mood night`; framing: `--focus x,y,z --zoom N`; camera moves: `--frames 300 --yaw-to ... --zoom-to ...`,
    plus `--audio file.wav`. Blender writes only inside your home directory if it's the flatpak.
@@ -69,11 +69,16 @@ pack("kit", ["pine", "crate", "rock", "gem"])
 - **Shapes** (last argument = material key or `{ mat, pos, rot, scale, jitter, seed, ... }`):
   `box(w, h, d)`, `cyl(r, h, { sides, top })`, `cone(r, h)`, `sphere(r, { detail })`,
   `rock(r, { rough, squash, seed })`, `lathe([r0, y0, r1, y1, ...])`, `extrude([x0, y0, ...], depth)`,
-  `prism(w, h, d)` (gable roof), `wedge(w, h, d)` (ramp).
+  `prism(w, h, d)` (gable roof), `wedge(w, h, d)` (ramp), `torus(R, r)`, `tube([x, y, z, ...], r)`
+  (pipes, cables, branches, rails: mitered bends, no twist, `closed` for rings).
   Boxes, cylinders, cones, lathes, prisms and wedges sit on their base; spheres and rocks are centered.
+- **Terrain**: `terrain(w, d, { res: 48, height: 3, fn: (x, z) => 0..1, mat: (h, slope, x, z) => key })`
+  or `heightmap: "../loom/out/hills/hills_height.png"`: islands, hills, cave floors, with grass / rock /
+  snow picked per triangle by height and slope.
 - **Voxels**: `voxels([layer, ...], { size })`; each layer is a top-down map (rows back → front,
   "." empty, 1-char palette keys). `voxfn([nx, ny, nz], (x, y, z) => key | null, { size })` for
-  procedural voxels. Greedy meshing keeps triangle counts low.
+  procedural voxels. `voximg("sprite.png", { size, depth, flat })` extrudes a pixel-art PNG into
+  voxels, one material per color (a pxl sprite becomes a 3D model). Greedy meshing keeps triangle counts low.
 - **Structure**: `tf({ pos, rot, scale }, ...items)`, `sym("x" | "z", ...items)` (mirror copy),
   `stamp(name, { pos, rot, scale, swap })`, `scatter(name, { area, count, scale, rot, y, seed })`,
   `group(name, [members])` (random pick), variants with `{ base, swap }`.

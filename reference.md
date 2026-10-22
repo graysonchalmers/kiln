@@ -68,6 +68,9 @@ The last argument is a material key, or an options object with `mat` plus:
 | `extrude([x0, y0, x1, y1, ...], depth)` | outline coordinates | Any simple polygon (concave ok), in X/Y, extruded along Z. |
 | `prism(w, h, d)` | base center | Gable roof: triangle in X/Y, ridge along Z. |
 | `wedge(w, h, d)` | base center | Ramp: full height at the back, 0 at the front. |
+| `torus(R, r)` | center | Ring of radius R around Y, tube radius r; `rings` (24) around, `sides` (12) around the tube. Rings, tires, donuts, halos. |
+| `tube([x0, y0, z0, x1, y1, z1, ...], r)` | path coordinates | A pipe of radius r swept along the points: `sides` (8); `closed: true` joins the ends (otherwise they are capped). Frames are carried along the path so the tube never twists, and bends are mitered so the cross section stays full. Pipes, cables, rails, branches, tentacles, handles. |
+| `terrain(w, d, { res, height, fn \| heightmap, mat })` | base center | A heightfield w × d meters: `res` cells per side (32, or `[nx, nz]`), `height` the vertical scale in meters (1). Heights 0..1 come from `fn: (x, z) => h` at world coordinates (centered) or `heightmap: "file.png"` (gray PNG, 16-bit kept, top row = back; a loom `_height.png` works as is). `mat` is a key, or `(h, slope, x, z) => key` per triangle (`slope` 0 flat .. 1 vertical): grass low, rock steep, snow high. Islands, hills, dungeon floors, dioramas. |
 
 ## Voxels
 
@@ -80,6 +83,16 @@ Layers run bottom to top. Each layer is a top-down map: rows go from the back (-
 (+z), columns from left (-x) to right (+x); `.` or space is empty, any other character is a
 palette key. The grid is centered in x/z with its base on y = 0. Faces between voxels are removed
 and coplanar faces of one material merge (greedy meshing).
+
+```js
+voximg("hero.png", { size = 0.1, depth = 1, alpha = 128, flat = false })
+```
+
+Voxels from a PNG (a pxl sprite, a logo, a map): every pixel with alpha ≥ `alpha` becomes `depth`
+voxels of `size` meters in a material named after its color (`px_rrggbb`, added to the palette, so
+`swap` can recolor it). Standing by default (image up = model up, depth along z); `flat: true` lays
+it down (image rows run back to front, depth up: floor plans, tile maps). Paths are relative to the
+model file.
 
 ## Structure and reuse
 
@@ -128,11 +141,12 @@ Clips export as glTF animations (one sample per frame, linear). `kiln build` wri
 
 ## Output and commands
 
-`kiln build file.kx.js [--out DIR] [--only a,b] [--turntable] [--no-preview]`
+`kiln build file.kx.js [--out DIR] [--only a,b] [--turntable] [--stl] [--no-preview]`
 
 | Path | Content |
 |---|---|
 | `out/models/<name>.glb` | glTF 2.0 binary: one node, one primitive per material, flat normals, PBR materials. |
+| `out/models/<name>.stl` | `--stl`: binary STL (triangles + normals, no materials) for 3D printing and CAD. |
 | `out/<pack>.glb` | One node per model, laid out in rows. Engines import it as a library of named meshes. |
 | `out/_preview/<name>.png` | Hero / front / right / top views, dimensions, triangle count, grid spacing, materials. |
 | `out/_preview/<name>.gif` | `--turntable`: 36-frame orbit (needs ffmpeg). |

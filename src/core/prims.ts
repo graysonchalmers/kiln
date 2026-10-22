@@ -1,8 +1,8 @@
 // Low-poly primitives. Boxes, cylinders, cones, lathes, prisms and extrusions sit on y = 0
 // (centered in x/z); spheres and rocks are centered on the origin. Every face is CCW-outward.
 import { KilnError } from "./errors.ts";
-import { type Face, earClip, orient } from "./mesh.ts";
-import { type V3, add, norm, rng, scl, sub } from "./util.ts";
+import { type Face, earClip, faceNormal, orient } from "./mesh.ts";
+import { type V3, add, cross, dot, len, norm, rng, scl, sub } from "./util.ts";
 
 export function box(w: number, h: number, d: number, mat: string): Face[] {
   const x = w / 2, z = d / 2;
@@ -136,4 +136,106 @@ export function rock(r: number, detail: number, rough: number, squash: number, s
     const v: V3[] = [moved[a], moved[b], moved[c]];
     return { v: orient(v, add(add(v[0], v[1]), v[2])), mat };
   });
+}
+
+/** A torus around the Y axis: ring radius R, tube radius r; `rings` segments around, `sides` around the tube. */
+export function torus(R: number, r: number, rings: number, sides: number, mat: string): Face[] {
+  if (!(rings >= 3 && sides >= 3)) throw new KilnError("torus: rings and sides must be >= 3");
+  const pt = (i: number, j: number): V3 => {
+    const a = (i / rings) * Math.PI * 2, b = (j / sides) * Math.PI * 2 + Math.PI / sides;
+    const d = R + Math.cos(b) * r;
+    return [Math.sin(a) * d, Math.sin(b) * r, Math.cos(a) * d];
+  };
+  const faces: Face[] = [];
+  for (let i = 0; i < rings; i++)
+    for (let j = 0; j < sides; j++) {
+      const a = pt(i, j), b = pt(i + 1, j), c = pt(i + 1, j + 1), d = pt(i, j + 1);
+      const ca = (i + 0.5) / rings * Math.PI * 2, center: V3 = [Math.sin(ca) * R, 0, Math.cos(ca) * R];
+      faces.push({ v: orient([a, b, c, d], sub(centroid([a, b, c, d]), center)), mat });
+    }
+  return faces;
+}
+
+/**
+ * A tube of radius r swept along a polyline (pipes, cables, branches, rails). Rings are carried
+ * along with parallel-transport frames so they never twist; `closed` joins the last point to the
+ * first, otherwise both ends are capped.
+ */
+export function tube(path: V3[], r: number, sides: number, closed: boolean, mat: string): Face[] {
+  if (path.length < 2) throw new KilnError("tube needs at least 2 points");
+  if (!(sides >= 3)) throw new KilnError("sides must be >= 3");
+  const pts = closed ? [...path, path[0]] : path;
+  // one tangent per point: the average of the directions in and out; at a bend the ring is mitered
+  // (stretched across the bend by 1 / cos(half angle)) so the pipe keeps its full cross section
+  const miters: { s: V3; m: number }[] = [];
+  const dirs = pts.map((p, i) => {
+    const prev = pts[i - 1] ?? (closed ? pts[pts.length - 2] : undefined), next = pts[i + 1] ?? (closed ? pts[1] : undefined);
+    const a = prev ? norm(sub(p, prev)) : [0, 0, 0] as V3, b = next ? norm(sub(next, p)) : [0, 0, 0] as V3;
+    const t = norm(add(a, b));
+    const bend = prev && next && len(sub(b, a)) > 1e-9;
+    miters.push(bend ? { s: norm(sub(b, a)), m: Math.min(4, 1 / Math.max(0.25, dot(a, t))) } : { s: [0, 0, 0], m: 1 });
+    return len(t) > 0 ? t : norm(len(b) ? b : a);
+  });
+  // parallel transport: start with any perpendicular, rotate it along the path
+  let u: V3 = Math.abs(dirs[0][1]) < 0.9 ? norm(cross(dirs[0], [0, 1, 0])) : norm(cross(dirs[0], [1, 0, 0]));
+  const frames = dirs.map((t, i) => {
+    if (i) {
+      const prev = dirs[i - 1], axis = cross(prev, t), s = len(axis);
+      if (s > 1e-9) {
+        const ax = scl(axis, 1 / s), ang = Math.atan2(s, dot(prev, t)), c = Math.cos(ang), sn = Math.sin(ang);
+        u = norm(add(add(scl(u, c), scl(cross(ax, u), sn)), scl(ax, dot(ax, u) * (1 - c))));
+      }
+    }
+    return { t, u, v: cross(t, u) };
+  });
+  const ring = (i: number): V3[] => Array.from({ length: sides }, (_, k) => {
+    const a = (k / sides) * Math.PI * 2 + Math.PI / sides, f = frames[i], mt = miters[i];
+    let o = add(scl(f.u, Math.cos(a) * r), scl(f.v, Math.sin(a) * r));
+    if (mt.m !== 1) o = add(o, scl(mt.s, (mt.m - 1) * dot(o, mt.s)));
+    return add(pts[i], o);
+  });
+  const rings = pts.map((_, i) => ring(i));
+  const faces: Face[] = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const A = rings[i], B = rings[i + 1], mid = scl(add(pts[i], pts[i + 1]), 0.5);
+    for (let k = 0; k < sides; k++) {
+      const j = (k + 1) % sides, v = [A[k], A[j], B[j], B[k]];
+      faces.push({ v: orient(v, sub(centroid(v), mid)), mat });
+    }
+  }
+  if (!closed) {
+    faces.push({ v: orient(rings[0], scl(dirs[0], -1)), mat });
+    faces.push({ v: orient(rings[rings.length - 1], dirs[dirs.length - 1]), mat });
+  }
+  return faces;
+}
+
+/**
+ * A heightfield w × d meters with nx × nz cells: `height(x, z)` gives 0..1 at world coordinates
+ * (centered in x/z), scaled by `scale` meters. Diagonals alternate per cell. `matOf` picks each
+ * triangle's material from its normalized height, slope (0 flat .. 1 vertical) and position.
+ */
+export function terrain(w: number, d: number, nx: number, nz: number, scale: number, height: (x: number, z: number) => number,
+  matOf: (h: number, slope: number, x: number, z: number) => string): Face[] {
+  if (!(nx >= 1 && nz >= 1)) throw new KilnError("terrain res must be >= 1");
+  const hs = new Float32Array((nx + 1) * (nz + 1));
+  for (let j = 0; j <= nz; j++)
+    for (let i = 0; i <= nx; i++) {
+      const v = height((i / nx - 0.5) * w, (j / nz - 0.5) * d);
+      if (typeof v !== "number" || !Number.isFinite(v)) throw new KilnError(`terrain height must return a number, got ${JSON.stringify(v)} at cell ${i},${j}`);
+      hs[j * (nx + 1) + i] = Math.max(0, Math.min(1, v));
+    }
+  const P = (i: number, j: number): V3 => [(i / nx - 0.5) * w, hs[j * (nx + 1) + i] * scale, (j / nz - 0.5) * d];
+  const faces: Face[] = [];
+  const tri = (a: V3, b: V3, c: V3) => {
+    const v = orient([a, b, c], [0, 1, 0]), n = faceNormal(v);
+    const cx = (a[0] + b[0] + c[0]) / 3, cz = (a[2] + b[2] + c[2]) / 3, h = (a[1] + b[1] + c[1]) / 3 / (scale || 1);
+    faces.push({ v, mat: matOf(h, Math.max(0, Math.min(1, 1 - n[1])), cx, cz) });
+  };
+  for (let j = 0; j < nz; j++)
+    for (let i = 0; i < nx; i++) {
+      const a = P(i, j), b = P(i + 1, j), c = P(i + 1, j + 1), e = P(i, j + 1);
+      if ((i + j) % 2) { tri(a, b, c); tri(a, c, e); } else { tri(a, b, e); tri(b, c, e); }
+    }
+  return faces;
 }

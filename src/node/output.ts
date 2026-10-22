@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { KilnError, didYouMean, wrap } from "../core/errors.ts";
 import { type GlbModel, glb } from "../core/gltf.ts";
+import { stl } from "../core/stl.ts";
 import { type Face, type Light, bounds, transform, transformLights, triCount } from "../core/mesh.ts";
 import type { Built, PackDef, Project } from "../core/project.ts";
 import { type V3, translate } from "../core/util.ts";
@@ -15,6 +16,8 @@ export interface OutputOptions {
   preview?: boolean;
   /** Also write a turntable GIF per model to out/_preview (needs ffmpeg). */
   turntable?: boolean;
+  /** Also write a binary STL per model to out/models (3D printing, CAD). */
+  stl?: boolean;
 }
 
 export interface OutputResult {
@@ -87,6 +90,7 @@ export function writeOutputs(p: Project, out: string, opts: OutputOptions = {}):
       const b = p.build(name);
       const clips = p.clips.filter((c) => c.model === name);
       write(join(out, "models", name + ".glb"), glb([{ name, faces: b.faces, pal: b.pal, lights: b.lights, joints: b.joints, clips }]));
+      if (opts.stl) write(join(out, "models", name + ".stl"), stl(b.faces, name));
       if (opts.preview !== false) {
         write(join(out, "_preview", name + ".png"), previewPng(b));
         for (const c of clips) write(join(out, "_preview", `${name}.${c.name}.png`), clipStrip(b, c));
