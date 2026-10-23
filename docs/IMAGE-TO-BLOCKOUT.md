@@ -15,7 +15,8 @@ First run: three CC0 trees cropped from the Quaternius Stylized Nature sheet (br
 ## Steps
 1. **Reference.** One object per image, clean background, colour that separates from it. Crop tight; note anything the
    frame cuts off.
-2. **Decompose** (a subagent, `art-direction:image-decomp` for the craft read, then a measured spec): identity + 2-3
+2. **Decompose from the image only** (a subagent, `art-direction:image-decomp` for the craft read, then a measured
+   spec; it must not fetch the source asset or mesh, or the loop stops testing image -> blockout): identity + 2-3
    recognition traits, a parts table in fractions of height (origin at the ground centre), proportions (width/height,
    widest point, lean, lopsidedness), a sampled palette, and the silhouette traits a judge checks first. Measured beats
    described: the subagent samples pixels.
@@ -90,3 +91,26 @@ Scene: `smoke/img2blockout.kx.js`, pack `img2blockout_best`. The decomposed v1 b
   likeness so far (8/10).
 - Next: barrel hoop contrast (wider, lighter metal); boulder plateau top and a crack instead of a clean seam; maple tall
   diagonal without losing clumps (hull only behind, lobes in front); a hard-surface box prop (crate) to test non-lathe parts.
+
+## Round 4 results (2026-10-23)
+
+| Object | Kept before | New | IoU kept -> new | Blind A/B (likeness) | Kept now |
+|---|---|---|---|---|---|
+| crate (Poly Haven old_military_crate, CC0) | v0 naive box | v1: lid, battens over skids, latches, corner posts, canvas flap | 0.807 -> 0.926 | v1 7 vs 3 | v1 |
+| maple | v3 | v5: v3's clumps along v4's tall diagonal, scarlet | 0.647 -> 0.708 | v5 5 vs 4 | v5 |
+| barrel | v1 | v2: hoops wider, prouder, lighter | 0.938 -> 0.910 | v1 8 vs 7 | v1 |
+| boulder | v2 | v3: plateau mass, longer slab, a dark crack box | 0.756 -> 0.784 | v2 6 vs 5 | v2 |
+
+- Box-built hard surface works: the image's rhythm (battens and skids at 19% / 81%, latches at 25% / 75%, the lid seam
+  0.16H down) placed parts the judge counted one by one. Depth (0.56L) was an assumption, flagged. The naive crate's
+  first score (0.60) was its wrong camera; shot at the measured camera it was 0.81, so always shoot v0 at the same camera.
+- The crate's decomposition agent fetched the source mesh to check itself. Its mesh numbers were not used, and the step
+  now says image only.
+- A contrast fix must stay inside the reference's material: "lighter hoops" became silver and lost. Use the sampled iron
+  value, not a direction.
+- A crack is a cut, not an added part: a dark box in the seam read as a stick. kiln has no boolean subtract; that is the
+  tool gap. The plateau mass also rounded the boulder's crown (it lost its craggy peak).
+- Maple: keeping the clumps and moving them onto the diagonal won where the hull crown lost. Silhouette gesture and
+  part identity both have to survive a fix.
+- Next: subtract/cut (cracks, notches, recessed panels), barrel hoop value from the sample, crate colour from the sampled
+  shadow tone (the render lightens it), crate hasp straps.

@@ -1,6 +1,7 @@
 // Image -> blockout (2026-10-23): reference image -> image-decomp spec -> recipe picks -> this scene -> likeness + blind
 // judge against the image. Refs: Quaternius Stylized Nature (CC0) crops in .proof/2026-10-23-img2blockout/refs.
 include("../lib/grayson/nature.kx.js")
+include("../lib/grayson/props.kx.js")
 include("../lib/grayson/styles.kx.js")
 style("cozy")
 pal({ maple: "#d83a24", mapleL: "#f25a36", mapleD: "#a8241a", birch: "#cfc3b0" })
@@ -166,7 +167,59 @@ model("barrel_v1",
     return box(half * 2 * 0.98, 0.012, 0.12 * BRH, { mat: k % 2 ? "brlHead" : "brl1", pos: [0, 0.96 * BRH + 0.004, z] }) }),
   tf({ rot: [0, 20, 0] }, cyl(0.028 * BRH, 0.02 * BRH, { mat: "brlBung", sides: 10, rot: [90, 0, 0], pos: [0, 0.5 * BRH, 0.425 * BRH] })))
 
+// ---------- round 4 (2026-10-23)
+// barrel v2: v1 with hoops that read (judge: "thin dark bands that almost merge into the wood"): 35% wider, prouder,
+// lighter metal
+pal({ hoop2: { color: "#8a857e", metal: 0.55, rough: 0.45 } })
+model("barrel_v2",
+  lathe([0, 0, ...BRP.flatMap((r, i) => [r * BRH, i * 0.1 * BRH]), 0.318 * BRH, BRH, 0.318 * BRH, 0.96 * BRH, 0, 0.96 * BRH], { mat: "brl1", sides: 30 }),
+  [[0.958, 0.055], [0.862, 0.033], [0.687, 0.049], [0.32, 0.046], [0.142, 0.032], [0.046, 0.054]].map(([c, w0]) => { const w = w0 * 1.35
+    return lathe([(brR(c - w / 2) + 0.014) * BRH, (c - w / 2) * BRH, (brR(c + w / 2) + 0.014) * BRH, (c + w / 2) * BRH], { mat: "hoop2", sides: 30 }) }),
+  [-2, -1, 0, 1, 2].map(k => { const z = k * 0.126 * BRH, half = Math.sqrt(Math.max(0, (0.318 * BRH) ** 2 - z * z))
+    return box(half * 2 * 0.98, 0.012, 0.12 * BRH, { mat: k % 2 ? "brlHead" : "brl1", pos: [0, 0.96 * BRH + 0.004, z] }) }),
+  tf({ rot: [0, 20, 0] }, cyl(0.028 * BRH, 0.02 * BRH, { mat: "brlBung", sides: 10, rot: [90, 0, 0], pos: [0, 0.5 * BRH, 0.425 * BRH] })))
+
+// boulder v3: a broad lumpy plateau at the top centre (judge: "peak too far left and too pointed"), the right slab longer
+// and lower, rougher facets, a dark crack in the seam between the two hulls instead of a clean join
+model("boulder_v3",
+  hull({ mat: "bst", cap: "bstL", capAngle: 35, jitter: 0.04, seed: 4 }, bm(0, 0.62, 0.89, 0.58, 6), bm(-0.31, 0.54, 0.46, 0.5, 21, 0.6), bm(-0.07, 0.28, 0.51, 0.28, -21, 0.6),
+    bm(0.04, 0.9, 0.46, 0.16, 0, 0.55)),
+  hull({ mat: "bst", cap: "bstL", capAngle: 35, jitter: 0.035, seed: 5 }, bm(0.33, 0.52, 0.24, 0.28, -3, 0.5), bm(0.3, 0.22, 0.75, 0.42, -18, 0.7)),
+  tf({ pos: [0.19 * BW, 0.44, 0.02], rot: [0, 0, 18] }, box(0.5, 0.035, 0.62, { mat: "bstD" })))
+
+// maple v5: v3's clumpy merged lobes (no hull core) laid out along v4's tall 45 deg diagonal, brighter scarlet (judge: v3
+// "too dark, maroon")
+pal({ mapleS: "#e5352b", mapleSL: "#f45a46", mapleSD: "#b32a22" })
+model("maple_v5",
+  tube([0, 0, 0, mx(0.03), 0.1 * MH, 0, mx(0.1), 0.25 * MH, 0, mx(0.25), 0.36 * MH, 0, mx(0.35), 0.5 * MH, 0],
+    [0.09, 0.065, 0.045, 0.024, 0.018].map(r => r * MH), { mat: "mBark", sides: S(7), jitter: 0.01 }),
+  [[0.35, 0.5, 0.6, 0.72], [0.35, 0.5, 0.45, 0.85], [0.25, 0.36, 0.08, 0.5]].map(([a, b, c, d]) =>
+    tube([a * MH, b * MH, 0, c * MH, d * MH, 0], 0.012 * MH, { mat: "mBarkD", top: 0.006 * MH })),
+  M4.map(([x, y, r], i) => canopy(r * MH * 1.0, { at: [x * MH, y * MH, (i % 2 ? 0.05 : -0.05) * MH], seed: 30 + i, puffs: 6, wild: 0.6, merge: 0.8, tones: ["mapleS", "mapleSL", "mapleSD"] })))
+
+// crate (box-built hard surface: Poly Haven old_military_crate, CC0, by Jack Mava; the closed one of the thumbnail's two)
+pal({ crateG: "#5f6440" })
+model("crate_v0", box(0.9, 0.36, 0.45, { mat: "crateG" }), box(0.92, 0.06, 0.47, { mat: "crateG", pos: [0, 0.36, 0] }))
+
+// crate v1 from the image-measured spec only (the decomposition agent also fetched the source mesh; those values were
+// not used, so the loop stays image -> blockout): front ~2.7:1, lid slab with a seam 0.16H down, two battens over two
+// skids at 19% / 81% of the length, two draw latches at 25% / 75%, corner posts, three boards per face, grey canvas flap
+// over the left end. Depth (0.56L) is an assumption: one view cannot pin it.
+pal({ crW: "#635d44", crW2: "#5b543e", crLid: "#716e55", crLid2: "#6a6650", crDark: "#272519", crHw: "#58593d", canvas: "#64645d" })
+const CL = 0.77, CH = CL / 2.7, CD = CL * 0.56, cu = (u) => (u - 0.5) * CL
+model("crate_v1",
+  [0.19, 0.81].map(u => box(0.083 * CL, 0.104 * CH, CD, { mat: "crDark", pos: [cu(u), 0, 0] })),
+  planks(CL, 0.817 * CH, CD, { along: "x", across: "y", n: 3, gap: 0.004, tones: ["crW", "crW2"], at: [0, 0.052 * CH, 0], seed: 2 }),
+  planks(CL, 0.156 * CH, CD + 0.041 * CL, { along: "x", across: "z", n: 3, gap: 0.004, tones: ["crLid", "crLid2"], at: [0, 0.844 * CH, 0.0025 * CL], seed: 3 }),
+  [0.19, 0.81].map(u => box(0.083 * CL, 0.042 * CH, CD, { mat: "crLid", pos: [cu(u), CH, 0] })),
+  sym("x", sym("z", box(0.07 * CL, 0.567 * CH, 0.07 * CL, { mat: "crHw", pos: [CL / 2 - 0.03 * CL, 0.215 * CH, CD / 2 - 0.03 * CL] }))),
+  [0.256, 0.744].map(u => [box(0.052 * CL, 0.384 * CH, 0.03 * CL, { mat: "crHw", pos: [cu(u), 0.433 * CH, CD / 2] }),
+    box(0.079 * CL, 0.218 * CH, 0.012 * CL, { mat: "crDark", pos: [cu(u), 0.713 * CH, CD / 2 + 0.023 * CL] })]),
+  box(0.02, 0.69 * CH, CD + 0.06 * CL, { mat: "canvas", pos: [-CL / 2 - 0.012, 0.16 * CH, 0] }),
+  extrude([0, 0.844 * CH, 0.14 * CL, 0.844 * CH, 0, 0.6 * CH], 0.012, { mat: "canvas", pos: [-CL / 2, 0, CD / 2 + 0.001] }))
+
 // Kept after the blind A/B against each reference. Round 1: broadleaf v2 (7-4), pine v1 (6-4). Round 2: maple v3 (4-3),
-// pine v3 tie (v1 kept). Round 3: boulder v2 (hull, 6-5: one rock, not a pile), maple v4 lost to v3 (5-4: the hull crown
-// read as a mushroom cap), barrel v1 over the naive lathe (8-4: measured profile, 6 hoops, bung, recessed head).
-pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v3", "boulder_v2", "barrel_v1"])
+// pine v3 tie (v1 kept). Round 3: boulder v2 (hull, 6-5), maple v4 lost, barrel v1 (8-4). Round 4: crate v1 over the naive
+// box (7-3), maple v5 over v3 (5-4: clumps on the diagonal), barrel v2 lost to v1 (7-8: light hoops read as another
+// material), boulder v3 lost to v2 (5-6: a stuck-on crack box read as a stick, the plateau mass rounded the crown).
+pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_v2", "barrel_v1", "crate_v1"])
