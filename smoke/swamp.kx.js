@@ -105,7 +105,7 @@ model("stilt_hut",
 feature(1.7)
 model("lantern_post",
   box(0.1, 1.7, 0.1, { mat: "barkD" }), box(0.45, 0.06, 0.06, { mat: "barkD", pos: [0.2, 1.62, 0] }),
-  [0, 1].map(k => torus(F(0.02) * 1.3, F(0.02) * 0.45, { mat: "iron", rings: 8, sides: 4, rot: [90 * (k % 2), 0, 0], pos: [0.38, 1.6 - k * 0.06, 0] })),
+  [0, 1].map(k => torus(F(0.02) * 1.3, F(0.02) * 0.45, { mat: "iron", rings: 8, sides: 4, rot: [90 * (k % 2), 0, 0], pos: [0.38, 1.6 - k * 0.06, 0], minor: true })),
   cyl(0.08, 0.2, { mat: "glass", sides: S(6), pos: [0.38, 1.22, 0] }), cone(0.11, 0.1, { mat: "iron", sides: S(6), pos: [0.38, 1.42, 0] }),
   cyl(0.09, 0.025, { mat: "iron", sides: S(6), pos: [0.38, 1.2, 0] }),
   light({ type: "point", color: "#ffbe70", power: 40, pos: [0.38, 1.1, 0.25] }))

@@ -120,6 +120,10 @@ export class Project {
   /** Default edge bevel in meters for every convex shape (settings({ bevel }) / --bevel); a shape's `bevel` wins. */
   bevel?: number;
   lockBevel = false;
+  /** Per-material look (smooth angle, bevel) from settings({ looks }). */
+  looks: Record<string, { smooth?: number; bevel?: number }> = {};
+  /** Minor parts smaller than this x the model size in two directions are dropped. */
+  minorFloor = 0.025;
   /** Set by a loader when --smooth / the viewer slider fixes SMOOTH: settings() then leaves it alone. */
   lockSmooth = false;
   private sgNext = 1;
@@ -168,7 +172,7 @@ export class Project {
     const style = (kind: string, v: unknown): { mat: string; o: Record<string, unknown> } => {
       if (typeof v === "string") return { mat: mat(v), o: {} };
       if (!isPlain(v)) throw new KilnError(`needs a material: "${[...this.pal.mats.keys()][0]}" or { mat, pos, rot, scale, ... }`);
-      checkKeys("options", v, ["mat", ...PLACE, "jitter", "wobble", "smooth", "bevel", "seed", ...SHAPE_OPTS[kind].filter((k) => k !== "seed")]);
+      checkKeys("options", v, ["mat", ...PLACE, "jitter", "wobble", "smooth", "bevel", "minor", "seed", ...SHAPE_OPTS[kind].filter((k) => k !== "seed")]);
       if (v.mat === undefined && !NO_MAT.includes(kind)) throw new KilnError(`${kind} needs { mat: "key" }${kind === "terrain" ? " or { mat: (h, slope, x, z) => key }" : ""}`);
       if (typeof v.mat === "function") {
         if (kind !== "terrain") throw new KilnError(`${kind}: mat must be a palette key`);
@@ -191,14 +195,18 @@ export class Project {
     const geo = (kind: string, args: unknown[], make: (mat: string, o: Record<string, unknown>) => Face[]): Geo => at(kind, (loc) => {
       const { mat: m, o } = style(kind, args[args.length - 1]);
       // Bevel only box-like solids: cones, spheres, rocks, tubes keep their points and facets.
-      const bvAll = o.bevel !== undefined ? num(o.bevel, "bevel", 0) : this.bevel ?? 0;
+      // Precedence: shape option > material look (settings({ looks })) > file/global setting; a CLI flag or
+      // viewer slider (lock*) beats material looks so the sliders always do something.
+      const look = this.looks[m] ?? {};
+      const bvAll = o.bevel !== undefined ? num(o.bevel, "bevel", 0) : !this.lockBevel && look.bevel !== undefined ? look.bevel : this.bevel ?? 0;
       const bv = ["box", "prism", "wedge", "cyl", "extrude"].includes(kind) ? bvAll : 0;
       const made = make(m, kind === "torus" ? { ...o, chamfer: bvAll } : o);
       let faces = transform(bv ? bevel(made, bv) : made, placeM(o));
-      const sm = o.smooth !== undefined ? num(o.smooth, "smooth", 0) : this.smooth;
+      const sm = o.smooth !== undefined ? num(o.smooth, "smooth", 0) : !this.lockSmooth && look.smooth !== undefined ? look.smooth : this.smooth;
       // Every shape call gets its own group id (smoothing groups, and lint measures parts by it).
       const sg = this.sgNext++;
       faces = faces.map((f) => (sm ? { ...f, sm, sg } : { ...f, sg }));
+      if (o.minor) faces = faces.map((f) => ({ ...f, minor: true }));
       // Default seed comes from the shape itself (kind, args, options), not its source line, so editing
       // other lines of a file never re-rolls a shape. Identical shapes share a wobble; pass `seed` to differ.
       if (o.jitter !== undefined) faces = jitter(faces, num(o.jitter, "jitter"), Number(o.seed ?? hash(`${kind}|${JSON.stringify(args.slice(0, -1))}|${JSON.stringify(o)}`)), o.wobble === undefined ? undefined : num(o.wobble, "wobble", 1e-6));
@@ -208,7 +216,16 @@ export class Project {
     /** Look settings for the whole file: settings({ ao: 0.6, smooth: 40 }). CLI flags / viewer sliders override. */
     env.settings = (o: unknown) => at("settings", () => {
       if (!isPlain(o)) throw new KilnError("settings({ ao: 0..1, smooth: degrees })");
-      checkKeys("settings", o, ["ao", "smooth", "bevel"]);
+      checkKeys("settings", o, ["ao", "smooth", "bevel", "looks", "minor"]);
+      if (o.minor !== undefined) this.minorFloor = num(o.minor, "minor", 0);
+      if (o.looks !== undefined) {
+        if (!isPlain(o.looks)) throw new KilnError("settings({ looks: { stone: { smooth: 40, bevel: 0.02 }, ... } })");
+        for (const [k, v] of Object.entries(o.looks)) {
+          if (!isPlain(v)) throw new KilnError(`looks.${k}: { smooth?, bevel? }`);
+          checkKeys(`looks.${k}`, v, ["smooth", "bevel"]);
+          this.looks[k] = { smooth: v.smooth === undefined ? undefined : num(v.smooth, "smooth", 0), bevel: v.bevel === undefined ? undefined : num(v.bevel, "bevel", 0) };
+        }
+      }
       if (o.bevel !== undefined && !this.lockBevel) this.bevel = num(o.bevel, "bevel", 0);
       if (o.ao !== undefined) this.ao = num(o.ao, "ao", 0);
       if (o.smooth !== undefined && !this.lockSmooth) this.smooth = num(o.smooth, "smooth", 0);
@@ -476,6 +493,17 @@ export class Project {
     for (const j of joints) {
       if (names.has(j.name)) throw new KilnError(`part '${j.name}' appears twice: stamp copies with { as: "name" } so their parts get unique names`);
       names.add(j.name);
+    }
+    if (faces.some((f) => f.minor)) {
+      const bb = bounds(faces), floor = this.minorFloor * Math.max(...bb.max.map((v, i) => v - bb.min[i]));
+      const parts = new Map<number, Face[]>();
+      for (const f of faces) if (f.minor) (parts.get(f.sg ?? -1) ?? parts.set(f.sg ?? -1, []).get(f.sg ?? -1)!).push(f);
+      const drop = new Set<number>();
+      for (const [sg, fs] of parts) {
+        const e = bounds(fs), ext = e.max.map((v, i) => v - e.min[i]).sort((x, y) => x - y);
+        if (ext[1] < floor) drop.add(sg);
+      }
+      if (drop.size) faces = faces.filter((f) => !(f.minor && drop.has(f.sg ?? -1)));
     }
     if (this.ao) faces = bakeAO(faces, this.ao);
     for (const j of joints) if (j.parent && !names.has(j.parent)) throw new KilnError(`part '${j.name}': unknown parent '${j.parent}'${didYouMean(j.parent, names)}`);

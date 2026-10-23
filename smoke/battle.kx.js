@@ -1,6 +1,7 @@
 // Battle-test kit: organic (irregular) + hard-surface (symmetric) set dressing. 2026-10-22.
 include("../lib/grayson/nature.kx.js")
 include("../lib/grayson/props.kx.js")
+include("../lib/grayson/styles.kx.js")
 pal({
   leaf: "#3d8c48", leafL: "#74c45a", leafD: "#255238", bark: "#6e4535", barkD: "#3b2622",
   wood: "#9c6a4d", barkM: "#8a5a3c", rot: "#c9a878", hayL: "#f0d47a", woodD: "#6e4535", woodL: "#c08a5e", hay: "#e0bf5a", hayD: "#b8933a",
@@ -9,6 +10,7 @@ pal({
   cactusD: "#3a6e3c", cactus: "#4f8a4a", cactusL: "#78b060", sand: "#e0cc8a", agaveD: "#3f6e66", agave: "#5f8f80", agaveL: "#a8c8a0",
   capB: "#b88a5a", stem: "#f2e6cf", water: { color: "#2a5f9a", rough: 0.08 }, rope: "#c9b48a",
 })
+materialLooks()
 
 // ---------- organic: should read irregular
 model("windswept_tree", trunk(1.8, { r: 0.16, lean: [0.6, 0.1], branches: [[1.3, 1.8, 0.2], [0.35, 1.5, -0.4]] }),
@@ -65,7 +67,7 @@ feature(1.9)
 model("signpost", box(0.1, 1.8, 0.1, { mat: "woodD" }), cone(0.09, 0.1, { mat: "barkD", sides: 4, pos: [0, 1.8, 0], rot: [0, 45, 0] }),
   extrude([-0.4, 0, 0.35, 0, 0.5, 0.11, 0.35, 0.22, -0.4, 0.22], 0.04, { mat: "woodL", pos: [0, 1.45, 0.05] }),
   extrude([0.4, 0, -0.35, 0, -0.5, 0.11, -0.35, 0.22, 0.4, 0.22], 0.04, { mat: "woodL", pos: [0, 1.15, 0.05] }),
-  [1.56, 1.26].map(y => cyl(F(0.015), 0.03, { mat: "iron", sides: 6, rot: [90, 0, 0], pos: [0, y, 0.09] })))
+  [1.56, 1.26].map(y => cyl(F(0.015), 0.03, { mat: "iron", sides: 6, rot: [90, 0, 0], pos: [0, y, 0.09], minor: true })))
 model("cart",
   planks(1.4, 0.06, 0.9, { along: "x", across: "z", tones: ["wood", "woodL"], at: [0, 0.5, 0], seed: 3 }), box(1.36, 0.03, 0.86, { mat: "woodD", pos: [0, 0.48, 0] }), sym("z", box(1.44, 0.04, 0.07, { mat: "woodL", pos: [0, 0.95, 0.43] })), sym("x", box(0.07, 0.04, 0.94, { mat: "woodL", pos: [0.69, 0.95, 0] })),
   [-0.35, 0, 0.35].map(x => sym("z", box(0.02, 0.36, 0.06, { mat: "woodD", pos: [x, 0.59, 0.455] }))), sym("x", sym("z", box(0.07, 0.36, 0.07, { mat: "iron", pos: [0.69, 0.6, 0.44] }))),

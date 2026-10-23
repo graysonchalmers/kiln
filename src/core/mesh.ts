@@ -14,6 +14,8 @@ export interface Face {
   sg?: number;
   /** Per-corner normals, set by smoothNormals() at output time. */
   n?: V3[];
+  /** Detail part (nail, rivet, chain): dropped when smaller than the model's feature floor. */
+  minor?: boolean;
   /** Per-corner baked light (0..1, ambient occlusion), set by bakeAO(); multiplies the material color. */
   c?: number[];
 }
