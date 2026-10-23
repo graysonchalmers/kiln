@@ -1,7 +1,7 @@
 // Project: the registry a model file fills in (the DSL), plus the lazy, cached, cycle-checked
 // builder that turns definitions into face lists.
 import { KilnError, didYouMean, wrap } from "./errors.ts";
-import { type Bounds, type Face, type Joint, type Light, type Part, bounds, faceNormal, renameParts, jitter, recolor, transform, transformLights, transformPart, triCount, bakeAO, bevel } from "./mesh.ts";
+import { type Bounds, type Face, type Joint, type Light, type Part, bounds, convexHull, faceNormal, renameParts, jitter, recolor, transform, transformLights, transformPart, triCount, bakeAO, bevel } from "./mesh.ts";
 import { Palette, normHex } from "./palette.ts";
 import { type ClipDef, checkTracks } from "./anim.ts";
 import { box, cyl, extrude, lathe, prism, rock, sphere, terrain, torus, tube, wedge } from "./prims.ts";
@@ -15,7 +15,7 @@ export interface Step {
 
 /** Geometry made at definition time, or a reference resolved at build time. */
 interface Geo { __geo: true; faces: Face[]; lights?: Light[]; step: Step }
-interface Ref { __ref: "stamp" | "scatter" | "tf" | "sym" | "part"; args: unknown[]; step: Step }
+interface Ref { __ref: "stamp" | "scatter" | "tf" | "sym" | "part" | "hull"; args: unknown[]; step: Step }
 type Item = Geo | Ref | Item[] | null | undefined | false;
 
 export interface ModelOpts {
@@ -214,17 +214,7 @@ export class Project {
       // Default seed comes from the shape itself (kind, args, options), not its source line, so editing
       // other lines of a file never re-rolls a shape. Identical shapes share a wobble; pass `seed` to differ.
       if (o.jitter !== undefined) faces = jitter(faces, num(o.jitter, "jitter"), Number(o.seed ?? hash(`${kind}|${JSON.stringify(args.slice(0, -1))}|${JSON.stringify(o)}`)), o.wobble === undefined ? undefined : num(o.wobble, "wobble", 1e-6));
-      // cap: faces facing up (within capAngle degrees of +Y, the edge broken by noise) take another material, so moss,
-      // snow or sand sits on the shape's own faces instead of a second shell laid over it.
-      if (o.cap !== undefined) {
-        if (typeof o.cap !== "string" || !this.pal.has(o.cap)) throw new KilnError(`cap: a palette key for the up-facing faces (got ${fmt(o.cap)})`);
-        const ang = o.capAngle === undefined ? 50 : num(o.capAngle, "capAngle", 0), cap = o.cap as string;
-        faces = faces.map((f) => {
-          const n = faceNormal(f.v), c = f.v.reduce((a, p) => [a[0] + p[0], a[1] + p[1], a[2] + p[2]] as V3, [0, 0, 0] as V3);
-          const edge = noise3(c[0] * 2.7 / f.v.length, c[1] * 2.7 / f.v.length, c[2] * 2.7 / f.v.length, 7) * 14;
-          return Math.acos(Math.max(-1, Math.min(1, n[1]))) * 180 / Math.PI < ang + edge ? { ...f, mat: cap } : f;
-        });
-      }
+      if (o.cap !== undefined) faces = this.capFaces(faces, o.cap, o.capAngle);
       return { __geo: true, faces, step: { label: `${kind}(${args.slice(0, -1).map(fmt).join(", ")})`, loc } };
     });
 
@@ -396,6 +386,14 @@ export class Project {
       placeM(o);
       return ref("tf", [o, ...items], `tf(${Object.keys(o).join(", ")})`);
     });
+    // hull({ mat, cap?, capAngle?, jitter?, wobble?, seed?, smooth? }, ...items): the convex hull of the items as one closed
+    // shape (separate masses read as a pile; their hull reads as one rock / one crown). Hull groups to keep concavities.
+    env.hull = (o: unknown, ...items: unknown[]) => at("hull", () => {
+      if (!isPlain(o) || typeof o.mat !== "string") throw new KilnError('hull({ mat: "stone", cap?, jitter? }, ...items)');
+      checkKeys("hull", o, ["mat", "cap", "capAngle", "jitter", "wobble", "seed", "smooth"]);
+      mat(o.mat);
+      return ref("hull", [o, ...items], `hull(${o.mat})`);
+    });
     env.sym = (axis: unknown, ...items: unknown[]) => at("sym", () => {
       if (axis !== "x" && axis !== "z") throw new KilnError('sym("x" | "z", ...items): items plus their mirror image across x = 0 (or z = 0)');
       return ref("sym", [axis, ...items], `sym("${axis}")`);
@@ -547,8 +545,28 @@ export class Project {
     throw new KilnError(`item is ${what}; items are shapes, voxels, tf, sym, stamp, scatter, or lists of those`);
   }
 
+  /** cap: faces facing up (within capAngle degrees of +Y, the edge broken by noise) take another material, so moss,
+   * snow or sand sits on the shape's own faces instead of a second shell laid over it. */
+  capFaces(faces: Face[], cap: unknown, capAngle: unknown): Face[] {
+    if (typeof cap !== "string" || !this.pal.has(cap)) throw new KilnError(`cap: a palette key for the up-facing faces (got ${fmt(cap)})`);
+    const ang = capAngle === undefined ? 50 : num(capAngle, "capAngle", 0);
+    return faces.map((f) => {
+      const n = faceNormal(f.v), c = f.v.reduce((a, p) => [a[0] + p[0], a[1] + p[1], a[2] + p[2]] as V3, [0, 0, 0] as V3);
+      const edge = noise3(c[0] * 2.7 / f.v.length, c[1] * 2.7 / f.v.length, c[2] * 2.7 / f.v.length, 7) * 14;
+      return Math.acos(Math.max(-1, Math.min(1, n[1]))) * 180 / Math.PI < ang + edge ? { ...f, mat: cap } : f;
+    });
+  }
+
   private resolve(r: Ref, depth: number): Part {
     const a = r.args;
+    if (r.__ref === "hull") {
+      const o = a[0] as Record<string, unknown>, m = String(o.mat);
+      let faces = convexHull(this.expand(a.slice(1), depth + 1).faces.flatMap((f) => f.v), m);
+      if (o.jitter !== undefined) faces = jitter(faces, num(o.jitter, "jitter"), Number(o.seed ?? 1), o.wobble === undefined ? undefined : num(o.wobble, "wobble", 1e-6));
+      if (o.cap !== undefined) faces = this.capFaces(faces, o.cap, o.capAngle);
+      const look = this.looks[m] ?? {}, sm = o.smooth !== undefined ? num(o.smooth, "smooth", 0) : look.smooth ?? this.smooth, sg = this.sgNext++;
+      return { faces: faces.map((f) => (sm ? { ...f, sm, sg } : { ...f, sg })), lights: [] };
+    }
     if (r.__ref === "tf") return transformPart(this.expand(a.slice(1), depth + 1), placeM(a[0] as Record<string, unknown>));
     if (r.__ref === "sym") {
       const p = this.expand(a.slice(1), depth + 1);

@@ -73,6 +73,9 @@ The last argument is a material key, or an options object with `mat` plus:
 | `tube([x0, y0, z0, x1, y1, z1, ...], r)` | path coordinates | A pipe of radius r swept along the points: `sides` (8); `closed: true` joins the ends (otherwise they are capped); `top` is the end radius (linear taper by arc length); `r` may be a list, one radius per point (flare + taper as one mesh). Frames are carried along the path so the tube never twists, and bends are mitered so the cross section stays full. Pipes, cables, rails, branches, tentacles, handles. |
 | `terrain(w, d, { res, height, fn \| heightmap, mat })` | base center | A heightfield w × d meters: `res` cells per side (32, or `[nx, nz]`), `height` the vertical scale in meters (1). Heights 0..1 come from `fn: (x, z) => h` at world coordinates (centered) or `heightmap: "file.png"` (gray PNG, 16-bit kept, top row = back; a loom `_height.png` works as is). `mat` is a key, or `(h, slope, x, z) => key` per triangle (`slope` 0 flat .. 1 vertical): grass low, rock steep, snow high. Islands, hills, dungeon floors, dioramas. |
 
+`hull({ mat, cap?, capAngle?, jitter?, wobble?, seed?, smooth? }, ...items)` wraps the items in their convex hull: one
+closed shape (separate masses read as a pile; their hull reads as one rock). Hull groups separately to keep a concavity.
+
 ## Voxels
 
 ```js

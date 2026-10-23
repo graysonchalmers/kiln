@@ -73,3 +73,20 @@ Scene: `smoke/img2blockout.kx.js`, pack `img2blockout_best`. The decomposed v1 b
   hull), not just placing.
 - Next: a hull/merge for multi-mass objects (rock piles to one rock, lobes to one crown), the maple's tall diagonal (judge:
   ~0.85 w:h, build ~1.2), a hard-surface reference (crate, barrel).
+
+## Round 3 results (2026-10-23)
+
+| Object | Kept before | New | IoU kept -> new | Blind A/B (likeness) | Kept now |
+|---|---|---|---|---|---|
+| boulder | v1 (6 separate rocks) | v2: two `hull()`s (body; shoulder + slab) | 0.751 -> 0.756 | v2 6 vs 5 | v2 |
+| maple | v3 | v4: hull core + lobes on a tall 45 deg diagonal | 0.647 -> 0.693 | v3 5 vs 4 | v3 |
+| barrel (Poly Haven wine_barrel_01, CC0) | v0 naive lathe | v1: measured profile, 6 hoops, 30 staves, bung, recessed head | 0.796 -> 0.938 | v1 8 vs 4 | v1 |
+
+- Core: `hull({ mat, cap, jitter... }, ...items)`, an incremental convex hull (test: two spheres join into one convex
+  shape spanning both).
+- Lessons: a hull turns a pile into one object (boulder), but on foliage it erases the clumps that identify it (maple v4
+  "a mushroom cap"), even though IoU and aspect both improved: the judge read identity, the metric read area. Lathe-shaped
+  hard-surface objects decompose almost exactly: a measured radius profile plus hoop heights gave IoU 0.94 and the best
+  likeness so far (8/10).
+- Next: barrel hoop contrast (wider, lighter metal); boulder plateau top and a crack instead of a clean seam; maple tall
+  diagonal without losing clumps (hull only behind, lobes in front); a hard-surface box prop (crate) to test non-lathe parts.

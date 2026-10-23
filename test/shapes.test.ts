@@ -74,6 +74,18 @@ test("cap: up-facing faces take the cap material (moss on a rock's own faces, no
   throwsMsg(() => one(`model("m", rock(1, { mat: "a", cap: "nope" }))`), /cap: a palette key/);
 });
 
+test("hull: separate masses become one closed convex shape", () => {
+  const two = one(`model("m", { pivot: "origin" }, sphere(1, { mat: "a" }), sphere(1, { mat: "a", pos: [3, 0, 0] }))`);
+  const h = one(`model("m", { pivot: "origin" }, hull({ mat: "b" }, sphere(1, { mat: "a" }), sphere(1, { mat: "a", pos: [3, 0, 0] })))`);
+  assert.ok(volume(h.faces) > volume(two.faces) * 1.6, "the hull bridges the gap between the two spheres");
+  assert.ok(h.faces.every((f) => f.mat === "b"), "one material");
+  // every hull vertex is on or inside every face plane: convex and outward
+  const vs = h.faces.flatMap((f) => f.v);
+  for (const f of h.faces) { const n = faceNormal(f.v), d = dot(n, f.v[0]); for (const p of vs) assert.ok(dot(n, p) - d < 1e-6); }
+  near(h.bounds.max[0] - h.bounds.min[0], two.bounds.max[0] - two.bounds.min[0], 1e-9, "same extent as its inputs");
+  assert.throws(() => one(`model("m", hull({ mat: "a" }, box(1, 1, 0, "a")))`));
+});
+
 test("terrain: a heightfield from a function with per-triangle materials by height and slope", () => {
   const flat = one(`model("m", terrain(4, 2, { mat: "a", res: [4, 2], fn: () => 0.5, height: 2 }))`);
   assert.equal(flat.faces.length, 16);

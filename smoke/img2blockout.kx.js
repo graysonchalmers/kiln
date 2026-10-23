@@ -129,7 +129,44 @@ model("boulder_v1",
   mass(0.25, 0.27, 0.65, 0.48, -18, 5, 0.7, 0.3), mass(-0.07, 0.28, 0.51, 0.28, -21, 6, 0.6),
   box(0.22, 0.14, 0.24, { mat: "bstL", pos: [0.06 * BW, 0.8, 0], rot: [0, 0, -9], bevel: 0.02 }))
 
-// Kept after the blind A/B against each reference. Round 1: broadleaf v2 (7-4), pine v1 (6-4). Round 2: maple v3 over v2
-// (4-3: visible trunk, true red; both still too wide), pine v3 tie with v1 (7-7 -> champion v1 kept), boulder v1 over the
-// naive rock (6-5; reads partly as a pile of separate stones).
-pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v3", "boulder_v1"])
+// ---------- round 3 (2026-10-23)
+// boulder v2: the same 6 masses joined by hull(): main body (M1 + cap + nose + belly) and the right shoulder + low slab as
+// two hulls, so the crack/step between them stays concave; v1's separate rocks read as a pile.
+const bm = (fx, fy, w, h, roll, d = 0.75) => tf({ pos: [fx * BW, fy, 0], rot: [0, 0, roll], scale: [w / h, 1, d / h] }, sphere(h / 2, { mat: "bst", detail: 1 }))
+model("boulder_v2",
+  hull({ mat: "bst", cap: "bstL", capAngle: 35, jitter: 0.025, seed: 4 }, bm(0, 0.62, 0.89, 0.58, 11), bm(-0.31, 0.54, 0.46, 0.5, 21, 0.6), bm(-0.07, 0.28, 0.51, 0.28, -21, 0.6),
+    box(0.22, 0.14, 0.24, { mat: "bst", pos: [0.06 * BW, 0.84, 0], rot: [0, 0, -9] })),
+  hull({ mat: "bst", cap: "bstL", capAngle: 35, jitter: 0.02, seed: 5 }, bm(0.31, 0.55, 0.24, 0.28, -3, 0.5), bm(0.25, 0.25, 0.65, 0.44, -18, 0.7)))
+
+// maple v4: a tall crown along a 45 deg diagonal (judge: ~0.85 w:h, v3 ~1.2), a hull core so no background shows between
+// lobes, lumpy lobes on its surface for the clumpy edge, on v3's trunk
+const M4 = [[-0.05, 0.42, 0.17], [0.1, 0.56, 0.21], [0.25, 0.7, 0.22], [0.4, 0.82, 0.2], [0.52, 0.94, 0.14], [0.55, 0.64, 0.15], [0.3, 0.36, 0.13]]
+model("maple_v4",
+  tube([0, 0, 0, mx(0.03), 0.1 * MH, 0, mx(0.1), 0.25 * MH, 0, mx(0.25), 0.36 * MH, 0, mx(0.35), 0.5 * MH, 0],
+    [0.09, 0.065, 0.045, 0.024, 0.018].map(r => r * MH), { mat: "mBark", sides: S(7), jitter: 0.01 }),
+  hull({ mat: "maple", jitter: 0.04, seed: 9 }, M4.map(([x, y, r]) => sphere(r * MH * 0.85, { mat: "maple", pos: [x * MH, y * MH, 0], detail: 1 }))),
+  M4.map(([x, y, r], i) => canopy(r * MH * 0.75, { at: [x * MH, y * MH, (i % 2 ? 0.08 : -0.08) * MH], seed: 20 + i, puffs: 4, wild: 0.6, merge: 0.5, tones: ["maple", "mapleL", "mapleD"] })))
+
+// barrel (hard-surface reference: Poly Haven wine_barrel_01, CC0, by James Ray Cock)
+pal({ brl: "#7a5a3c", hoopM: { color: "#55575a", metal: 0.6, rough: 0.5 } })
+model("barrel_v0", lathe([0.25, 0, 0.3, 0.45, 0.25, 0.9, 0, 0.9], { mat: "brl", sides: 16 }),
+  [0.15, 0.75].map(y => torus(0.29, 0.015, { mat: "hoopM", rings: 16, sides: 4, pos: [0, y, 0] })))
+
+// barrel v1 from the decomposition: symmetrised profile (r/H at h/H 0..1), 30 staves (lathe sides, flat-shaded facets),
+// 6 iron hoops at measured heights (2 / 1 / gap / 1 / 2), head recessed 0.04H inside a 0.03H chime, 5 head boards,
+// raised bung at 0.5H, azimuth +20 deg; palette sampled
+pal({ brl1: "#6a5038", brlHead: "#806446", brlLip: "#977f66", brlBung: "#977656", hoop1: { color: "#59524c", metal: 0.6, rough: 0.5 } })
+const BRH = 0.9, BRP = [0.348, 0.368, 0.388, 0.412, 0.423, 0.429, 0.423, 0.412, 0.388, 0.368, 0.348]
+const brR = (h) => { const i = Math.min(9, Math.floor(h * 10)), t = h * 10 - i; return BRP[i] + (BRP[i + 1] - BRP[i]) * t }
+model("barrel_v1",
+  lathe([0, 0, ...BRP.flatMap((r, i) => [r * BRH, i * 0.1 * BRH]), 0.318 * BRH, BRH, 0.318 * BRH, 0.96 * BRH, 0, 0.96 * BRH], { mat: "brl1", sides: 30 }),
+  [[0.958, 0.055], [0.862, 0.033], [0.687, 0.049], [0.32, 0.046], [0.142, 0.032], [0.046, 0.054]].map(([c, w]) =>
+    lathe([(brR(c - w / 2) + 0.008) * BRH, (c - w / 2) * BRH, (brR(c + w / 2) + 0.008) * BRH, (c + w / 2) * BRH], { mat: "hoop1", sides: 30 })),
+  [-2, -1, 0, 1, 2].map(k => { const z = k * 0.126 * BRH, half = Math.sqrt(Math.max(0, (0.318 * BRH) ** 2 - z * z))
+    return box(half * 2 * 0.98, 0.012, 0.12 * BRH, { mat: k % 2 ? "brlHead" : "brl1", pos: [0, 0.96 * BRH + 0.004, z] }) }),
+  tf({ rot: [0, 20, 0] }, cyl(0.028 * BRH, 0.02 * BRH, { mat: "brlBung", sides: 10, rot: [90, 0, 0], pos: [0, 0.5 * BRH, 0.425 * BRH] })))
+
+// Kept after the blind A/B against each reference. Round 1: broadleaf v2 (7-4), pine v1 (6-4). Round 2: maple v3 (4-3),
+// pine v3 tie (v1 kept). Round 3: boulder v2 (hull, 6-5: one rock, not a pile), maple v4 lost to v3 (5-4: the hull crown
+// read as a mushroom cap), barrel v1 over the naive lathe (8-4: measured profile, 6 hoops, bung, recessed head).
+pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v3", "boulder_v2", "barrel_v1"])

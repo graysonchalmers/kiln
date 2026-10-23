@@ -1,7 +1,7 @@
 // A mesh is a list of flat, convex, planar polygons with a material key each. Low-poly assets
 // are flat-shaded, so faces never share normals and polygon soup is the natural representation.
 import { KilnError } from "./errors.ts";
-import { type M, type V3, add, apply, cross, det, dot, hash, noise3, norm, rng, scl, sub } from "./util.ts";
+import { type M, type V3, add, apply, cross, det, dot, hash, len, noise3, norm, rng, scl, sub } from "./util.ts";
 
 export interface Face {
   v: V3[];
@@ -342,4 +342,39 @@ export function bevel(faces: Face[], size: number, minAngle = 50): Face[] {
     poly = next;
   }
   return poly.map((f) => ({ ...faces[0], v: f.v, mat: f.mat, part: f.part, n: undefined, c: undefined }));
+}
+
+/** Convex hull of a point cloud as outward triangles (incremental: a starting tetrahedron, then each outside point
+ * replaces the faces it sees, fanning to their horizon). Joins separate masses into one closed shape. */
+export function convexHull(points: V3[], mat: string): Face[] {
+  const key = (p: V3) => p.map((v) => Math.round(v * 1e5)).join(",");
+  const pts = [...new Map(points.map((p) => [key(p), p])).values()];
+  if (pts.length < 4) throw new KilnError("hull needs at least 4 distinct points");
+  const ext = (cmp: (p: V3) => number) => pts.reduce((a, p) => (cmp(p) > cmp(a) ? p : a));
+  const p0 = ext((p) => -p[0]), p1 = ext((p) => len(sub(p, p0)));
+  const d01 = norm(sub(p1, p0)), p2 = ext((p) => len(cross(sub(p, p0), d01)));
+  const n012 = norm(cross(sub(p1, p0), sub(p2, p0))), p3 = ext((p) => Math.abs(dot(sub(p, p0), n012)));
+  const span = len(sub(p1, p0)), eps = span * 1e-7;
+  if (len(cross(sub(p2, p0), d01)) < eps || Math.abs(dot(sub(p3, p0), n012)) < eps) throw new KilnError("hull: the points are flat (all in one plane)");
+  const ctr = scl(add(add(p0, p1), add(p2, p3)), 0.25);
+  type T = { v: [V3, V3, V3]; n: V3; d: number };
+  const tri = (a: V3, b: V3, c: V3): T => {
+    let n = norm(cross(sub(b, a), sub(c, a)));
+    if (dot(n, sub(a, ctr)) < 0) { [b, c] = [c, b]; n = scl(n, -1); }
+    return { v: [a, b, c], n, d: dot(n, a) };
+  };
+  let tris: T[] = [tri(p0, p1, p2), tri(p0, p1, p3), tri(p0, p2, p3), tri(p1, p2, p3)];
+  for (const p of pts) {
+    const seen = tris.filter((t) => dot(t.n, p) - t.d > eps * 10);
+    if (!seen.length) continue;
+    const edges = new Map<string, [V3, V3]>();
+    for (const t of seen) for (let i = 0; i < 3; i++) {
+      const a = t.v[i], b = t.v[(i + 1) % 3], back = key(b) + "|" + key(a);
+      if (edges.has(back)) edges.delete(back); else edges.set(key(a) + "|" + key(b), [a, b]);
+    }
+    const gone = new Set(seen);
+    tris = tris.filter((t) => !gone.has(t));
+    for (const [a, b] of edges.values()) tris.push(tri(a, b, p));
+  }
+  return tris.map((t) => ({ v: [...t.v], mat }));
 }
