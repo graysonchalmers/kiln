@@ -64,9 +64,9 @@ model("signpost", box(0.1, 1.8, 0.1, { mat: "woodD" }), cone(0.09, 0.1, { mat: "
   extrude([0.4, 0, -0.35, 0, -0.5, 0.11, -0.35, 0.22, 0.4, 0.22], 0.04, { mat: "woodL", pos: [0, 1.15, 0.05] }),
   [1.56, 1.26].map(y => cyl(0.015, 0.02, { mat: "iron", sides: 4, rot: [90, 0, 0], pos: [0, y, 0.09] })))
 model("cart",
-  box(1.4, 0.1, 0.9, { mat: "wood", pos: [0, 0.5, 0] }), sym("z", box(1.44, 0.04, 0.07, { mat: "woodL", pos: [0, 0.95, 0.43] })), sym("x", box(0.07, 0.04, 0.94, { mat: "woodL", pos: [0.69, 0.95, 0] })),
+  planks(1.4, 0.06, 0.9, { along: "x", across: "z", tones: ["wood", "woodL"], at: [0, 0.5, 0], seed: 3 }), box(1.36, 0.03, 0.86, { mat: "woodD", pos: [0, 0.48, 0] }), sym("z", box(1.44, 0.04, 0.07, { mat: "woodL", pos: [0, 0.95, 0.43] })), sym("x", box(0.07, 0.04, 0.94, { mat: "woodL", pos: [0.69, 0.95, 0] })),
   [-0.35, 0, 0.35].map(x => sym("z", box(0.02, 0.36, 0.06, { mat: "woodD", pos: [x, 0.59, 0.455] }))), sym("x", sym("z", box(0.07, 0.36, 0.07, { mat: "iron", pos: [0.69, 0.6, 0.44] }))),
-  sym("z", box(1.4, 0.35, 0.05, { mat: "woodD", pos: [0, 0.6, 0.43] })), sym("x", box(0.05, 0.35, 0.9, { mat: "woodD", pos: [0.68, 0.6, 0] })),
+  sym("z", planks(1.4, 0.35, 0.05, { along: "x", across: "y", n: 3, tones: ["woodD", "wood"], at: [0, 0.6, 0.43], seed: 5 })), sym("x", planks(0.05, 0.35, 0.9, { along: "z", across: "y", n: 3, tones: ["woodD", "wood"], at: [0.68, 0.6, 0], seed: 6 })),
   cyl(0.05, 1.2, { mat: "iron", sides: 6, rot: [90, 0, 0], pos: [0, 0.4, -0.6] }),
   sym("z", wheel(0.4, { at: [0, 0, 0.52] })),
   sym("z", tube([-0.6, 0.52, 0.35, -1.2, 0.35, 0.32, -1.6, 0.25, 0.3], 0.035, { mat: "woodD" })),
