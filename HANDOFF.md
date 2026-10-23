@@ -1,9 +1,9 @@
-# 🧭 Session Handoff — Tool-Kiln
+# 🧭 Session Handoff — Tool-Blockout3D (text / image → 3D blockout generator)
 
 _Last updated: 2026-10-22 (Envy), first session._
 
 ## 🎯 Current state
-Grayson's text-to-blockout tool. Fork of `uilianks/kiln` (MIT, low-poly 3D assets as code → GLB). Origin = `graysonchalmers/kiln` (public; forks of public repos must be), upstream = `uilianks/kiln`, work on branch **`grayson`**; `main` mirrors upstream. Grayson is fine diverging from upstream (2026-10-22), so no upstream PR is planned.
+Text / image → 3D blockout generator (folder renamed from Tool-Kiln 2026-10-22). Built on a fork of `uilianks/kiln` (MIT, low-poly 3D assets as code → GLB). Origin = `graysonchalmers/kiln` (public; forks of public repos must be), upstream = `uilianks/kiln`, work on branch **`grayson`**; `main` mirrors upstream. Grayson is fine diverging from upstream (2026-10-22), so no upstream PR is planned.
 - **Goal (Grayson, 2026-10-22):** text → blockout AND reference image → blockout, with a guaranteed quality floor, then drop the assets into any engine / 3D program. image-decomp / art-direction skills become the feedback loop that improves blockouts.
 - **Core additions (src/):** `wobble` smooth noise, `DETAIL` / `--detail`, auto-smooth (`smooth`, `--smooth`), baked AO (`--ao`), bevel (`bevel`, `--bevel`, chamfered torus), `settings({ ao, smooth, bevel, looks, minor })`, per-material looks, `minor` parts, `kiln lint` (feature scale), stable shape-hashed seeds, viewer sliders (detail / smooth / AO / bevel).
 - **Library (lib/grayson/):** `nature` (canopy, conifer, trunk, blades, leaf/fronds, fiddlehead, flame, mossRock, gravel, crystals), `props` (crate, sack, wheel, planks), `styles` (cozy/swamp/desert/autumn/winter + materialLooks), `detail` (S/SD/N/lods, wobble, feature/F), `sheet.sh`, `golden.sh` + 12 goldens.
