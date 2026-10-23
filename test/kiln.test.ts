@@ -141,6 +141,18 @@ test("model lights shade a flat quad smoothly: no step along its triangle split 
   assert.ok(jump <= 3, `largest step between neighbouring pixels on the lit quad: ${jump}`);
 });
 
+test("a pack previews models whose palettes were set at different points in the file", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kiln-pack-"));
+  try {
+    const file = join(dir, "p.kx.js");
+    writeFileSync(file, `pal({ red: "#ff0000" })\nmodel("one", box(1, 1, 1, "red"))\npal({ grn: "#00ff00" })\nmodel("two", box(1, 1, 1, "grn"))\npack("both", ["one", "two"])`);
+    writeOutputs(loadProject(file), join(dir, "out"), {});
+    assert.ok(readFileSync(join(dir, "out", "_preview", "both.png")).length > 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the preview renderer draws the model in its material color", () => {
   const b = one(`model("m", box(1, 1, 1, "a"))`);
   const img = renderView(b.faces, b.pal, b.bounds, { w: 64, h: 64, ground: false, yaw: 0, pitch: 0 });

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Silhouette likeness between a reference image and a render: likeness.py <ref.png> <render.png> [--mask-out m.png]
-Ref mask: saturated pixels (S > 0.22; the reference sits on a grey/white checker). Render mask: pixels away from the
+Ref mask: its alpha channel if it has one, else saturated pixels (S > 0.22; for a reference on a grey/white checker). Render mask: pixels away from the
 render's background (estimated per row from the image edges: the backdrop is a gradient). Both cropped to their mask box, fitted into 128x128 (aspect kept), then compared.
 --cut-top F drops the top F of the render's height (for a reference cropped by its frame).
 Prints IoU (silhouette overlap), aspect (w/h) of each, and the dominant hue of each mask (degrees)."""
@@ -27,7 +27,11 @@ def hue(img, m):
     return int(np.bincount((hh[keep] // 15).astype(int), minlength=24).argmax() * 15 + 7) if keep.any() else -1
 
 ref, ren = load(sys.argv[1]), load(sys.argv[2])
-mx, mn = ref.max(2), ref.min(2); mref = (mx - mn) / np.maximum(mx, 1e-9) > 0.22
+if subprocess.check_output(["identify", "-format", "%[channels]", sys.argv[1] + "[0]"]).decode().endswith("a"):  # transparent ref: alpha is the mask
+    w, h = ref.shape[1], ref.shape[0]
+    mref = np.frombuffer(subprocess.check_output(["convert", sys.argv[1] + "[0]", "-alpha", "extract", "-depth", "8", "gray:-"]), np.uint8).reshape(h, w) > 128
+else:
+    mx, mn = ref.max(2), ref.min(2); mref = (mx - mn) / np.maximum(mx, 1e-9) > 0.22
 bg = np.concatenate([ren[:, :3], ren[:, -3:]], 1).mean(1, keepdims=True); mren = np.abs(ren - bg).max(2) > 0.06  # per-row bg (gradient)
 if "--cut-top" in sys.argv:  # the reference is cropped at the top: drop the same fraction of the render's height
     f = float(sys.argv[sys.argv.index("--cut-top") + 1]); ys = np.nonzero(mren.any(1))[0]

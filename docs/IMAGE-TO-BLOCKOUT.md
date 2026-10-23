@@ -54,3 +54,22 @@ Scene: `smoke/img2blockout.kx.js`, pack `img2blockout_best`. The decomposed v1 b
   on small trees.
 - **Next:** v3 for the maple (keep v2's mass, restore v1's trunk and diagonal) and the pine (v1 plus measured 20 deg
   droop); try a non-tree reference (a rock, a crate) to test the loop beyond `canopy`/`fronds`.
+
+## Round 2 results (2026-10-23)
+
+| Object | Kept before | New | IoU kept -> new | Blind A/B (likeness) | Kept now |
+|---|---|---|---|---|---|
+| maple | v2 | v3: v2's mass + v1's trunk, diagonal, red | 0.633 -> 0.647 | v3 4 vs 3 | v3 |
+| pine | v1 | v3: v1 + boughs at a measured 20 deg | 0.725 -> 0.714 | tie 7-7 | v1 (champion) |
+| boulder (Poly Haven boulder_01, CC0) | v0 naive rock | v1 from 6 fitted masses | 0.62 -> 0.75 | v1 6 vs 5 | v1 |
+
+- Recipes: `leaf({ angle })` sets the drawn tip segment's angle (test: 19.8 deg for 20); `canopy({ merge })` grows and pulls
+  puffs into one mass. `likeness.py` reads a transparent reference's alpha as its mask.
+- Core fix found by building the kept pack: a pack's preview used the first model's palette, so models whose colours were
+  defined later in the file failed. It now uses every model's palette (test with non-hex keys: `a`-`f` are default colours).
+- Lessons: a measured 20 deg droop was too subtle to move a judge (tie), so "measure it" is necessary, not sufficient;
+  `merge` fills one canopy but does not join separate lobes, so multi-lobe crowns still need overlapping sizes; a fitted-mass
+  spec (union IoU 0.97 on the mask) built as separate rocks reads as a pile; the masses need joining (shared faces or one
+  hull), not just placing.
+- Next: a hull/merge for multi-mass objects (rock piles to one rock, lobes to one crown), the maple's tall diagonal (judge:
+  ~0.85 w:h, build ~1.2), a hard-surface reference (crate, barrel).

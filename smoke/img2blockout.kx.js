@@ -93,6 +93,43 @@ model("maple_v2",
   m2lobe(0.6, 0.9, 0.46, 1, 0, 0.85), m2lobe(0.86, 0.76, 0.34, 2), m2lobe(0.74, 0.5, 0.24, 3), m2lobe(0.42, 0.3, 0.28, 4),
   m2lobe(0.1, 0.4, 0.5, 5, 0.03), m2lobe(0.26, 0.68, 0.3, 6), m2lobe(0.48, 0.6, 0.6, 7, -0.05))
 
-// Kept after the blind A/B against each reference (2026-10-23): broadleaf v2 (7 vs 4), pine v1 (6 vs 4: v2 over-drooped),
-// maple v2 (6 vs 5, near tie: v2 lost the visible trunk and the 45 deg diagonal).
-pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v2"])
+// ---------- round 2 (2026-10-23)
+// pine v3: v1 (kept) with boughs at a measured 20 deg tip angle (leaf angle option) instead of v2's guessed droop
+model("pine_v3",
+  trunk(PH * 0.42, { r: PH * 0.03, flare: 1.7, taper: 0.6, mat: "pbark", lean: [PH * 0.02, 0] }),
+  tube([-0.08 * PH, 0.2 * PH, 0, -0.14 * PH, 0.17 * PH, 0.02, -0.19 * PH, 0.13 * PH, 0.03], 0.014, { mat: "ptwig", top: 0.006 }),
+  tube([0.04 * PH, 0.21 * PH, 0, 0.14 * PH, 0.2 * PH, -0.02, 0.23 * PH, 0.18 * PH, -0.03], 0.014, { mat: "ptwig", top: 0.006 }),
+  [[0.24, 0.21, -0.04], [0.40, 0.31, 0.02], [0.54, 0.25, 0.03], [0.60, 0.23, 0.04], [0.66, 0.19, 0.045], [0.72, 0.18, 0.055], [0.78, 0.15, 0.065]]
+    .map(([h, hw, x], i) => tf({ pos: [x * PH, h * PH, 0] },
+      cone(hw * PH * 0.72, PH * 0.13, { mat: "pinD", sides: S(8), pos: [0, -PH * 0.07, 0], jitter: 0.02, seed: i }),
+      fronds(8, { len: hw * PH, lift: 0.04, angle: 20, w0: hw * PH * 0.55, tip: 0.15, zig: 0.45, wild: 0.5, seed: 7 + i, tones: ["pin", "pinL"], thick: 0.03 }))),
+  tf({ pos: [0.08 * PH, 0.86 * PH, 0] }, cone(0.11 * PH, 0.14 * PH, { mat: "pin", sides: S(6), jitter: 0.02 }),
+    fronds(4, { len: 0.1 * PH, lift: 0.12, angle: 15, w0: 0.06 * PH, zig: 0.4, seed: 3, tones: ["pinL", "pin"], thick: 0.03 })))
+
+// maple v3: v2's dense crown (merged canopies) on v1's visible pale trunk, branches and 45 deg diagonal, v1's red
+const m3lobe = (x, y, d, seed, z = 0, sq = 1) => tf({ pos: [mx(x), y * MH, z * MH], scale: [1, sq, 1] },
+  canopy(d / 2 * MH * 0.85, { seed, puffs: 6, wild: 0.6, merge: 0.8, tones: ["maple", "mapleL", "mapleD"] }))
+model("maple_v3",
+  tube([0, 0, 0, mx(0.03), 0.1 * MH, 0, mx(0.1), 0.25 * MH, 0, mx(0.32), 0.33 * MH, 0, mx(0.4), 0.47 * MH, 0],
+    [0.09, 0.065, 0.045, 0.022, 0.018].map(r => r * MH), { mat: "mBark", sides: S(7), jitter: 0.01 }),
+  [[0.4, 0.47, 0.5, 0.75], [0.4, 0.47, 0.6, 0.62], [0.13, 0.36, 0.06, 0.4]].map(([a, b, c, d]) =>
+    tube([mx(a), b * MH, 0, mx(c), d * MH, 0], 0.012 * MH, { mat: "mBarkD", top: 0.006 * MH })),
+  m3lobe(0.52, 0.86, 0.36, 1, 0, 0.85), m3lobe(0.76, 0.72, 0.28, 2), m3lobe(0.70, 0.48, 0.18, 3), m3lobe(0.40, 0.3, 0.22, 4),
+  m3lobe(0.04, 0.42, 0.36, 5, 0.03), m3lobe(0.21, 0.7, 0.24, 6), m3lobe(0.45, 0.58, 0.44, 7, -0.05))
+
+// boulder (non-tree reference: Poly Haven boulder_01, CC0, transparent thumbnail)
+model("boulder_v0", rock(0.6, { mat: "stone", seed: 3 }))
+// boulder v1 from the decomposition's 6 fitted masses (their union scored IoU 0.966 on the reference mask): positions as
+// (fx of W, fy of H), sizes in H, roll in degrees; W/H 1.35, narrow ground contact on the right, left nose lifted
+pal({ bst: "#6a5440", bstL: "#86705c", bstD: "#4a3828" })
+const BW = 1.35, mass = (fx, fy, w, h, roll, seed, d = 0.75, flat = 0) => tf({ pos: [fx * BW, fy, 0], rot: [0, 0, roll], scale: [w / h, 1, d / h] },
+  rock(h / 2, { mat: "bst", squash: 1, rough: 0.18, seed, flat, cap: "bstL", capAngle: 35, detail: SD(1) }))
+model("boulder_v1",
+  mass(0, 0.62, 0.89, 0.58, 11, 1), mass(-0.31, 0.54, 0.46, 0.5, 21, 3, 0.6), mass(0.31, 0.55, 0.24, 0.28, -3, 4, 0.5),
+  mass(0.25, 0.27, 0.65, 0.48, -18, 5, 0.7, 0.3), mass(-0.07, 0.28, 0.51, 0.28, -21, 6, 0.6),
+  box(0.22, 0.14, 0.24, { mat: "bstL", pos: [0.06 * BW, 0.8, 0], rot: [0, 0, -9], bevel: 0.02 }))
+
+// Kept after the blind A/B against each reference. Round 1: broadleaf v2 (7-4), pine v1 (6-4). Round 2: maple v3 over v2
+// (4-3: visible trunk, true red; both still too wide), pine v3 tie with v1 (7-7 -> champion v1 kept), boulder v1 over the
+// naive rock (6-5; reads partly as a pile of separate stones).
+pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v3", "boulder_v1"])

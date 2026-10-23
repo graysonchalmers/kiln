@@ -10,6 +10,7 @@ import { type Face, type Light, bounds, transform, transformLights, triCount } f
 import type { Built, PackDef, Project } from "../core/project.ts";
 import { type V3, translate } from "../core/util.ts";
 import { clipStrip, previewPng, viewPng } from "./preview.ts";
+import { Palette } from "../core/palette.ts";
 
 export interface OutputOptions {
   only?: string[];
@@ -61,7 +62,7 @@ export function packLayout(p: Project, pk: PackDef): { models: GlbModel[]; combi
     }
     z += depth[ri] + gap;
   });
-  return { models, combined: { name: pk.name, faces: all, steps: [], bounds: bounds(all), tris: triCount(all), pal: built[0].pal, lights: allLights, joints: [], mood: built[0].mood } };
+  return { models, combined: { name: pk.name, faces: all, steps: [], bounds: bounds(all), tris: triCount(all), pal: new Palette(new Map(built.flatMap((b) => [...b.pal.mats]))), lights: allLights, joints: [], mood: built[0].mood } };
 }
 
 function turntable(b: Built, out: string): void {
