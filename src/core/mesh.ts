@@ -1,7 +1,7 @@
 // A mesh is a list of flat, convex, planar polygons with a material key each. Low-poly assets
 // are flat-shaded, so faces never share normals and polygon soup is the natural representation.
 import { KilnError } from "./errors.ts";
-import { type M, type V3, apply, det, dot, hash, noise3, norm, rng } from "./util.ts";
+import { type M, type V3, add, apply, cross, det, dot, hash, noise3, norm, rng, scl, sub } from "./util.ts";
 
 export interface Face {
   v: V3[];
@@ -266,4 +266,77 @@ export function bakeAO(faces: Face[], strength: number, dirs = 32, res = 96): Fa
     });
     return { ...f, c };
   });
+}
+
+/** Chamfer the sharp edges of a convex shape by `size` (meters): every edge whose faces meet at more than
+ * `minAngle` degrees gets a bevel plane, and the solid is rebuilt by clipping against all planes.
+ * Concave shapes come back unchanged. Bevel faces take the material of one neighbour. */
+export function bevel(faces: Face[], size: number, minAngle = 50): Face[] {
+  if (size <= 0 || faces.length < 4) return faces;
+  const bb = bounds(faces);
+  // Shapes too thin for the full bevel (trims, slats, nails) are skipped: a sliver bevel costs tris and shows nothing.
+  if (size > 0.25 * Math.min(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2])) return faces;
+  type Plane = { n: V3; d: number; mat: string; part?: string };
+  const planes: Plane[] = [];
+  const pid = faces.map((f) => {
+    const n = faceNormal(f.v), d = dot(n, f.v[0]);
+    let i = planes.findIndex((p) => dot(p.n, n) > 0.9999 && Math.abs(p.d - d) < 1e-6);
+    if (i < 0) { planes.push({ n, d, mat: f.mat, part: f.part }); i = planes.length - 1; }
+    return i;
+  });
+  const pts = faces.flatMap((f) => f.v), eps = 1e-6 * (1 + Math.max(...pts.map((p) => Math.abs(p[0]) + Math.abs(p[1]) + Math.abs(p[2]))));
+  for (const p of planes) for (const q of pts) if (dot(p.n, q) > p.d + eps * 10) return faces;     // concave: leave as is
+  // Sharp edges between two different planes become bevel planes.
+  const key = (p: V3) => p.map((c) => Math.round(c * 1e5)).join(",");
+  const edges = new Map<string, { a: V3; planes: Set<number> }>();
+  faces.forEach((f, fi) => f.v.forEach((a, k) => {
+    const b = f.v[(k + 1) % f.v.length], ka = key(a), kb = key(b), ek = ka < kb ? ka + "|" + kb : kb + "|" + ka;
+    const e = edges.get(ek) ?? edges.set(ek, { a, planes: new Set() }).get(ek)!;
+    e.planes.add(pid[fi]);
+  }));
+  const cosMin = Math.cos((minAngle * Math.PI) / 180), cuts: Plane[] = [], seen = new Set<string>();
+  for (const e of edges.values()) {
+    if (e.planes.size !== 2) continue;
+    const [i, j] = [...e.planes], P = planes[i], Q = planes[j];
+    if (dot(P.n, Q.n) > cosMin) continue;
+    const n = norm(add(P.n, Q.n)), d = dot(n, e.a) - size, k = `${n.map((c) => c.toFixed(4))}|${d.toFixed(5)}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    cuts.push({ n, d, mat: P.n[1] >= Q.n[1] ? Q.mat : P.mat, part: P.part });
+  }
+  if (!cuts.length) return faces;
+  // Rebuild: start from a box around the shape, clip by every plane (Sutherland-Hodgman + cap polygon).
+  const lo: V3 = [Infinity, Infinity, Infinity], hi: V3 = [-Infinity, -Infinity, -Infinity];
+  for (const q of pts) for (let c = 0; c < 3; c++) { lo[c] = Math.min(lo[c], q[c] - 1); hi[c] = Math.max(hi[c], q[c] + 1); }
+  const C = (x: number, y: number, z: number): V3 => [x ? hi[0] : lo[0], y ? hi[1] : lo[1], z ? hi[2] : lo[2]];
+  let poly: { v: V3[]; mat: string; part?: string }[] = [
+    [C(0, 0, 0), C(0, 1, 0), C(1, 1, 0), C(1, 0, 0)], [C(0, 0, 1), C(1, 0, 1), C(1, 1, 1), C(0, 1, 1)],
+    [C(0, 0, 0), C(1, 0, 0), C(1, 0, 1), C(0, 0, 1)], [C(0, 1, 0), C(0, 1, 1), C(1, 1, 1), C(1, 1, 0)],
+    [C(0, 0, 0), C(0, 0, 1), C(0, 1, 1), C(0, 1, 0)], [C(1, 0, 0), C(1, 1, 0), C(1, 1, 1), C(1, 0, 1)],
+  ].map((v) => ({ v, mat: faces[0].mat }));
+  for (const pl of [...planes, ...cuts]) {
+    const cap: V3[] = [], next: typeof poly = [];
+    for (const f of poly) {
+      const out: V3[] = [];
+      f.v.forEach((a, k) => {
+        const b = f.v[(k + 1) % f.v.length], da = dot(pl.n, a) - pl.d, db = dot(pl.n, b) - pl.d;
+        if (da <= eps) out.push(a);
+        if ((da < -eps && db > eps) || (da > eps && db < -eps)) {
+          const x = add(a, scl(sub(b, a), da / (da - db)));
+          out.push(x); cap.push(x);
+        } else if (Math.abs(da) <= eps) cap.push(a);
+      });
+      if (out.length >= 3) next.push({ ...f, v: out });
+    }
+    if (cap.length >= 3) {
+      const c = scl(cap.reduce((s, q) => add(s, q), [0, 0, 0] as V3), 1 / cap.length);
+      const u = norm(sub(cap[0], c)), w = cross(pl.n, u), uniq: V3[] = [];
+      for (const q of cap.sort((a, b) => Math.atan2(dot(sub(a, c), w), dot(sub(a, c), u)) - Math.atan2(dot(sub(b, c), w), dot(sub(b, c), u))))
+        if (!uniq.length || Math.hypot(...sub(q, uniq[uniq.length - 1])) > eps * 10) uniq.push(q);
+      if (uniq.length > 2 && Math.hypot(...sub(uniq[0], uniq[uniq.length - 1])) <= eps * 10) uniq.pop();
+      if (uniq.length >= 3) next.push({ v: uniq, mat: pl.mat, part: pl.part });
+    }
+    poly = next;
+  }
+  return poly.map((f) => ({ ...faces[0], v: f.v, mat: f.mat, part: f.part, n: undefined, c: undefined }));
 }

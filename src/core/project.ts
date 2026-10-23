@@ -1,7 +1,7 @@
 // Project: the registry a model file fills in (the DSL), plus the lazy, cached, cycle-checked
 // builder that turns definitions into face lists.
 import { KilnError, didYouMean, wrap } from "./errors.ts";
-import { type Bounds, type Face, type Joint, type Light, type Part, bounds, renameParts, jitter, recolor, transform, transformLights, transformPart, triCount, bakeAO } from "./mesh.ts";
+import { type Bounds, type Face, type Joint, type Light, type Part, bounds, renameParts, jitter, recolor, transform, transformLights, transformPart, triCount, bakeAO, bevel } from "./mesh.ts";
 import { Palette, normHex } from "./palette.ts";
 import { type ClipDef, checkTracks } from "./anim.ts";
 import { box, cyl, extrude, lathe, prism, rock, sphere, terrain, torus, tube, wedge } from "./prims.ts";
@@ -117,6 +117,9 @@ export class Project {
   smooth?: number;
   /** Baked ambient occlusion strength 0..1 for every model (a loader sets it from AO). */
   ao?: number;
+  /** Default edge bevel in meters for every convex shape (settings({ bevel }) / --bevel); a shape's `bevel` wins. */
+  bevel?: number;
+  lockBevel = false;
   /** Set by a loader when --smooth / the viewer slider fixes SMOOTH: settings() then leaves it alone. */
   lockSmooth = false;
   private sgNext = 1;
@@ -165,7 +168,7 @@ export class Project {
     const style = (kind: string, v: unknown): { mat: string; o: Record<string, unknown> } => {
       if (typeof v === "string") return { mat: mat(v), o: {} };
       if (!isPlain(v)) throw new KilnError(`needs a material: "${[...this.pal.mats.keys()][0]}" or { mat, pos, rot, scale, ... }`);
-      checkKeys("options", v, ["mat", ...PLACE, "jitter", "wobble", "smooth", "seed", ...SHAPE_OPTS[kind].filter((k) => k !== "seed")]);
+      checkKeys("options", v, ["mat", ...PLACE, "jitter", "wobble", "smooth", "bevel", "seed", ...SHAPE_OPTS[kind].filter((k) => k !== "seed")]);
       if (v.mat === undefined && !NO_MAT.includes(kind)) throw new KilnError(`${kind} needs { mat: "key" }${kind === "terrain" ? " or { mat: (h, slope, x, z) => key }" : ""}`);
       if (typeof v.mat === "function") {
         if (kind !== "terrain") throw new KilnError(`${kind}: mat must be a palette key`);
@@ -187,7 +190,9 @@ export class Project {
     };
     const geo = (kind: string, args: unknown[], make: (mat: string, o: Record<string, unknown>) => Face[]): Geo => at(kind, (loc) => {
       const { mat: m, o } = style(kind, args[args.length - 1]);
-      let faces = transform(make(m, o), placeM(o));
+      // Bevel only box-like solids: cones, spheres, rocks, tubes keep their points and facets.
+      const bv = ["box", "prism", "wedge", "cyl", "extrude"].includes(kind) ? (o.bevel !== undefined ? num(o.bevel, "bevel", 0) : this.bevel) : 0;
+      let faces = transform(bv ? bevel(make(m, o), bv) : make(m, o), placeM(o));
       const sm = o.smooth !== undefined ? num(o.smooth, "smooth", 0) : this.smooth;
       if (sm) { const sg = this.sgNext++; faces = faces.map((f) => ({ ...f, sm, sg })); }
       if (o.jitter !== undefined) faces = jitter(faces, num(o.jitter, "jitter"), Number(o.seed ?? hash(`${kind}|${loc}`)), o.wobble === undefined ? undefined : num(o.wobble, "wobble", 1e-6));
@@ -197,7 +202,8 @@ export class Project {
     /** Look settings for the whole file: settings({ ao: 0.6, smooth: 40 }). CLI flags / viewer sliders override. */
     env.settings = (o: unknown) => at("settings", () => {
       if (!isPlain(o)) throw new KilnError("settings({ ao: 0..1, smooth: degrees })");
-      checkKeys("settings", o, ["ao", "smooth"]);
+      checkKeys("settings", o, ["ao", "smooth", "bevel"]);
+      if (o.bevel !== undefined && !this.lockBevel) this.bevel = num(o.bevel, "bevel", 0);
       if (o.ao !== undefined) this.ao = num(o.ao, "ao", 0);
       if (o.smooth !== undefined && !this.lockSmooth) this.smooth = num(o.smooth, "smooth", 0);
       return null;

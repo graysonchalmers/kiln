@@ -29,6 +29,7 @@ const USAGE = `kiln — low-poly and voxel 3D game assets as code
   (build / serve / info) --detail N   sets DETAIL for model files (1 = default; libraries scale resolution with it)
   (build / serve / info) --smooth DEG  auto-smooth every shape: edges under DEG shade smooth, sharper stay hard (0 = flat)
   (build / serve / info) --ao 0..1     bake ambient occlusion into vertex colors (0.6 is a good start)
+  (build / serve / info) --bevel M      chamfer sharp edges of convex shapes by M meters (0.015 is a good start)
       Live viewer: drag to orbit, step through the build, rebuilds on save.
   kiln list   <models.kx.js>
 
@@ -52,6 +53,7 @@ function parse(argv: string[]): Args {
     else if (v === "--detail") globals.DETAIL = Number(val());
     else if (v === "--smooth") globals.SMOOTH = Number(val());
     else if (v === "--ao") globals.AO = Number(val());
+    else if (v === "--bevel") globals.BEVEL = Number(val());
     else if (v === "--size") {
       const m = /^(\d+)x(\d+)$/.exec(val());
       if (!m) throw new KilnError("--size must look like 1600x1200");

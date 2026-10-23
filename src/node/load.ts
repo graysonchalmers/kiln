@@ -28,6 +28,7 @@ export function loadProject(file: string): Project {
   const p = new Project();
   if (typeof globals.SMOOTH === "number") { p.smooth = globals.SMOOTH; p.lockSmooth = true; }
   if (typeof globals.AO === "number") p.ao = globals.AO;
+  if (typeof globals.BEVEL === "number") { p.bevel = globals.BEVEL; p.lockBevel = true; }
   const ctx = vm.createContext({ ...p.env(), ...globals, console, Math });
   const stack: string[] = [];
   const run = (path: string) => {
