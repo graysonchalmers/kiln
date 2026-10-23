@@ -26,7 +26,8 @@ export const globals: Record<string, unknown> = {};
 /** Load a model file from disk. Throws KilnError with a file:line:col location on failure. */
 export function loadProject(file: string): Project {
   const p = new Project();
-  if (typeof globals.SMOOTH === "number") p.smooth = globals.SMOOTH;
+  if (typeof globals.SMOOTH === "number") { p.smooth = globals.SMOOTH; p.lockSmooth = true; }
+  if (typeof globals.AO === "number") p.ao = globals.AO;
   const ctx = vm.createContext({ ...p.env(), ...globals, console, Math });
   const stack: string[] = [];
   const run = (path: string) => {
@@ -50,6 +51,8 @@ export function loadProject(file: string): Project {
   p.pathHook = (path) => (isAbsolute(path) ? path : resolve(dirname(stack[stack.length - 1] ?? resolve(file)), path));
   p.imageHook = readImage;
   run(file);
+  // CLI flags / viewer sliders win over settings() in the file (AO applies at build, after loading)
+  if (typeof globals.AO === "number") p.ao = globals.AO;
   resolveTextures(p, dirname(resolve(file)));
   return p;
 }

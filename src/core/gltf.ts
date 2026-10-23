@@ -117,6 +117,7 @@ export function glb(models: GlbModel[]): Uint8Array {
     const primitives: Record<string, unknown>[] = [];
     for (const [key, tris] of byMat) {
       const tex = pal.get(key).tex;
+      const ao = tris.some((t) => t.c), col = ao ? new Float32Array(tris.length * 9) : undefined;
       const pos = new Float32Array(tris.length * 9), nrm = new Float32Array(tris.length * 9), uv = tex ? new Float32Array(tris.length * 6) : undefined;
       const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
       tris.forEach((t, i) => {
@@ -128,6 +129,7 @@ export function glb(models: GlbModel[]): Uint8Array {
             const x = p[c] - origin[c];
             pos[i * 9 + k * 3 + c] = x;
             nrm[i * 9 + k * 3 + c] = (t.n?.[k] ?? n)[c];
+            if (col) col[i * 9 + k * 3 + c] = t.c?.[k] ?? 1;
             if (x < min[c]) min[c] = x;
             if (x > max[c]) max[c] = x;
           }
@@ -135,6 +137,7 @@ export function glb(models: GlbModel[]): Uint8Array {
       });
       const attributes: Record<string, number> = { POSITION: push(pos, "VEC3", min, max), NORMAL: push(nrm, "VEC3") };
       if (uv) attributes.TEXCOORD_0 = push(uv, "VEC2");
+      if (col) attributes.COLOR_0 = push(col, "VEC3");
       primitives.push({ attributes, material: material(key, pal), mode: 4 });
     }
     meshes.push({ name, primitives });

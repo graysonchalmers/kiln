@@ -179,7 +179,8 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
     };
     const colF = shadeN(nn);
     // Smooth faces: light each corner with its own normal (flipped like the face), interpolate (Gouraud).
-    const vc = t.n ? t.n.map((cn) => shadeN(dot(n, nn) < 0 ? scl(cn, -1) : cn)) : undefined;
+    let vc = t.n ? t.n.map((cn) => shadeN(dot(n, nn) < 0 ? scl(cn, -1) : cn)) : undefined;
+    if (t.c) vc = (vc ?? [colF, colF, colF]).map((cc, k) => scl(cc, t.c![k]));
     const tx = m.tex, al = tx?.albedo;
     raster(p[0], p[1], p[2], (i, z, w0, w1, w2) => {
       if (z >= zb[i]) return;

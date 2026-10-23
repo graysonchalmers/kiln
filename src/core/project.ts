@@ -1,7 +1,7 @@
 // Project: the registry a model file fills in (the DSL), plus the lazy, cached, cycle-checked
 // builder that turns definitions into face lists.
 import { KilnError, didYouMean, wrap } from "./errors.ts";
-import { type Bounds, type Face, type Joint, type Light, type Part, bounds, renameParts, jitter, recolor, transform, transformLights, transformPart, triCount } from "./mesh.ts";
+import { type Bounds, type Face, type Joint, type Light, type Part, bounds, renameParts, jitter, recolor, transform, transformLights, transformPart, triCount, bakeAO } from "./mesh.ts";
 import { Palette, normHex } from "./palette.ts";
 import { type ClipDef, checkTracks } from "./anim.ts";
 import { box, cyl, extrude, lathe, prism, rock, sphere, terrain, torus, tube, wedge } from "./prims.ts";
@@ -115,6 +115,10 @@ export class Project {
   imageHook?: (path: string) => Rgba;
   /** Default auto-smooth angle for every shape (a loader sets it from SMOOTH); the shape option `smooth` wins. */
   smooth?: number;
+  /** Baked ambient occlusion strength 0..1 for every model (a loader sets it from AO). */
+  ao?: number;
+  /** Set by a loader when --smooth / the viewer slider fixes SMOOTH: settings() then leaves it alone. */
+  lockSmooth = false;
   private sgNext = 1;
   private images = new Map<string, Rgba>();
 
@@ -188,6 +192,15 @@ export class Project {
       if (sm) { const sg = this.sgNext++; faces = faces.map((f) => ({ ...f, sm, sg })); }
       if (o.jitter !== undefined) faces = jitter(faces, num(o.jitter, "jitter"), Number(o.seed ?? hash(`${kind}|${loc}`)), o.wobble === undefined ? undefined : num(o.wobble, "wobble", 1e-6));
       return { __geo: true, faces, step: { label: `${kind}(${args.slice(0, -1).map(fmt).join(", ")})`, loc } };
+    });
+
+    /** Look settings for the whole file: settings({ ao: 0.6, smooth: 40 }). CLI flags / viewer sliders override. */
+    env.settings = (o: unknown) => at("settings", () => {
+      if (!isPlain(o)) throw new KilnError("settings({ ao: 0..1, smooth: degrees })");
+      checkKeys("settings", o, ["ao", "smooth"]);
+      if (o.ao !== undefined) this.ao = num(o.ao, "ao", 0);
+      if (o.smooth !== undefined && !this.lockSmooth) this.smooth = num(o.smooth, "smooth", 0);
+      return null;
     });
 
     env.pal = (defs: unknown) => at("pal", () => {
@@ -452,6 +465,7 @@ export class Project {
       if (names.has(j.name)) throw new KilnError(`part '${j.name}' appears twice: stamp copies with { as: "name" } so their parts get unique names`);
       names.add(j.name);
     }
+    if (this.ao) faces = bakeAO(faces, this.ao);
     for (const j of joints) if (j.parent && !names.has(j.parent)) throw new KilnError(`part '${j.name}': unknown parent '${j.parent}'${didYouMean(j.parent, names)}`);
     return { name: def.name, faces, steps, bounds: bounds(faces), tris: triCount(faces), pal: def.pal, lights, joints };
   }

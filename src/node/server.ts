@@ -16,7 +16,7 @@ export interface ServeOptions { port?: number; out?: string | false; log?: (line
 
 interface ErrInfo { message: string; loc?: string }
 interface ModelInfo { name: string; part: boolean; dims?: string; tris?: number; steps?: { label: string; loc?: string }[]; changed: boolean; error?: ErrInfo }
-interface State { detail: number; smooth: number; version: number; file: string; time: string; ms: number; error?: ErrInfo; models: ModelInfo[]; errors: ErrInfo[] }
+interface State { detail: number; smooth: number; ao: number; version: number; file: string; time: string; ms: number; error?: ErrInfo; models: ModelInfo[]; errors: ErrInfo[] }
 
 const viewerDir = join(dirname(fileURLToPath(import.meta.url)), "..", "viewer");
 const errInfo = (e: KilnError): ErrInfo => ({ message: e.message, loc: e.loc });
@@ -27,14 +27,14 @@ export function serve(file: string, opts: ServeOptions = {}): Promise<{ url: str
   const log = opts.log ?? ((l: string) => console.log(l));
   const clients = new Set<ServerResponse>();
   let project: Project | undefined;
-  let state: State = { detail: Number(globals.DETAIL ?? 1), smooth: Number(globals.SMOOTH ?? 0), version: 0, file: basename(abs), time: "", ms: 0, models: [], errors: [] };
+  let state: State = { detail: Number(globals.DETAIL ?? 1), smooth: Number(globals.SMOOTH ?? 0), ao: Number(globals.AO ?? 0), version: 0, file: basename(abs), time: "", ms: 0, models: [], errors: [] };
   const last = new Map<string, string>();
   let watched = new Set<string>();
   let timer: NodeJS.Timeout | undefined;
 
   const rebuild = () => {
     const t0 = performance.now();
-    const next: State = { detail: Number(globals.DETAIL ?? 1), smooth: Number(globals.SMOOTH ?? 0), version: state.version + 1, file: basename(abs), time: new Date().toLocaleTimeString(), ms: 0, models: [], errors: [] };
+    const next: State = { detail: Number(globals.DETAIL ?? 1), smooth: Number(globals.SMOOTH ?? 0), ao: Number(globals.AO ?? 0), version: state.version + 1, file: basename(abs), time: new Date().toLocaleTimeString(), ms: 0, models: [], errors: [] };
     try { project = loadProject(abs); } catch (e) { project = undefined; next.error = errInfo(wrap(e)); }
     if (project) {
       for (const name of project.order) {
@@ -112,6 +112,9 @@ export function serve(file: string, opts: ServeOptions = {}): Promise<{ url: str
         // d = DETAIL (0, 8], s = SMOOTH degrees [0, 180]; either may be omitted
         const d = url.searchParams.has("d") ? Number(url.searchParams.get("d")) : Number(globals.DETAIL ?? 1);
         const sm = url.searchParams.has("s") ? Number(url.searchParams.get("s")) : Number(globals.SMOOTH ?? 0);
+        const ao = url.searchParams.has("a") ? Number(url.searchParams.get("a")) : Number(globals.AO ?? 0);
+        if (!(ao >= 0 && ao <= 1)) { res.writeHead(400); res.end("a must be in [0, 1]"); return; }
+        globals.AO = ao;
         if (!(d > 0 && d <= 8) || !(sm >= 0 && sm <= 180)) { res.writeHead(400); res.end("d must be in (0, 8], s in [0, 180]"); return; }
         globals.DETAIL = d;
         globals.SMOOTH = sm;

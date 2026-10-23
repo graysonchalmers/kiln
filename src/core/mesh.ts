@@ -14,6 +14,8 @@ export interface Face {
   sg?: number;
   /** Per-corner normals, set by smoothNormals() at output time. */
   n?: V3[];
+  /** Per-corner baked light (0..1, ambient occlusion), set by bakeAO(); multiplies the material color. */
+  c?: number[];
 }
 
 /** An animatable part: a named node that rotates / moves / scales about its pivot. */
@@ -124,7 +126,7 @@ export function triangulate(faces: Face[]): Face[] {
   const out: Face[] = [];
   for (const f of faces) {
     if (f.v.length === 3) { out.push(f); continue; }
-    for (let i = 1; i < f.v.length - 1; i++) out.push({ ...f, v: [f.v[0], f.v[i], f.v[i + 1]], n: f.n && [f.n[0], f.n[i], f.n[i + 1]] });
+    for (let i = 1; i < f.v.length - 1; i++) out.push({ ...f, v: [f.v[0], f.v[i], f.v[i + 1]], n: f.n && [f.n[0], f.n[i], f.n[i + 1]], c: f.c && [f.c[0], f.c[i], f.c[i + 1]] });
   }
   return out;
 }
@@ -203,5 +205,65 @@ export function smoothNormals(faces: Face[]): Face[] {
       return norm(s);
     });
     return { ...t, n };
+  });
+}
+
+/** Bake ambient occlusion into per-corner colors: each corner's view of an open sky (with an infinite
+ * ground below the model) over `dirs` directions, via orthographic depth maps. strength 0..1 = how dark
+ * a fully enclosed corner gets. Also adds a gentle bottom-to-top gradient. Keeps faces as they are. */
+export function bakeAO(faces: Face[], strength: number, dirs = 32, res = 96): Face[] {
+  if (!faces.length || strength <= 0) return faces;
+  const tris = triangulate(faces), b = bounds(faces);
+  const size = Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]) || 1, eps = size * 0.015;
+  const ctr: V3 = [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2];
+  // Directions: Fibonacci sphere; those pointing into the ground (y < 0) are always blocked.
+  const D: V3[] = [];
+  for (let i = 0; i < dirs; i++) {
+    const y = 1 - (2 * (i + 0.5)) / dirs, r = Math.sqrt(1 - y * y), a = i * 2.39996323;
+    D.push([Math.cos(a) * r, y, Math.sin(a) * r]);
+  }
+  const maps = D.map((d) => {
+    if (d[1] < -0.05) return undefined;
+    const u = norm(Math.abs(d[1]) > 0.9 ? [1, 0, 0].map((x, k) => x - d[k] * d[0]) as V3 : [d[2], 0, -d[0]]);
+    const v: V3 = [d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]];
+    const half = size * 0.9, cell = (2 * half) / res, depth = new Float32Array(res * res).fill(-Infinity);
+    const prj = (p: V3) => { const q: V3 = [p[0] - ctr[0], p[1] - ctr[1], p[2] - ctr[2]]; return [(dot(q, u) + half) / cell, (dot(q, v) + half) / cell, dot(q, d)]; };
+    for (const t of tris) {
+      const [A, B, C] = t.v.map(prj);
+      const area = (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0]);
+      if (Math.abs(area) < 1e-12) continue;
+      const x0 = Math.max(0, Math.floor(Math.min(A[0], B[0], C[0]))), x1 = Math.min(res - 1, Math.ceil(Math.max(A[0], B[0], C[0])));
+      const y0 = Math.max(0, Math.floor(Math.min(A[1], B[1], C[1]))), y1 = Math.min(res - 1, Math.ceil(Math.max(A[1], B[1], C[1])));
+      for (let y = y0; y <= y1; y++)
+        for (let x = x0; x <= x1; x++) {
+          const px = x + 0.5, py = y + 0.5;
+          const w0 = ((B[0] - px) * (C[1] - py) - (B[1] - py) * (C[0] - px)) / area, w1 = ((C[0] - px) * (A[1] - py) - (C[1] - py) * (A[0] - px)) / area, w2 = 1 - w0 - w1;
+          if (w0 < -0.01 || w1 < -0.01 || w2 < -0.01) continue;
+          const z = w0 * A[2] + w1 * B[2] + w2 * C[2];
+          if (z > depth[y * res + x]) depth[y * res + x] = z;
+        }
+    }
+    return { prj, depth };
+  });
+  const h = b.max[1] - b.min[1] || 1;
+  return faces.map((f) => {
+    const fn = faceNormal(f.v);
+    const c = f.v.map((p, k) => {
+      const n = f.n?.[k] ?? fn, q: V3 = [p[0] + n[0] * eps, p[1] + n[1] * eps, p[2] + n[2] * eps];
+      let seen = 0, total = 0;
+      D.forEach((d, i) => {
+        const w = dot(d, n);
+        if (w <= 0) return;
+        total += w;
+        const m = maps[i];
+        if (!m) return;
+        const [x, y, z] = m.prj(q), xi = Math.floor(x), yi = Math.floor(y);
+        const block = xi >= 0 && yi >= 0 && xi < res && yi < res ? m.depth[yi * res + xi] : -Infinity;
+        if (block <= z + eps) seen += w;
+      });
+      const vis = total ? seen / total : 1, grad = 0.88 + 0.12 * Math.min(1, Math.max(0, (p[1] - b.min[1]) / h));
+      return Math.max(0, Math.min(1, (1 - strength * (1 - vis)) * (1 - strength * (1 - grad))));
+    });
+    return { ...f, c };
   });
 }
