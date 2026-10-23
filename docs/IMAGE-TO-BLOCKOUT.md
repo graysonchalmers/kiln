@@ -114,3 +114,25 @@ Scene: `smoke/img2blockout.kx.js`, pack `img2blockout_best`. The decomposed v1 b
   part identity both have to survive a fix.
 - Next: subtract/cut (cracks, notches, recessed panels), barrel hoop value from the sample, crate colour from the sampled
   shadow tone (the render lightens it), crate hasp straps.
+
+## Round 5 results (2026-10-23)
+
+| Object | Kept before | New | Blind A/B (likeness) | Kept now |
+|---|---|---|---|---|
+| boulder | v2 (two hulls) | v4: one hull with the crack cut in by `subtract()` | v2 6 vs 5 | v2 |
+| barrel | v1 | v3: hoop and wood values matched to the reference by measurement (hoop 30 / wood 35) | v1 8 vs 7 | v1 |
+| crate | v1 | v2: hasp straps, colour matched to the reference medians | v2 7 vs 6 | v2 |
+| crate | v1 | v2s: hasp straps, sampled shadow tones (as asked) | tie 6-6 | - |
+| crate | v2 | v3: v2's straps in dark metal on v1's olive | v2 6 vs 5 | v2 |
+
+- Core: `subtract(base, ...cutters)`, a BSP-tree boolean cut (after csg.js). Kept faces keep their material; carved walls
+  take the cutter's (test: a 2 m cube minus a corner = 7.875 m3 exactly; a miss changes nothing).
+- The cut works, but at blockout scale a crack thin enough to read as a crack reads as a faint crease: the judge preferred
+  v2's separated lobe to one fused mass with a crack.
+- Matching one measured value moves the others: lifting the barrel wood to the reference's value made it orange and
+  saturated. Match hue, saturation and value together.
+- Colour judging across backdrops is unreliable. Measured, crate v1 rendered darker than the reference (V 26 vs 40), the
+  opposite of the judge's "too light"; a median-matched v2 then read "too pale khaki", and v1's olive read "brown" to the
+  next judge. Builds are judged on a dark backdrop, references on light grey.
+- Next: render the judge's copies on the reference's backdrop (a `shot.ts --bg` option), then redo colour; a deeper,
+  wider crack cut on the two-hull boulder.

@@ -86,6 +86,18 @@ test("hull: separate masses become one closed convex shape", () => {
   assert.throws(() => one(`model("m", hull({ mat: "a" }, box(1, 1, 0, "a")))`));
 });
 
+test("subtract: a cutter carves the base; the carved walls take the cutter's material", () => {
+  // a 2 m cube (x, z -1..1, y 0..2) minus a 1 m cube overlapping one top corner by 0.5 m on each axis
+  const cut = one(`model("m", { pivot: "origin" }, subtract(box(2, 2, 2, "a"), box(1, 1, 1, { mat: "b", pos: [1, 1.5, 1] })))`);
+  near(volume(cut.faces), 8 - 0.125, 1e-6, "volume");
+  const walls = cut.faces.filter((f) => f.mat === "b");
+  assert.ok(walls.length >= 3, "three carved walls in the cutter's material");
+  for (const f of walls) for (const p of f.v) assert.ok(p[0] <= 1 + 1e-9 && p[1] <= 2 + 1e-9 && p[2] <= 1 + 1e-9, "walls stay inside the base");
+  const miss = one(`model("m", { pivot: "origin" }, subtract(box(1, 1, 1, "a"), box(1, 1, 1, { mat: "b", pos: [5, 0, 0] })))`);
+  near(volume(miss.faces), 1, 1e-9, "a cutter that misses changes nothing");
+  throwsMsg(() => one(`model("m", subtract(box(1, 1, 1, "a")))`), /at least one cutter/);
+});
+
 test("terrain: a heightfield from a function with per-triangle materials by height and slope", () => {
   const flat = one(`model("m", terrain(4, 2, { mat: "a", res: [4, 2], fn: () => 0.5, height: 2 }))`);
   assert.equal(flat.faces.length, 16);

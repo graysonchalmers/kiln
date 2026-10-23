@@ -218,8 +218,76 @@ model("crate_v1",
   box(0.02, 0.69 * CH, CD + 0.06 * CL, { mat: "canvas", pos: [-CL / 2 - 0.012, 0.16 * CH, 0] }),
   extrude([0, 0.844 * CH, 0.14 * CL, 0.844 * CH, 0, 0.6 * CH], 0.012, { mat: "canvas", pos: [-CL / 2, 0, CD / 2 + 0.001] }))
 
-// Kept after the blind A/B against each reference. Round 1: broadleaf v2 (7-4), pine v1 (6-4). Round 2: maple v3 (4-3),
-// pine v3 tie (v1 kept). Round 3: boulder v2 (hull, 6-5), maple v4 lost, barrel v1 (8-4). Round 4: crate v1 over the naive
-// box (7-3), maple v5 over v3 (5-4: clumps on the diagonal), barrel v2 lost to v1 (7-8: light hoops read as another
-// material), boulder v3 lost to v2 (5-6: a stuck-on crack box read as a stick, the plateau mass rounded the crown).
-pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_v2", "barrel_v1", "crate_v1"])
+// ---------- round 5 (2026-10-23)
+// barrel v3: values matched to the reference by measurement (hoopv: hoop pixels median V vs wood): reference hoop 30 /
+// wood 35 (iron a little darker than wood, set apart by being grey); v1 rendered 24 / 25 (merged), v2 34 / 25 (silver).
+pal({ brl3: "#8f6c4c", brl3Head: "#a07e58", hoop3: { color: "#7a726a", metal: 0.6, rough: 0.5 } })
+model("barrel_v3",
+  lathe([0, 0, ...BRP.flatMap((r, i) => [r * BRH, i * 0.1 * BRH]), 0.318 * BRH, BRH, 0.318 * BRH, 0.96 * BRH, 0, 0.96 * BRH], { mat: "brl3", sides: 30 }),
+  [[0.958, 0.055], [0.862, 0.033], [0.687, 0.049], [0.32, 0.046], [0.142, 0.032], [0.046, 0.054]].map(([c, w0]) => { const w = w0 * 1.2
+    return lathe([(brR(c - w / 2) + 0.01) * BRH, (c - w / 2) * BRH, (brR(c + w / 2) + 0.01) * BRH, (c + w / 2) * BRH], { mat: "hoop3", sides: 30 }) }),
+  [-2, -1, 0, 1, 2].map(k => { const z = k * 0.126 * BRH, half = Math.sqrt(Math.max(0, (0.318 * BRH) ** 2 - z * z))
+    return box(half * 2 * 0.98, 0.012, 0.12 * BRH, { mat: k % 2 ? "brl3Head" : "brl3", pos: [0, 0.96 * BRH + 0.004, z] }) }),
+  tf({ rot: [0, 20, 0] }, cyl(0.028 * BRH, 0.02 * BRH, { mat: "brlBung", sides: 10, rot: [90, 0, 0], pos: [0, 0.5 * BRH, 0.425 * BRH] })))
+
+// boulder v4: one connected mass (judge: v2 "two stones leaning together"): a single hull over v2's six masses, the crack
+// CUT into the front face with subtract() along the measured line (fx -0.01, fy 0.35 -> fx +0.39, fy 0.52, rising 18 deg)
+// instead of v3's added box (read as a stick); the carved walls are the dark crack material
+model("boulder_v4",
+  subtract(
+    hull({ mat: "bst", cap: "bstL", capAngle: 35, jitter: 0.03, seed: 4 }, bm(0, 0.62, 0.89, 0.58, 11), bm(-0.31, 0.54, 0.46, 0.5, 21, 0.6),
+      bm(-0.07, 0.28, 0.51, 0.28, -21, 0.6), box(0.22, 0.14, 0.24, { mat: "bst", pos: [0.06 * BW, 0.82, 0], rot: [0, 0, -9] }),
+      bm(0.31, 0.55, 0.24, 0.28, -3, 0.5), bm(0.25, 0.25, 0.65, 0.44, -18, 0.7)),
+    tf({ pos: [0.19 * BW, 0.41, 0.28], rot: [0, 0, 18] }, box(0.62, 0.06, 0.5, { mat: "bstD" }))))
+
+// crate v2: v1 + hasp straps (judge: latches were "plain dark squares, without the strap hasps running down the front").
+// Colour: measured, the v1 render was DARKER than the reference (median V 26 vs 40, S 33 vs 29, hue 52 vs 50), so the
+// judge's "too light, yellow-khaki" read was the dark backdrop; v2 matches the measured medians, v2s uses the sampled
+// shadow tones as asked. Both go to the blind A/B.
+pal({ cr2W: "#9c9470", cr2W2: "#8f8865", cr2L: "#a8a27d", cr2L2: "#9e9873",
+  cr2sW: "#524d39", cr2sW2: "#4a4533", cr2sL: "#625f48", cr2sL2: "#5a5742" })
+model("crate_v2",
+  [0.19, 0.81].map(u => box(0.083 * CL, 0.104 * CH, CD, { mat: "crDark", pos: [cu(u), 0, 0] })),
+  planks(CL, 0.817 * CH, CD, { along: "x", across: "y", n: 3, gap: 0.004, tones: ["cr2W", "cr2W2"], at: [0, 0.052 * CH, 0], seed: 2 }),
+  planks(CL, 0.156 * CH, CD + 0.041 * CL, { along: "x", across: "z", n: 3, gap: 0.004, tones: ["cr2L", "cr2L2"], at: [0, 0.844 * CH, 0.0025 * CL], seed: 3 }),
+  [0.19, 0.81].map(u => box(0.083 * CL, 0.042 * CH, CD, { mat: "cr2L", pos: [cu(u), CH, 0] })),
+  sym("x", sym("z", box(0.07 * CL, 0.567 * CH, 0.07 * CL, { mat: "crHw", pos: [CL / 2 - 0.03 * CL, 0.215 * CH, CD / 2 - 0.03 * CL] }))),
+  // hasp straps: a metal strap from the lid edge down the front face to the draw latch, a staple loop over the lid seam
+  [0.256, 0.744].map(u => [box(0.03 * CL, 0.56 * CH, 0.008 * CL, { mat: "crHw", pos: [cu(u), 0.44 * CH, CD / 2 + 0.024 * CL] }),
+    box(0.06 * CL, 0.16 * CH, 0.03 * CL, { mat: "crHw", pos: [cu(u), 0.43 * CH, CD / 2] }),
+    box(0.075 * CL, 0.05 * CH, 0.014 * CL, { mat: "crDark", pos: [cu(u), 0.82 * CH, CD / 2 + 0.028 * CL] })]),
+  box(0.02, 0.69 * CH, CD + 0.06 * CL, { mat: "canvas", pos: [-CL / 2 - 0.012, 0.16 * CH, 0] }),
+  extrude([0, 0.844 * CH, 0.14 * CL, 0.844 * CH, 0, 0.6 * CH], 0.012, { mat: "canvas", pos: [-CL / 2, 0, CD / 2 + 0.001] }))
+model("crate_v2s",
+  [0.19, 0.81].map(u => box(0.083 * CL, 0.104 * CH, CD, { mat: "crDark", pos: [cu(u), 0, 0] })),
+  planks(CL, 0.817 * CH, CD, { along: "x", across: "y", n: 3, gap: 0.004, tones: ["cr2sW", "cr2sW2"], at: [0, 0.052 * CH, 0], seed: 2 }),
+  planks(CL, 0.156 * CH, CD + 0.041 * CL, { along: "x", across: "z", n: 3, gap: 0.004, tones: ["cr2sL", "cr2sL2"], at: [0, 0.844 * CH, 0.0025 * CL], seed: 3 }),
+  [0.19, 0.81].map(u => box(0.083 * CL, 0.042 * CH, CD, { mat: "cr2sL", pos: [cu(u), CH, 0] })),
+  sym("x", sym("z", box(0.07 * CL, 0.567 * CH, 0.07 * CL, { mat: "crHw", pos: [CL / 2 - 0.03 * CL, 0.215 * CH, CD / 2 - 0.03 * CL] }))),
+  // hasp straps: a metal strap from the lid edge down the front face to the draw latch, a staple loop over the lid seam
+  [0.256, 0.744].map(u => [box(0.03 * CL, 0.56 * CH, 0.008 * CL, { mat: "crHw", pos: [cu(u), 0.44 * CH, CD / 2 + 0.024 * CL] }),
+    box(0.06 * CL, 0.16 * CH, 0.03 * CL, { mat: "crHw", pos: [cu(u), 0.43 * CH, CD / 2] }),
+    box(0.075 * CL, 0.05 * CH, 0.014 * CL, { mat: "crDark", pos: [cu(u), 0.82 * CH, CD / 2 + 0.028 * CL] })]),
+  box(0.02, 0.69 * CH, CD + 0.06 * CL, { mat: "canvas", pos: [-CL / 2 - 0.012, 0.16 * CH, 0] }),
+  extrude([0, 0.844 * CH, 0.14 * CL, 0.844 * CH, 0, 0.6 * CH], 0.012, { mat: "canvas", pos: [-CL / 2, 0, CD / 2 + 0.001] }))
+
+// crate v3 (after the round-5 judge): v2's hasp straps (won 7-6 on them) in dark metal, with v1's olive (the judge found it
+// closer than v2's median-matched khaki); not part of the main A/B, judged on its own against v2
+model("crate_v3",
+  [0.19, 0.81].map(u => box(0.083 * CL, 0.104 * CH, CD, { mat: "crDark", pos: [cu(u), 0, 0] })),
+  planks(CL, 0.817 * CH, CD, { along: "x", across: "y", n: 3, gap: 0.004, tones: ["crW", "crW2"], at: [0, 0.052 * CH, 0], seed: 2 }),
+  planks(CL, 0.156 * CH, CD + 0.041 * CL, { along: "x", across: "z", n: 3, gap: 0.004, tones: ["crLid", "crLid2"], at: [0, 0.844 * CH, 0.0025 * CL], seed: 3 }),
+  [0.19, 0.81].map(u => box(0.083 * CL, 0.042 * CH, CD, { mat: "crLid", pos: [cu(u), CH, 0] })),
+  sym("x", sym("z", box(0.07 * CL, 0.567 * CH, 0.07 * CL, { mat: "crHw", pos: [CL / 2 - 0.03 * CL, 0.215 * CH, CD / 2 - 0.03 * CL] }))),
+  // hasp straps: a metal strap from the lid edge down the front face to the draw latch, a staple loop over the lid seam
+  [0.256, 0.744].map(u => [box(0.03 * CL, 0.56 * CH, 0.008 * CL, { mat: "crDark", pos: [cu(u), 0.44 * CH, CD / 2 + 0.024 * CL] }),
+    box(0.06 * CL, 0.16 * CH, 0.03 * CL, { mat: "crDark", pos: [cu(u), 0.43 * CH, CD / 2] }),
+    box(0.075 * CL, 0.05 * CH, 0.014 * CL, { mat: "crDark", pos: [cu(u), 0.82 * CH, CD / 2 + 0.028 * CL] })]),
+  box(0.02, 0.69 * CH, CD + 0.06 * CL, { mat: "canvas", pos: [-CL / 2 - 0.012, 0.16 * CH, 0] }),
+  extrude([0, 0.844 * CH, 0.14 * CL, 0.844 * CH, 0, 0.6 * CH], 0.012, { mat: "canvas", pos: [-CL / 2, 0, CD / 2 + 0.001] }))
+
+// Kept after the blind A/B against each reference. Round 1: broadleaf v2 (7-4), pine v1 (6-4). Round 2: maple v3, pine tie.
+// Round 3: boulder v2 (hull, 6-5), barrel v1 (8-4). Round 4: crate v1 (7-3), maple v5 (5-4); barrel v2, boulder v3 lost.
+// Round 5: crate v2 over v1 (7-6, hasp straps) and over v3 (6-5); boulder v4 (one hull + subtract() crack) lost 5-6,
+// barrel v3 (values matched by measurement, wood went orange) lost 7-8, crate v2s (shadow tones) tied v1.
+pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_v2", "barrel_v1", "crate_v2"])

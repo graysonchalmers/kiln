@@ -6,6 +6,7 @@ import { Palette, normHex } from "./palette.ts";
 import { type ClipDef, checkTracks } from "./anim.ts";
 import { box, cyl, extrude, lathe, prism, rock, sphere, terrain, torus, tube, wedge } from "./prims.ts";
 import { type Grid, gridFn, meshGrid, parseLayers } from "./voxel.ts";
+import { subtract } from "./csg.ts";
 import { type M, type V3, globRe, hash, mul, noise3, rng, rotM, scaleM, translate } from "./util.ts";
 
 export interface Step {
@@ -15,7 +16,7 @@ export interface Step {
 
 /** Geometry made at definition time, or a reference resolved at build time. */
 interface Geo { __geo: true; faces: Face[]; lights?: Light[]; step: Step }
-interface Ref { __ref: "stamp" | "scatter" | "tf" | "sym" | "part" | "hull"; args: unknown[]; step: Step }
+interface Ref { __ref: "stamp" | "scatter" | "tf" | "sym" | "part" | "hull" | "subtract"; args: unknown[]; step: Step }
 type Item = Geo | Ref | Item[] | null | undefined | false;
 
 export interface ModelOpts {
@@ -394,6 +395,12 @@ export class Project {
       mat(o.mat);
       return ref("hull", [o, ...items], `hull(${o.mat})`);
     });
+    // subtract(base, ...cutters): cut the cutters out of the base (cracks, notches, recessed panels, holes). Base and
+    // cutters should each be closed solids; the carved walls take each cutter's material.
+    env.subtract = (base: unknown, ...cutters: unknown[]) => at("subtract", () => {
+      if (!cutters.length) throw new KilnError("subtract(base, ...cutters): give at least one cutter");
+      return ref("subtract", [base, ...cutters], `subtract(${cutters.length})`);
+    });
     env.sym = (axis: unknown, ...items: unknown[]) => at("sym", () => {
       if (axis !== "x" && axis !== "z") throw new KilnError('sym("x" | "z", ...items): items plus their mirror image across x = 0 (or z = 0)');
       return ref("sym", [axis, ...items], `sym("${axis}")`);
@@ -559,6 +566,12 @@ export class Project {
 
   private resolve(r: Ref, depth: number): Part {
     const a = r.args;
+    if (r.__ref === "subtract") {
+      // each cutter is subtracted in turn; its carved walls keep the cutter's material, with a fresh smoothing group
+      let faces = this.expand(a[0], depth + 1).faces;
+      for (const c of a.slice(1)) { const sg = this.sgNext++; faces = subtract(faces, this.expand(c, depth + 1).faces.map((f) => ({ ...f, sg }))); }
+      return { faces, lights: [] };
+    }
     if (r.__ref === "hull") {
       const o = a[0] as Record<string, unknown>, m = String(o.mat);
       let faces = convexHull(this.expand(a.slice(1), depth + 1).faces.flatMap((f) => f.v), m);
