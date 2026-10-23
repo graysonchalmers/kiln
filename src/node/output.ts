@@ -61,7 +61,7 @@ export function packLayout(p: Project, pk: PackDef): { models: GlbModel[]; combi
     }
     z += depth[ri] + gap;
   });
-  return { models, combined: { name: pk.name, faces: all, steps: [], bounds: bounds(all), tris: triCount(all), pal: built[0].pal, lights: allLights, joints: [] } };
+  return { models, combined: { name: pk.name, faces: all, steps: [], bounds: bounds(all), tris: triCount(all), pal: built[0].pal, lights: allLights, joints: [], mood: built[0].mood } };
 }
 
 function turntable(b: Built, out: string): void {

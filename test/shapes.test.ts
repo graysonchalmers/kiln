@@ -65,6 +65,15 @@ test("rock flat: the underside is cut to a plane, so it sits on a face", () => {
   assert.ok(volume(rock.faces) > 0, "still closed and outward");
 });
 
+test("cap: up-facing faces take the cap material (moss on a rock's own faces, no second shell)", () => {
+  const r = one(`model("m", { pivot: "origin" }, rock(1, { mat: "a", cap: "b", capAngle: 40, seed: 2 }))`);
+  const capped = r.faces.filter((f) => f.mat === "b"), plain = r.faces.filter((f) => f.mat === "a");
+  assert.ok(capped.length > 0 && plain.length > 0, "both materials present");
+  for (const f of capped) assert.ok(faceNormal(f.v)[1] > Math.cos((40 + 14) * Math.PI / 180) - 1e-9, "only up-facing faces are capped");
+  assert.ok(capped.length + plain.length === one(`model("m", { pivot: "origin" }, rock(1, { mat: "a", seed: 2 }))`).faces.length, "same faces, recolored");
+  throwsMsg(() => one(`model("m", rock(1, { mat: "a", cap: "nope" }))`), /cap: a palette key/);
+});
+
 test("terrain: a heightfield from a function with per-triangle materials by height and slope", () => {
   const flat = one(`model("m", terrain(4, 2, { mat: "a", res: [4, 2], fn: () => 0.5, height: 2 }))`);
   assert.equal(flat.faces.length, 16);

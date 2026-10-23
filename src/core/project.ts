@@ -1,12 +1,12 @@
 // Project: the registry a model file fills in (the DSL), plus the lazy, cached, cycle-checked
 // builder that turns definitions into face lists.
 import { KilnError, didYouMean, wrap } from "./errors.ts";
-import { type Bounds, type Face, type Joint, type Light, type Part, bounds, renameParts, jitter, recolor, transform, transformLights, transformPart, triCount, bakeAO, bevel } from "./mesh.ts";
+import { type Bounds, type Face, type Joint, type Light, type Part, bounds, faceNormal, renameParts, jitter, recolor, transform, transformLights, transformPart, triCount, bakeAO, bevel } from "./mesh.ts";
 import { Palette, normHex } from "./palette.ts";
 import { type ClipDef, checkTracks } from "./anim.ts";
 import { box, cyl, extrude, lathe, prism, rock, sphere, terrain, torus, tube, wedge } from "./prims.ts";
 import { type Grid, gridFn, meshGrid, parseLayers } from "./voxel.ts";
-import { type M, type V3, globRe, hash, mul, rng, rotM, scaleM, translate } from "./util.ts";
+import { type M, type V3, globRe, hash, mul, noise3, rng, rotM, scaleM, translate } from "./util.ts";
 
 export interface Step {
   label: string;
@@ -176,7 +176,7 @@ export class Project {
     const style = (kind: string, v: unknown): { mat: string; o: Record<string, unknown> } => {
       if (typeof v === "string") return { mat: mat(v), o: {} };
       if (!isPlain(v)) throw new KilnError(`needs a material: "${[...this.pal.mats.keys()][0]}" or { mat, pos, rot, scale, ... }`);
-      checkKeys("options", v, ["mat", ...PLACE, "jitter", "wobble", "smooth", "bevel", "minor", "seed", ...SHAPE_OPTS[kind].filter((k) => k !== "seed")]);
+      checkKeys("options", v, ["mat", ...PLACE, "jitter", "wobble", "smooth", "bevel", "minor", "seed", "cap", "capAngle", ...SHAPE_OPTS[kind].filter((k) => k !== "seed")]);
       if (v.mat === undefined && !NO_MAT.includes(kind)) throw new KilnError(`${kind} needs { mat: "key" }${kind === "terrain" ? " or { mat: (h, slope, x, z) => key }" : ""}`);
       if (typeof v.mat === "function") {
         if (kind !== "terrain") throw new KilnError(`${kind}: mat must be a palette key`);
@@ -214,6 +214,17 @@ export class Project {
       // Default seed comes from the shape itself (kind, args, options), not its source line, so editing
       // other lines of a file never re-rolls a shape. Identical shapes share a wobble; pass `seed` to differ.
       if (o.jitter !== undefined) faces = jitter(faces, num(o.jitter, "jitter"), Number(o.seed ?? hash(`${kind}|${JSON.stringify(args.slice(0, -1))}|${JSON.stringify(o)}`)), o.wobble === undefined ? undefined : num(o.wobble, "wobble", 1e-6));
+      // cap: faces facing up (within capAngle degrees of +Y, the edge broken by noise) take another material, so moss,
+      // snow or sand sits on the shape's own faces instead of a second shell laid over it.
+      if (o.cap !== undefined) {
+        if (typeof o.cap !== "string" || !this.pal.has(o.cap)) throw new KilnError(`cap: a palette key for the up-facing faces (got ${fmt(o.cap)})`);
+        const ang = o.capAngle === undefined ? 50 : num(o.capAngle, "capAngle", 0), cap = o.cap as string;
+        faces = faces.map((f) => {
+          const n = faceNormal(f.v), c = f.v.reduce((a, p) => [a[0] + p[0], a[1] + p[1], a[2] + p[2]] as V3, [0, 0, 0] as V3);
+          const edge = noise3(c[0] * 2.7 / f.v.length, c[1] * 2.7 / f.v.length, c[2] * 2.7 / f.v.length, 7) * 14;
+          return Math.acos(Math.max(-1, Math.min(1, n[1]))) * 180 / Math.PI < ang + edge ? { ...f, mat: cap } : f;
+        });
+      }
       return { __geo: true, faces, step: { label: `${kind}(${args.slice(0, -1).map(fmt).join(", ")})`, loc } };
     });
 
