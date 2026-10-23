@@ -21,10 +21,12 @@ model("old_oak", tf({ scale: [2, 2, 2] }, trunk(1.3, { r: 0.3, lean: [-0.12, 0.0
 model("pine_grove", tf({ pos: [-0.5, 0, 0], rot: [3, 0, -2] }, conifer(3, { seed: 2, tiers: 5 })),
   tf({ pos: [0.65, 0, 0.3], rot: [-2, 40, 4] }, conifer(2.2, { seed: 5, tiers: 4 })),
   tf({ pos: [0.1, 0, -0.75], rot: [0, 80, -3] }, conifer(1.4, { seed: 9, tiers: 3 })))
-model("fern_patch", fronds(9, { len: 0.6, w0: 0.2, zig: 0.6, seed: 3, segs: 2, wild: 1, vee: 18, tipTones: ["leafL", "leaf"], tones: ["leafD", "leaf"] }),
-  tf({ pos: [0.45, 0, 0.3], scale: [0.6, 0.6, 0.6], rot: [0, 37, 0] }, fronds(6, { seed: 8, segs: 2, wild: 1, vee: 18, w0: 0.18, zig: 0.6, tones: ["leafD"], tipTones: ["leafL"] })))
-model("agave", fronds(13, { len: 0.6, lift: 0.45, w0: 0.2, tip: 0.04, thick: 0.03, zig: 0, segs: 2, droop: 0.08, seed: 4, wild: 0.95, vee: 28, tones: ["agaveD", "agave"], tipTones: ["agaveL", "agave"] }),
-  tf({ rot: [0, 23, 0] }, fronds(6, { len: 0.38, lift: 0.5, w0: 0.15, tip: 0.04, thick: 0.03, zig: 0, segs: 2, droop: 0, seed: 9, wild: 0.95, vee: 28, tones: ["agave"], tipTones: ["agaveL"] })))
+model("fern_patch", fronds(9, { len: 0.6, w0: 0.22, zig: 1.1, seed: 3, segs: 2, wild: 1, vee: 12, tones: ["leafD", "leaf"], tipTones: ["leafL", "leaf"] }),
+  tf({ pos: [0.45, 0, 0.3], scale: [0.6, 0.6, 0.6], rot: [0, 37, 0] }, fronds(6, { seed: 8, segs: 2, wild: 1, vee: 12, w0: 0.2, zig: 1.1, tones: ["leafD"], tipTones: ["leafL"] })),
+  fiddlehead(0.22, { at: [0.05, 0, 0.02], rot: 30 }), fiddlehead(0.16, { at: [-0.06, 0, -0.03], rot: 200 }))
+model("agave", fronds(8, { len: 0.62, lift: 0.4, w0: 0.3, tip: 0.02, thick: 0.05, zig: 0, segs: 3, droop: 0.35, seed: 4, wild: 0.8, vee: 35, tones: ["agaveD", "agave"], tipTones: ["agaveL", "agave"] }),
+  tf({ rot: [0, 23, 0] }, fronds(6, { len: 0.42, lift: 0.4, w0: 0.24, tip: 0.02, thick: 0.05, zig: 0, segs: 2, droop: 0.1, seed: 9, wild: 0.8, vee: 40, tones: ["agave"], tipTones: ["agaveL"] })),
+  fronds(4, { len: 0.22, lift: 0.3, w0: 0.16, tip: 0.02, thick: 0.05, zig: 0, segs: 1, droop: 0, seed: 2, vee: 45, tones: ["agaveL"] }))
 model("cactus", tf({ rot: [2, 0, 5] },
   cyl(0.14, 1.5, { mat: "cactus", sides: 8, top: 0.11, jitter: 0.01 }), sphere(0.11, { mat: "cactusL", pos: [0, 1.5, 0], detail: 1, scale: [1, 0.6, 1] }),
   tube([0, 0.55, 0, 0.3, 0.6, 0.02, 0.36, 0.72, 0.02, 0.37, 0.98, 0.02], 0.08, { mat: "cactusL" }), sphere(0.08, { mat: "cactusL", pos: [0.37, 0.98, 0.02], scale: [1, 0.6, 1] }),
@@ -40,8 +42,10 @@ model("rotting_log", tf({ rot: [0, 12, 0] },
       tf({ pos: [x, y, z], scale: [s, s, s], rot: [55, 0, 0] }, cyl(0.03, 0.1, { mat: "stem", sides: 5 }), cone(0.09, 0.05, { mat: "capB", sides: 6, pos: [0, 0.09, 0] }))),
     rock(0.2, { mat: "moss", seed: 11, squash: 0.2, pos: [-0.35, 0.37, -0.03] })))
 model("well",
-  cyl(0.6, 0.6, { mat: "stone", sides: 10, jitter: 0.015 }), cyl(0.5, 0.5, { mat: "water", sides: 10, pos: [0, 0.02, 0] }),
-  cyl(0.64, 0.08, { mat: "stoneL", sides: 10, pos: [0, 0.6, 0] }),
+  cyl(0.6, 0.6, { mat: "stone", sides: 10, jitter: 0.015 }), cyl(0.47, 0.01, { mat: "water", sides: 10, pos: [0, 0.6, 0] }),
+  torus(0.56, 0.08, { mat: "stoneL", rings: 10, sides: 5, pos: [0, 0.64, 0] }),
+  [0.2, 0.4].map(y => cyl(0.605, 0.02, { mat: "stoneD", sides: 10, pos: [0, y, 0] })),
+  box(0.04, 0.04, 0.25, { mat: "iron", pos: [0.8, 1.58, 0.12] }),
   sym("x", box(0.1, 2.0, 0.1, { mat: "woodD", pos: [0.72, 0, 0] })),
   cyl(0.06, 1.5, { mat: "wood", sides: 6, rot: [0, 0, 90], pos: [0.75, 1.6, 0] }),
   prism(1.75, 0.45, 1.0, { mat: "woodL", pos: [0, 2.0, 0] }),
@@ -67,7 +71,9 @@ model("hay_bale", box(0.86, 0.41, 0.46, { mat: "hay", pos: [0, 0.02, 0] }), box(
   [0.1, 0.2, 0.3].map((y, i) => box(0.905, 0.025, 0.505, { mat: i % 2 ? "hayL" : "hayD", pos: [0, y, 0] })),
   [-0.25, 0.25].map(x => box(0.03, 0.455, 0.515, { mat: "barkD", pos: [x, 0, 0] })),
   [[-0.38, 0.2], [0.35, -0.19], [0.1, 0.21]].map(([x, z], i) => tf({ pos: [x, 0.43, z] }, blades(3, { h: 0.07, spread: 0.03, tones: ["hayL"], w: 0.015, seed: i + 2 }))))
-model("gravestone", tf({ rot: [-3, 0, 2] }, extrude([-0.25, 0, 0.25, 0, 0.25, 0.55, 0.18, 0.68, 0.05, 0.73, -0.02, 0.66, -0.18, 0.68, -0.25, 0.55], 0.12, { mat: "stone", pos: [0, 0.08, -0.06] })),
+model("gravestone", tf({ pos: [0, 0.08, 0], rot: [-3, 0, 2] }, extrude([-0.25, 0, 0.25, 0, 0.25, 0.55, 0.18, 0.68, 0.05, 0.73, -0.02, 0.66, -0.18, 0.68, -0.25, 0.55], 0.12, { mat: "stone", pos: [0, 0, -0.06] }),
+    extrude([-0.17, 0.25, 0.17, 0.25, 0.17, 0.5, 0, 0.58, -0.17, 0.5], 0.01, { mat: "stoneD", pos: [0, 0, 0.06] }),
+    extrude([-0.25, 0.53, 0.25, 0.53, 0.18, 0.69, 0.05, 0.74, -0.02, 0.67, -0.18, 0.69], 0.125, { mat: "stoneL", pos: [0, 0.02, -0.0625] })),
   box(0.65, 0.08, 0.3, { mat: "stoneD" }), rock(0.1, { mat: "moss", squash: 0.25, seed: 4, pos: [0.15, 0.09, 0.08] }))
 model("market_crates", crate(0.6, 0.5, 0.5), crate(0.5, 0.4, 0.45, { at: [0.08, 0.5, 0], rot: [0, 12, 0] }),
   sack(0.55, { at: [0.62, 0, 0.1] }), sack(0.4, { at: [-0.55, 0, 0.15], seed: 3 }))
