@@ -132,6 +132,15 @@ model("room", { pivot: "origin" }, stamp("lamp", { pos: [1, 2, 3] }), sym("x", s
   }
 });
 
+test("model lights shade a flat quad smoothly: no step along its triangle split (the lantern-post seam)", () => {
+  // lit once per triangle, this quad stepped by 10 levels across its diagonal; lit per corner, by 1
+  const b = loadSource(`pal({ a: "#707070" })\nmodel("m", { pivot: "origin" }, box(2, 0.02, 2, "a"), light({ type: "point", color: "#ffffff", power: 3, pos: [0.3, 0.25, 0.7] }))`).build("m");
+  const w = 96, img = renderView(b.faces, b.pal, b.bounds, { w, h: w, ground: false, yaw: 0, pitch: 89.5, lights: b.lights, mood: "day" });
+  let jump = 0;
+  for (let y = 30; y < 66; y++) for (let x = 30; x < 66; x++) { const i = (y * w + x) * 4; jump = Math.max(jump, Math.abs(img[i + 1] - img[i + 5]), Math.abs(img[i + 1] - img[i + 1 + w * 4])); }
+  assert.ok(jump <= 3, `largest step between neighbouring pixels on the lit quad: ${jump}`);
+});
+
 test("the preview renderer draws the model in its material color", () => {
   const b = one(`model("m", box(1, 1, 1, "a"))`);
   const img = renderView(b.faces, b.pal, b.bounds, { w: 64, h: 64, ground: false, yaw: 0, pitch: 0 });

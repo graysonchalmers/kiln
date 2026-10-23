@@ -71,3 +71,18 @@ nothing to drift against. (Replaces "one grader per kit" from the earlier text-t
   have become the baseline if only round-to-round deltas were judged.
 - Left: lantern post diagonal seam (per-vertex baked AO interpolated across one tall quad: subdivide long faces before
   baking, in core); log underside V13; cypress hanging moss barely reads; mangrove canopy 8 small masses.
+
+## Round 5: swamp kit (2026-10-23)
+
+- Asked: core fix for the lantern seam (subdivide long faces before baking AO), cypress hanging moss that reads, mangrove
+  canopy as 3-5 masses, log underside.
+- The seam was neither geometry nor AO: the preview lit a model's own lights once per triangle (its centroid), so a flat
+  quad's two triangles differed. Same post with AO off still seamed; without a light, none. Fix in `render.ts`: lights per
+  corner, interpolated; a test steps by 10 on the old renderer, 1 on the new. The asked-for AO subdivision was built,
+  attacked the wrong cause, added up to 80% tris, and was reverted.
+- Blind A/B vs the round-4 champion: before won 6, after 3, kit sheet before. Losses: mangrove 4-mass canopy (the judge
+  prefers round 4's 3-tone canopy: the ask was rejected), lighter moss on pale stone (value too close), bigger knee mat
+  (lost a third time), lit pieces under the fixed renderer (weaker glow). Kept the winners (cypress drapes, stump ring),
+  reverted the rest, raised the lantern/hut lights. Final re-judge vs round 4: **kit sheet after**; cypress, knees, stump,
+  lantern after; snag split across two judges -> champion's version kept; hut before (it preferred the bug's glow bleed).
+- Log underside unchanged (V12-13): an odd-sided log did nothing; it is the log's own cast shadow.

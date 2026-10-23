@@ -171,17 +171,19 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
     // Two-sided: flip normals that face away from the camera (open shapes, inner faces).
     const c0 = t.v[0];
     const nn = dot(n, sub(eye, c0)) < 0 ? scl(n, -1) : n;
-    const shadeN = (nn: V3): V3 => {
+    const shadeN = (nn: V3, at: V3 = scl(add(add(t.v[0], t.v[1]), t.v[2]), 1 / 3)): V3 => {
       const key = Math.max(0, dot(nn, LIGHT)), fill = Math.max(0, dot(nn, FILL));
       const sky = 0.5 + 0.5 * nn[1];
       const lightAmt = night ? 0.05 * sky + 0.02 + 0.1 * key : 0.25 * sky + 0.07 * (1 - sky) + 0.95 * key + 0.22 * fill;
       const spec = m!.metal > 0 && !night ? m!.metal * 0.6 * Math.max(0, dot(nn, norm(add(LIGHT, norm(sub(eye, c0)))))) ** 24 : 0;
-      const pl: V3 = lights.length ? punctual(lights, scl(add(add(t.v[0], t.v[1]), t.v[2]), 1 / 3), nn) : [0, 0, 0];
+      const pl: V3 = lights.length ? punctual(lights, at, nn) : [0, 0, 0];
       return m!.c.map((v, k) => v * (lightAmt + pl[k]) * (1 - m!.metal * 0.4) + spec + (m!.e ? m!.e[k] * (night ? 1.4 : 1) : 0)) as V3;
     };
     const colF = shadeN(nn);
     // Smooth faces: light each corner with its own normal (flipped like the face), interpolate (Gouraud).
-    let vc = t.n ? t.n.map((cn) => shadeN(dot(n, nn) < 0 ? scl(cn, -1) : cn)) : undefined;
+    // Model lights are evaluated at each corner and interpolated: lit once per triangle, the two triangles of a flat quad
+    // got different light and drew a diagonal seam (round 5: the "lantern post seam" was this, not geometry or AO).
+    let vc = t.n ? t.n.map((cn, k) => shadeN(dot(n, nn) < 0 ? scl(cn, -1) : cn, t.v[k])) : lights.length ? t.v.map((v) => shadeN(nn, v)) : undefined;
     if (t.c) vc = (vc ?? [colF, colF, colF]).map((cc, k) => scl(cc, t.c![k]));
     const tx = m.tex, al = tx?.albedo;
     raster(p[0], p[1], p[2], (i, z, w0, w1, w2) => {
