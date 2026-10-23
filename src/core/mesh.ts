@@ -1,7 +1,7 @@
 // A mesh is a list of flat, convex, planar polygons with a material key each. Low-poly assets
 // are flat-shaded, so faces never share normals and polygon soup is the natural representation.
 import { KilnError } from "./errors.ts";
-import { type M, type V3, apply, det, dot, hash, norm, rng } from "./util.ts";
+import { type M, type V3, apply, det, dot, hash, noise3, norm, rng } from "./util.ts";
 
 export interface Face {
   v: V3[];
@@ -90,12 +90,19 @@ export function recolor(faces: Face[], swap: Record<string, string>): Face[] {
 }
 
 /** Move welded vertices together by up to `amount` (deterministic): the classic low-poly wobble. */
-export function jitter(faces: Face[], amount: number, seed: number): Face[] {
+/** With `wobble` (feature size in meters) the offset is smooth noise instead, so extra detail stays coherent. */
+export function jitter(faces: Face[], amount: number, seed: number, wobble?: number): Face[] {
   const moved = new Map<string, V3>();
   const at = (p: V3): V3 => {
     const k = p.map((c) => Math.round(c * 1e4)).join(",");
     let o = moved.get(k);
     if (!o) {
+      if (wobble) {
+        const f = 1 / wobble, n = (c: number) => noise3(p[0] * f + c * 17.3, p[1] * f + c * 5.1, p[2] * f + c * 11.7, seed) * amount;
+        o = [p[0] + n(0), p[1] + n(1), p[2] + n(2)];
+        moved.set(k, o);
+        return o;
+      }
       const r = rng(hash(k) ^ seed);
       o = [p[0] + (r() * 2 - 1) * amount, p[1] + (r() * 2 - 1) * amount, p[2] + (r() * 2 - 1) * amount];
       moved.set(k, o);

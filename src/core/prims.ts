@@ -2,7 +2,7 @@
 // (centered in x/z); spheres and rocks are centered on the origin. Every face is CCW-outward.
 import { KilnError } from "./errors.ts";
 import { type Face, earClip, faceNormal, orient } from "./mesh.ts";
-import { type V3, add, cross, dot, len, norm, rng, scl, sub } from "./util.ts";
+import { type V3, add, cross, dot, len, noise3, norm, rng, scl, sub } from "./util.ts";
 
 export function box(w: number, h: number, d: number, mat: string): Face[] {
   const x = w / 2, z = d / 2;
@@ -125,11 +125,12 @@ export function sphere(r: number, detail: number, mat: string): Face[] {
 }
 
 /** A rock: an icosphere with each vertex pushed in or out, optionally squashed. */
-export function rock(r: number, detail: number, rough: number, squash: number, seed: number, mat: string): Face[] {
+export function rock(r: number, detail: number, rough: number, squash: number, seed: number, mat: string, wobble?: number): Face[] {
   const { pts, tris } = ico(detail);
   const rr = rng(seed);
   const moved = pts.map((p) => {
-    const k = 1 + (rr() * 2 - 1) * rough;
+    // wobble: smooth noise over the surface (feature size in meters) instead of per-vertex random
+    const k = 1 + (wobble ? noise3(p[0] * r / wobble, p[1] * r / wobble, p[2] * r / wobble, seed) * 1.6 : rr() * 2 - 1) * rough;
     return [p[0] * r * k, p[1] * r * k * squash, p[2] * r * k] as V3;
   });
   return tris.map(([a, b, c]) => {

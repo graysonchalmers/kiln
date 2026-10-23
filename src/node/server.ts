@@ -7,7 +7,7 @@ import { type KilnError, wrap } from "../core/errors.ts";
 import { glb } from "../core/gltf.ts";
 import { bounds } from "../core/mesh.ts";
 import type { Project } from "../core/project.ts";
-import { loadProject } from "./load.ts";
+import { globals, loadProject } from "./load.ts";
 import { dims, writeOutputs } from "./output.ts";
 import { viewPng } from "./preview.ts";
 import { FeedbackError, writeFeedback } from "./feedback.ts";
@@ -16,7 +16,7 @@ export interface ServeOptions { port?: number; out?: string | false; log?: (line
 
 interface ErrInfo { message: string; loc?: string }
 interface ModelInfo { name: string; part: boolean; dims?: string; tris?: number; steps?: { label: string; loc?: string }[]; changed: boolean; error?: ErrInfo }
-interface State { version: number; file: string; time: string; ms: number; error?: ErrInfo; models: ModelInfo[]; errors: ErrInfo[] }
+interface State { detail: number; version: number; file: string; time: string; ms: number; error?: ErrInfo; models: ModelInfo[]; errors: ErrInfo[] }
 
 const viewerDir = join(dirname(fileURLToPath(import.meta.url)), "..", "viewer");
 const errInfo = (e: KilnError): ErrInfo => ({ message: e.message, loc: e.loc });
@@ -27,14 +27,14 @@ export function serve(file: string, opts: ServeOptions = {}): Promise<{ url: str
   const log = opts.log ?? ((l: string) => console.log(l));
   const clients = new Set<ServerResponse>();
   let project: Project | undefined;
-  let state: State = { version: 0, file: basename(abs), time: "", ms: 0, models: [], errors: [] };
+  let state: State = { detail: Number(globals.DETAIL ?? 1), version: 0, file: basename(abs), time: "", ms: 0, models: [], errors: [] };
   const last = new Map<string, string>();
   let watched = new Set<string>();
   let timer: NodeJS.Timeout | undefined;
 
   const rebuild = () => {
     const t0 = performance.now();
-    const next: State = { version: state.version + 1, file: basename(abs), time: new Date().toLocaleTimeString(), ms: 0, models: [], errors: [] };
+    const next: State = { detail: Number(globals.DETAIL ?? 1), version: state.version + 1, file: basename(abs), time: new Date().toLocaleTimeString(), ms: 0, models: [], errors: [] };
     try { project = loadProject(abs); } catch (e) { project = undefined; next.error = errInfo(wrap(e)); }
     if (project) {
       for (const name of project.order) {
@@ -108,6 +108,12 @@ export function serve(file: string, opts: ServeOptions = {}): Promise<{ url: str
           }
         });
         return;
+      } else if (url.pathname === "/api/detail" && req.method === "POST") {
+        const d = Number(url.searchParams.get("d"));
+        if (!(d > 0 && d <= 8)) { res.writeHead(400); res.end("d must be in (0, 8]"); return; }
+        globals.DETAIL = d;
+        rebuild();
+        res.writeHead(204); res.end();
       } else if (url.pathname === "/api/glb" && project) {
         const b = project.build(name);
         res.writeHead(200, { "content-type": "model/gltf-binary", "content-disposition": `attachment; filename="${name}.glb"` });

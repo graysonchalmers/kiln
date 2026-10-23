@@ -65,3 +65,19 @@ export function det(m: M): number {
 }
 
 export const r3 = (x: number) => Math.round(x * 1000) / 1000;
+
+/** Smooth 3D value noise in [-1, 1]: nearby points get nearby values (trilinear, smoothstep). */
+export function noise3(x: number, y: number, z: number, seed = 1): number {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const fx = x - xi, fy = y - yi, fz = z - zi;
+  const s = (t: number) => t * t * (3 - 2 * t);
+  const h = (i: number, j: number, k: number) => {
+    let n = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(k, 1274126177) ^ Math.imul(seed, 2246822519);
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    return (((n ^ (n >>> 16)) >>> 0) / 4294967295) * 2 - 1;
+  };
+  const l = (a: number, b: number, t: number) => a + (b - a) * t;
+  const u = s(fx), v = s(fy), w = s(fz);
+  return l(l(l(h(xi, yi, zi), h(xi + 1, yi, zi), u), l(h(xi, yi + 1, zi), h(xi + 1, yi + 1, zi), u), v),
+    l(l(h(xi, yi, zi + 1), h(xi + 1, yi, zi + 1), u), l(h(xi, yi + 1, zi + 1), h(xi + 1, yi + 1, zi + 1), u), v), w);
+}

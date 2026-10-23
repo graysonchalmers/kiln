@@ -20,10 +20,13 @@ function compile(code: string, file: string): string {
   return /\.[cm]?ts$/.test(file) ? stripTypeScriptTypes(code, { mode: "strip" }) : code;
 }
 
+/** Extra globals for model files (e.g. DETAIL from --detail or the viewer slider). Libraries read them with typeof guards. */
+export const globals: Record<string, unknown> = {};
+
 /** Load a model file from disk. Throws KilnError with a file:line:col location on failure. */
 export function loadProject(file: string): Project {
   const p = new Project();
-  const ctx = vm.createContext({ ...p.env(), console, Math });
+  const ctx = vm.createContext({ ...p.env(), ...globals, console, Math });
   const stack: string[] = [];
   const run = (path: string) => {
     const abs = resolve(path);
@@ -53,7 +56,7 @@ export function loadProject(file: string): Project {
 /** Load art source from a string (tests, embedding). `name` appears in error locations. */
 export function loadSource(src: string, name = "model.kx.js"): Project {
   const p = new Project();
-  const ctx = vm.createContext({ ...p.env(), console, Math });
+  const ctx = vm.createContext({ ...p.env(), ...globals, console, Math });
   p.addFile(name);
   p.imageHook = readImage;
   try {

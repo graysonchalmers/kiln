@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { KilnError, didYouMean, wrap } from "../core/errors.ts";
 import { glb } from "../core/gltf.ts";
 import { blenderRender } from "./blender.ts";
-import { loadProject } from "./load.ts";
+import { loadProject, globals } from "./load.ts";
 import { dims, packLayout, writeOutputs } from "./output.ts";
 import { serve } from "./server.ts";
 
@@ -26,6 +26,7 @@ const USAGE = `kiln — low-poly and voxel 3D game assets as code
   kiln info   <models.kx.js> <name>
       Dimensions, triangle count, materials and build steps.
   kiln serve  <models.kx.js> [--port 4340] [--out DIR | --no-out]
+  (build / serve / info) --detail N   sets DETAIL for model files (1 = default; libraries scale resolution with it)
       Live viewer: drag to orbit, step through the build, rebuilds on save.
   kiln list   <models.kx.js>
 
@@ -46,6 +47,7 @@ function parse(argv: string[]): Args {
     else if (v === "--turntable") a.turntable = true;
     else if (v === "--stl") a.stl = true;
     else if (v === "--port") a.port = Number(val());
+    else if (v === "--detail") globals.DETAIL = Number(val());
     else if (v === "--size") {
       const m = /^(\d+)x(\d+)$/.exec(val());
       if (!m) throw new KilnError("--size must look like 1600x1200");
