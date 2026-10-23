@@ -11,6 +11,7 @@ pal({ reed: "#7a8a48", cattail: "#4a3020", lily: "#5a8a3a", lilyL: "#7aa850", pe
   hangMoss: "#8a9a6a", barkG: "#7a7468", ring: "#b89a6a", fung: "#e0a050", fungL: "#f2dcb0", gill: "#2e4a3e" })
 
 // ---------- trees
+feature(0)
 model("bald_cypress",
   [0, 51, 103, 154, 206, 257, 309].map((a, i) => tf({ rot: [0, a, 0] }, cone(0.24, 1.3 - (i % 3) * 0.25, { mat: i % 2 ? "bark" : "barkD", sides: S(5), pos: [0.42, 0, 0], rot: [0, 0, 18], wobble: WB(), jitter: 0.03 }))),
   cone(0.75, 1.6, { mat: "bark", sides: S(12), wobble: WB(), jitter: 0.04 }),
@@ -72,16 +73,18 @@ model("glow_toadstools",
   light({ type: "point", color: "#9aef60", power: 8, pos: [0, 0.35, 0.15] }))
 
 // ---------- built
+feature(3)
 model("log_bridge",
   cyl(0.22, 3, { mat: "bark", sides: S(8), rot: [0, 0, 90], pos: [1.5, 0.22, 0], wobble: WB(), jitter: 0.02 }),
   sym("x", cyl(0.18, 0.01, { mat: "woodL", sides: S(8), rot: [0, 0, 90], pos: [1.505, 0.22, 0] })),
   [...Array(11)].map((_, i) => box(0.21, 0.04, 0.3 + (i % 3) * 0.02, { mat: i % 2 ? "woodL" : "wood", pos: [-1.2 + i * 0.24, 0.42, (i % 2) * 0.01], rot: [0, (i % 3 - 1) * 2, 0] })),
   sym("x", [box(0.06, 0.6, 0.06, { mat: "woodD", pos: [1.1, 0.3, 0.17] }), box(0.06, 0.6, 0.06, { mat: "woodD", pos: [0.3, 0.3, 0.17] })]),
-  tube([-1.1, 0.88, 0.17, -0.7, 0.8, 0.17, -0.3, 0.86, 0.17, 0.3, 0.86, 0.17, 0.7, 0.8, 0.17, 1.1, 0.88, 0.17], 0.02, { mat: "rope" }))
+  tube([-1.1, 0.88, 0.17, -0.7, 0.8, 0.17, -0.3, 0.86, 0.17, 0.3, 0.86, 0.17, 0.7, 0.8, 0.17, 1.1, 0.88, 0.17], F(0.02), { mat: "rope", sides: 5 }))
 model("boardwalk",
   [...Array(10)].map((_, i) => box(1.0 + (i % 3) * 0.06, 0.05, 0.22, { mat: i % 2 ? "wood" : "woodL", pos: [(i % 2) * 0.04 - 0.02, 0.5, -1.1 + i * 0.245], rot: [0, (i % 3 - 1) * 2, 0] })),
   sym("x", box(0.08, 0.1, 2.5, { mat: "woodD", pos: [0.42, 0.4, 0] })),
   sym("x", [-1.1, 0, 1.1].map(z => cyl(0.07, 0.5, { mat: "barkD", sides: S(7), pos: [0.42, 0, z], jitter: 0.01 }))))
+feature(3.25)
 model("stilt_hut",
   sym("x", sym("z", cyl(0.07, 1.4, { mat: "barkD", sides: S(6), pos: [0.85, 0, 0.7], jitter: 0.01 }))),
   planks(2.0, 0.08, 1.7, { along: "z", across: "x", tones: ["woodL", "wood"], at: [0, 1.2, 0], seed: 7 }),
@@ -95,15 +98,16 @@ model("stilt_hut",
   prism(2.3, 0.1, 2.0, { mat: "thatchD", pos: [0, 2.3, -0.05] }),
   [0, 1, 2].map(i => prism(2.2 - i * 0.25, 0.08, 1.9 - i * 0.28, { mat: i % 2 ? "thatchD" : "thatch", pos: [0, 2.42 + i * 0.22, -0.05], jitter: 0.015, seed: i })),
   prism(1.6, 0.55, 1.35, { mat: "thatch", pos: [0, 2.6, -0.05], jitter: 0.02 }),
-  box(0.08, 0.08, 1.9, { mat: "woodL", pos: [0, 3.15, -0.05] }),
+  box(F(0.04) * 2.2, F(0.04) * 2.2, 1.9, { mat: "woodL", pos: [0, 3.13, -0.05] }),
   [-0.6, -0.1].map(x => tf({ pos: [x, 0, 1.9], rot: [-41, 0, 0] }, box(0.05, 1.6, 0.06, { mat: "woodD" }))),
   [0.2, 0.4, 0.6, 0.8].map(t => box(0.5, 0.04, 0.12, { mat: "wood", pos: [-0.35, 1.2 * t, 1.9 - 1.05 * t] })),
   light({ type: "point", color: "#ffc070", power: 30, pos: [0.4, 1.8, 0.9] }))
+feature(1.7)
 model("lantern_post",
   box(0.1, 1.7, 0.1, { mat: "barkD" }), box(0.45, 0.06, 0.06, { mat: "barkD", pos: [0.2, 1.62, 0] }),
-  [0, 1, 2].map(k => torus(0.02, 0.006, { mat: "iron", rings: 6, sides: 3, rot: [90 * (k % 2), 0, 0], pos: [0.38, 1.6 - k * 0.035, 0] })),
-  cyl(0.08, 0.2, { mat: "glass", sides: S(6), pos: [0.38, 1.25, 0] }), cone(0.11, 0.1, { mat: "iron", sides: S(6), pos: [0.38, 1.45, 0] }),
-  cyl(0.09, 0.02, { mat: "iron", sides: S(6), pos: [0.38, 1.24, 0] }),
+  [0, 1].map(k => torus(F(0.02) * 1.3, F(0.02) * 0.45, { mat: "iron", rings: 8, sides: 4, rot: [90 * (k % 2), 0, 0], pos: [0.38, 1.6 - k * 0.06, 0] })),
+  cyl(0.08, 0.2, { mat: "glass", sides: S(6), pos: [0.38, 1.22, 0] }), cone(0.11, 0.1, { mat: "iron", sides: S(6), pos: [0.38, 1.42, 0] }),
+  cyl(0.09, 0.025, { mat: "iron", sides: S(6), pos: [0.38, 1.2, 0] }),
   light({ type: "point", color: "#ffbe70", power: 40, pos: [0.38, 1.1, 0.25] }))
 
 pack("swamp_kit", ["bald_cypress", "cypress_knees", "dead_snag", "mangrove_roots", "lily_pads", "cattails", "moss_branch",

@@ -196,7 +196,9 @@ export class Project {
       const made = make(m, kind === "torus" ? { ...o, chamfer: bvAll } : o);
       let faces = transform(bv ? bevel(made, bv) : made, placeM(o));
       const sm = o.smooth !== undefined ? num(o.smooth, "smooth", 0) : this.smooth;
-      if (sm) { const sg = this.sgNext++; faces = faces.map((f) => ({ ...f, sm, sg })); }
+      // Every shape call gets its own group id (smoothing groups, and lint measures parts by it).
+      const sg = this.sgNext++;
+      faces = faces.map((f) => (sm ? { ...f, sm, sg } : { ...f, sg }));
       if (o.jitter !== undefined) faces = jitter(faces, num(o.jitter, "jitter"), Number(o.seed ?? hash(`${kind}|${loc}`)), o.wobble === undefined ? undefined : num(o.wobble, "wobble", 1e-6));
       return { __geo: true, faces, step: { label: `${kind}(${args.slice(0, -1).map(fmt).join(", ")})`, loc } };
     });

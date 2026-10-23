@@ -41,11 +41,12 @@ model("rotting_log", tf({ rot: [0, 12, 0] },
     [[0.1, 0.3, 0.17, 1], [0.32, 0.27, 0.19, 0.7], [-0.25, 0.3, 0.17, 0.8]].map(([x, y, z, s]) =>
       tf({ pos: [x, y, z], scale: [s, s, s], rot: [55, 0, 0] }, cyl(0.03, 0.1, { mat: "stem", sides: 5 }), cone(0.09, 0.05, { mat: "capB", sides: 6, pos: [0, 0.09, 0] }))),
     rock(0.2, { mat: "moss", seed: 11, squash: 0.2, pos: [-0.35, 0.37, -0.03] })))
+feature(2.6)
 model("well",
   cyl(0.6, 0.6, { mat: "stone", sides: 10, jitter: 0.015 }), cyl(0.47, 0.01, { mat: "water", sides: 10, pos: [0, 0.6, 0] }),
   torus(0.56, 0.08, { mat: "stoneL", rings: 10, sides: 5, pos: [0, 0.64, 0] }),
   [0.2, 0.4].map(y => cyl(0.605, 0.02, { mat: "stoneD", sides: 10, pos: [0, y, 0] })),
-  box(0.04, 0.04, 0.25, { mat: "iron", pos: [0.8, 1.58, 0.12] }),
+  box(F(0.02) * 2, F(0.02) * 2, 0.3, { mat: "iron", pos: [0.8, 1.56, 0.14] }), box(F(0.02) * 2, 0.22, F(0.02) * 2, { mat: "iron", pos: [0.8, 1.38, 0.29] }),
   sym("x", box(0.1, 2.0, 0.1, { mat: "woodD", pos: [0.72, 0, 0] })),
   cyl(0.06, 1.5, { mat: "wood", sides: 6, rot: [0, 0, 90], pos: [0.75, 1.6, 0] }),
   // roof as construction: two boards meeting at a ridge, stepped shingle rows, ridge beam
@@ -54,15 +55,17 @@ model("well",
     [-0.27, -0.02, 0.23].map((z, i) => box(2.0 - i * 0.02, 0.035, 0.3, { mat: i % 2 ? "woodL" : "wood", pos: [0, 0.03 + i * 0.012, z], rot: [-4, 0, 0] })))),
   tf({ pos: [0, 2.5, 0], rot: [45, 0, 0] }, box(2.06, 0.1, 0.1, { mat: "woodD", pos: [0, -0.05, 0] })),
   sym("x", box(0.08, 0.5, 0.08, { mat: "woodD", pos: [0.72, 2.0, 0] })),
-  cyl(0.01, 0.4, { mat: "rope", sides: 4, pos: [0, 1.2, 0] }),
+  cyl(F(0.01), 0.4, { mat: "rope", sides: 6, pos: [0, 1.2, 0] }),
   cyl(0.12, 0.2, { mat: "woodD", sides: 8, top: 0.1, pos: [0, 1.0, 0] }))
+feature(0)
 model("fence",
   [-0.95, 0, 0.95].map(x => [box(0.1, 1.0, 0.1, { mat: "woodD", pos: [x, 0, 0] }), cone(0.08, 0.08, { mat: "barkD", sides: 4, pos: [x, 1.0, 0], rot: [0, 45, 0] })]),
   [0.35, 0.75].map(y => box(2.0, 0.12, 0.04, { mat: "wood", pos: [0, y, 0.07] })))
+feature(1.9)
 model("signpost", box(0.1, 1.8, 0.1, { mat: "woodD" }), cone(0.09, 0.1, { mat: "barkD", sides: 4, pos: [0, 1.8, 0], rot: [0, 45, 0] }),
   extrude([-0.4, 0, 0.35, 0, 0.5, 0.11, 0.35, 0.22, -0.4, 0.22], 0.04, { mat: "woodL", pos: [0, 1.45, 0.05] }),
   extrude([0.4, 0, -0.35, 0, -0.5, 0.11, -0.35, 0.22, 0.4, 0.22], 0.04, { mat: "woodL", pos: [0, 1.15, 0.05] }),
-  [1.56, 1.26].map(y => cyl(0.015, 0.02, { mat: "iron", sides: 4, rot: [90, 0, 0], pos: [0, y, 0.09] })))
+  [1.56, 1.26].map(y => cyl(F(0.015), 0.03, { mat: "iron", sides: 6, rot: [90, 0, 0], pos: [0, y, 0.09] })))
 model("cart",
   planks(1.4, 0.06, 0.9, { along: "x", across: "z", tones: ["wood", "woodL"], at: [0, 0.5, 0], seed: 3 }), box(1.36, 0.03, 0.86, { mat: "woodD", pos: [0, 0.48, 0] }), sym("z", box(1.44, 0.04, 0.07, { mat: "woodL", pos: [0, 0.95, 0.43] })), sym("x", box(0.07, 0.04, 0.94, { mat: "woodL", pos: [0.69, 0.95, 0] })),
   [-0.35, 0, 0.35].map(x => sym("z", box(0.02, 0.36, 0.06, { mat: "woodD", pos: [x, 0.59, 0.455] }))), sym("x", sym("z", box(0.07, 0.36, 0.07, { mat: "iron", pos: [0.69, 0.6, 0.44] }))),

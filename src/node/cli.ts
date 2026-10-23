@@ -24,6 +24,7 @@ const USAGE = `kiln — low-poly and voxel 3D game assets as code
       --audio FILE muxes a soundtrack into the MP4. --clip NAME plays an animate() clip (looping over the frames;
       --clip-frame N for a still); --still-camera with --frames keeps the camera fixed.
   kiln info   <models.kx.js> <name>
+  kiln lint   <models.kx.js> [--only a,b] [--min 0.025]   flag parts too thin for their asset (feature scale) and over-dense parts
       Dimensions, triangle count, materials and build steps.
   kiln serve  <models.kx.js> [--port 4340] [--out DIR | --no-out]
   (build / serve / info) --detail N   sets DETAIL for model files (1 = default; libraries scale resolution with it)
@@ -35,7 +36,7 @@ const USAGE = `kiln — low-poly and voxel 3D game assets as code
 
 Model files may be .js or .ts. Default out dir: <model file dir>/out.`;
 
-interface Args { cmd?: string; file?: string; rest: string[]; out?: string | false; only?: string[]; preview?: boolean; turntable?: boolean; stl?: boolean;
+interface Args { min?: number; cmd?: string; file?: string; rest: string[]; out?: string | false; only?: string[]; preview?: boolean; turntable?: boolean; stl?: boolean;
   port?: number; size?: [number, number]; yaw?: number; pitch?: number; samples?: number; ground?: boolean; transparent?: boolean; frames?: number; mood?: "day" | "night"; fog?: number; lens?: number; zoom?: number; focus?: [number, number, number]; yawTo?: number; pitchTo?: number; zoomTo?: number; audio?: string; bloom?: number; clip?: string; still?: boolean; clipFrame?: number }
 
 function parse(argv: string[]): Args {
@@ -54,6 +55,7 @@ function parse(argv: string[]): Args {
     else if (v === "--smooth") globals.SMOOTH = Number(val());
     else if (v === "--ao") globals.AO = Number(val());
     else if (v === "--bevel") globals.BEVEL = Number(val());
+    else if (v === "--min") a.min = Number(val());
     else if (v === "--size") {
       const m = /^(\d+)x(\d+)$/.exec(val());
       if (!m) throw new KilnError("--size must look like 1600x1200");
@@ -137,6 +139,33 @@ export async function main(argv: string[]): Promise<number> {
         }
         console.log(`render ${name} -> ${out}`);
         return 0;
+      }
+      case "lint": {
+        // Feature scale: every part (shape call) should be at least `min` x the asset's largest dimension thick,
+        // and its polygons should not be far denser than the asset's typical polygon.
+        const p = loadProject(file), ratio = a.min ?? 0.025;
+        let flagged = 0;
+        for (const name of p.order) {
+          if (name.startsWith("_") || (a.only && !a.only.includes(name))) continue;
+          const b = p.build(name), size = Math.max(...b.bounds.max.map((v, i) => v - b.bounds.min[i])), floor = ratio * size;
+          const parts = new Map<number, typeof b.faces>();
+          for (const f of b.faces) { const k = f.sg ?? -1; (parts.get(k) ?? parts.set(k, []).get(k)!).push(f); }
+          const edge = (fs: typeof b.faces) => { const L = fs.flatMap((f) => f.v.map((v, i) => Math.hypot(...v.map((c, k) => c - f.v[(i + 1) % f.v.length][k])))).sort((x, y) => x - y); return L[L.length >> 1] ?? 0; };
+          const typical = edge(b.faces), out: string[] = [];
+          for (const fs of parts.values()) {
+            const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+            for (const f of fs) for (const v of f.v) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], v[i]); hi[i] = Math.max(hi[i], v[i]); }
+            const ext = hi.map((v, i) => v - lo[i]).sort((x, y) => x - y), at = lo.map((v, i) => ((v + hi[i]) / 2).toFixed(2)).join(",");
+            const mats = [...new Set(fs.map((f) => f.mat))].join("/");
+            // Plates (thin in one direction: boards, panes) are fine; specks and sticks (small in two directions:
+            // nails, chain links, rope) must reach the floor or they read as noise next to the rest of the asset.
+            if (ext[1] < floor) out.push(`  small  ${mats.padEnd(10)} ${(ext[0] * 100).toFixed(1)} x ${(ext[1] * 100).toFixed(1)} cm < ${(floor * 100).toFixed(1)} cm  at [${at}]`);
+            else if (fs.length > 12 && edge(fs) < typical / 5) out.push(`  dense  ${mats.padEnd(10)} edges ${(edge(fs) * 100).toFixed(1)} cm vs asset ${(typical * 100).toFixed(1)} cm  at [${at}]`);
+          }
+          if (out.length) { flagged += out.length; console.log(`${name} (${size.toFixed(2)} m, floor ${(floor * 100).toFixed(1)} cm)\n${out.join("\n")}`); }
+        }
+        console.log(flagged ? `${flagged} part(s) flagged` : "lint: all parts in scale");
+        return flagged ? 1 : 0;
       }
       case "info": {
         const name = a.rest[0];
