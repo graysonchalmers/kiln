@@ -1,0 +1,12 @@
+# 2026-10-22 — Self-improving design loop, round 1 (swamp kit)
+
+- Grayson asked (via pickup) for the system turned on itself: generate assets, review them automatically, discuss the feedback, deliver a round of improvement. Inventory: the parts existed (kiln, sheet.sh, text-to-glb blind grader, art-direction plugin, gauntlet-loop, visual-review-loop, skill-forge); missing were a critic discussion, write-back of lessons into the tool, one recipe, and a reference anchor. He picked "run one full round on the swamp kit".
+- Refs: Kenney Nature Kit + Quaternius Stylized Nature (CC0). No swamp-specific CC0 pack found; used as style anchors. BAR.md: 6 points.
+- Panel (3 blind lens critics, parallel): wood/bark rendered darker than the review floor (measured), every organic stem a constant-width pipe, raw cones for knees/stump rim, stacked roof sheets, spindly assemblies.
+- Root cause behind the form critique: `tube()` had one radius. Added `top` (linear taper by arc length) + test. Rebuilt `trunk()`: concave lathe root flare blending into a tapered bent tube, branches to 30%.
+- Argued: adjudication sent back to critics. Accepted their minimums as pass tests (trunk >= 25% canopy width; lit wood >= 35% value and floor + 10; stone floor + 15). Rejected boardwalk sag (snap level). Toadstool stems: critic right that they read green; no-light build showed they sit in cap shadow, so the teal underlight stays (deliberate).
+- Blind A/B (fresh judge, per-asset coin flip, key outside its folder): after won 17/17, mean +1.4/2. After judging: fixed its regressions (flare collar seam, knees lost taper), scaled flare height with tree (7% h) after spotting a plinth look on nature_v2's small oak, removed a near-coincident inner roof prism. Not re-judged; disclosed in the commit.
+- Ruled out: sinking boulders (`tf` pos or `pivot: "origin"`) to hide the pinch; preview still frames it floating. Needs a flat-bottom rock option.
+- Tool fix: golden .tsv stored absolute paths into the main checkout, so `golden.sh check` in a worktree tested main. Now repo-relative.
+- Write-back: `docs/DESIGN-LOOP.md` (recipe + round log), `lib/grayson/values.py`, `lib/grayson/ab.py`, text-to-glb SKILL.md steps 4-5 and `what-good-looks-like.md` round 12, skill `reference.md` tube line. Goldens re-saved: cattails, fungus_stump, lantern_post, stilt_hut, old_oak, windswept_tree.
+- `showcase/dragon_hoard` fails to build at HEAD too (needs external loom textures); pre-existing.
