@@ -44,6 +44,10 @@ test("torus and tube are closed and outward; the tube follows its path without t
   assert.equal(ring.faces.length, 4 * 6, "closed: no caps, one segment back to the start");
   assert.ok(volume(ring.faces) > 0);
   throwsMsg(() => one(`model("m", tube([0, 0, 0], 1, "a"))`), /at least 2 points/);
+  // top: linear taper by arc length, a frustum along a straight path
+  const taper = one(`model("m", { pivot: "origin" }, tube([0, 0, 0, 0, 1, 0, 0, 3, 0], 0.6, { mat: "a", sides: 8, top: 0.2 }))`);
+  const ry = (y: number) => Math.max(...taper.faces.flatMap((f) => f.v).filter((p) => Math.abs(p[1] - y) < 1e-9).map((p) => Math.hypot(p[0], p[2])));
+  near(ry(0), 0.6, 1e-9); near(ry(1), 0.6 - 0.4 / 3, 1e-9, "radius follows arc length"); near(ry(3), 0.2, 1e-9);
 });
 
 test("terrain: a heightfield from a function with per-triangle materials by height and slope", () => {

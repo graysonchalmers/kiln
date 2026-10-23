@@ -170,9 +170,10 @@ export function torus(R: number, r: number, rings: number, sides: number, mat: s
 /**
  * A tube of radius r swept along a polyline (pipes, cables, branches, rails). Rings are carried
  * along with parallel-transport frames so they never twist; `closed` joins the last point to the
- * first, otherwise both ends are capped.
+ * first, otherwise both ends are capped. `top` (default r) is the end radius: the pipe tapers
+ * linearly by arc length (trunks, roots, branches, horns).
  */
-export function tube(path: V3[], r: number, sides: number, closed: boolean, mat: string): Face[] {
+export function tube(path: V3[], r: number, sides: number, closed: boolean, mat: string, top = r): Face[] {
   if (path.length < 2) throw new KilnError("tube needs at least 2 points");
   if (!(sides >= 3)) throw new KilnError("sides must be >= 3");
   const pts = closed ? [...path, path[0]] : path;
@@ -199,9 +200,12 @@ export function tube(path: V3[], r: number, sides: number, closed: boolean, mat:
     }
     return { t, u, v: cross(t, u) };
   });
+  const arc = [0];
+  for (let i = 1; i < pts.length; i++) arc.push(arc[i - 1] + len(sub(pts[i], pts[i - 1])));
   const ring = (i: number): V3[] => Array.from({ length: sides }, (_, k) => {
     const a = (k / sides) * Math.PI * 2 + Math.PI / sides, f = frames[i], mt = miters[i];
-    let o = add(scl(f.u, Math.cos(a) * r), scl(f.v, Math.sin(a) * r));
+    const ri = r + (top - r) * (arc[i] / (arc[arc.length - 1] || 1));
+    let o = add(scl(f.u, Math.cos(a) * ri), scl(f.v, Math.sin(a) * ri));
     if (mt.m !== 1) o = add(o, scl(mt.s, (mt.m - 1) * dot(o, mt.s)));
     return add(pts[i], o);
   });

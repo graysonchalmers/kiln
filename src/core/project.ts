@@ -58,7 +58,7 @@ const PLACE = ["pos", "rot", "scale"];
 const SHAPE_OPTS: Record<string, string[]> = {
   box: [], cyl: ["sides", "top"], cone: ["sides"], sphere: ["detail"], rock: ["detail", "rough", "squash", "seed"],
   lathe: ["sides"], extrude: [], prism: [], wedge: [], voxels: ["size"], voxfn: ["size"],
-  torus: ["sides", "rings"], tube: ["sides", "closed"], terrain: ["res", "height", "fn", "heightmap"],
+  torus: ["sides", "rings"], tube: ["sides", "closed", "top"], terrain: ["res", "height", "fn", "heightmap"],
   voximg: ["size", "depth", "alpha", "flat"],
 };
 /** Shapes whose material comes from inside (voxel keys, a terrain's mat function). */
@@ -310,7 +310,8 @@ export class Project {
         throw new KilnError("tube path: a flat list [x0, y0, z0, x1, y1, z1, ...] of at least 2 points");
       const pts: V3[] = [];
       for (let i = 0; i < path.length; i += 3) pts.push([path[i], path[i + 1], path[i + 2]]);
-      return tube(pts, num(r, "r", 1e-9), Number(o.sides ?? 8), !!o.closed, m);
+      const R = num(r, "r", 1e-9);
+      return tube(pts, R, Number(o.sides ?? 8), !!o.closed, m, o.top === undefined ? R : num(o.top, "top", 1e-9));
     });
     env.terrain = (w: unknown, d: unknown, s: unknown) => geo("terrain", [w, d, s], (m, o) => {
       const res = o.res === undefined ? [32, 32] : typeof o.res === "number" ? [o.res, o.res] : o.res;
