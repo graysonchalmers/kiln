@@ -191,8 +191,10 @@ export class Project {
     const geo = (kind: string, args: unknown[], make: (mat: string, o: Record<string, unknown>) => Face[]): Geo => at(kind, (loc) => {
       const { mat: m, o } = style(kind, args[args.length - 1]);
       // Bevel only box-like solids: cones, spheres, rocks, tubes keep their points and facets.
-      const bv = ["box", "prism", "wedge", "cyl", "extrude"].includes(kind) ? (o.bevel !== undefined ? num(o.bevel, "bevel", 0) : this.bevel) : 0;
-      let faces = transform(bv ? bevel(make(m, o), bv) : make(m, o), placeM(o));
+      const bvAll = o.bevel !== undefined ? num(o.bevel, "bevel", 0) : this.bevel ?? 0;
+      const bv = ["box", "prism", "wedge", "cyl", "extrude"].includes(kind) ? bvAll : 0;
+      const made = make(m, kind === "torus" ? { ...o, chamfer: bvAll } : o);
+      let faces = transform(bv ? bevel(made, bv) : made, placeM(o));
       const sm = o.smooth !== undefined ? num(o.smooth, "smooth", 0) : this.smooth;
       if (sm) { const sg = this.sgNext++; faces = faces.map((f) => ({ ...f, sm, sg })); }
       if (o.jitter !== undefined) faces = jitter(faces, num(o.jitter, "jitter"), Number(o.seed ?? hash(`${kind}|${loc}`)), o.wobble === undefined ? undefined : num(o.wobble, "wobble", 1e-6));
@@ -281,7 +283,7 @@ export class Project {
       if (Object.keys(defs).length) this.pal = this.pal.extend(defs);
       return meshGrid(g, Number(o.size ?? 0.1));
     });
-    env.torus = (R: unknown, r: unknown, s: unknown) => geo("torus", [R, r, s], (m, o) => torus(num(R, "R", 1e-9), num(r, "r", 1e-9), Number(o.rings ?? 24), Number(o.sides ?? 12), m));
+    env.torus = (R: unknown, r: unknown, s: unknown) => geo("torus", [R, r, s], (m, o) => torus(num(R, "R", 1e-9), num(r, "r", 1e-9), Number(o.rings ?? 24), Number(o.sides ?? 12), m, Number(o.chamfer ?? 0)));
     env.tube = (path: unknown, r: unknown, s: unknown) => geo("tube", [path, r, s], (m, o) => {
       if (!Array.isArray(path) || path.length % 3 || path.length < 6 || !path.every((v) => typeof v === "number" && Number.isFinite(v)))
         throw new KilnError("tube path: a flat list [x0, y0, z0, x1, y1, z1, ...] of at least 2 points");

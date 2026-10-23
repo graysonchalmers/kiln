@@ -274,8 +274,9 @@ export function bakeAO(faces: Face[], strength: number, dirs = 32, res = 96): Fa
 export function bevel(faces: Face[], size: number, minAngle = 50): Face[] {
   if (size <= 0 || faces.length < 4) return faces;
   const bb = bounds(faces);
-  // Shapes too thin for the full bevel (trims, slats, nails) are skipped: a sliver bevel costs tris and shows nothing.
-  if (size > 0.25 * Math.min(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2])) return faces;
+  // Thin parts (sign boards, trims) get a proportionally smaller bevel; true slivers (< 3 mm) are skipped.
+  size = Math.min(size, 0.3 * Math.min(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]));
+  if (size < 0.003) return faces;
   type Plane = { n: V3; d: number; mat: string; part?: string };
   const planes: Plane[] = [];
   const pid = faces.map((f) => {

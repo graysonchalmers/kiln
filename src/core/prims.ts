@@ -140,12 +140,22 @@ export function rock(r: number, detail: number, rough: number, squash: number, s
 }
 
 /** A torus around the Y axis: ring radius R, tube radius r; `rings` segments around, `sides` around the tube. */
-export function torus(R: number, r: number, rings: number, sides: number, mat: string): Face[] {
+export function torus(R: number, r: number, rings: number, sides: number, mat: string, chamfer = 0): Face[] {
   if (!(rings >= 3 && sides >= 3)) throw new KilnError("torus: rings and sides must be >= 3");
+  // Cross-section polygon; with `chamfer` (polygonal sections, sides <= 6) each corner is cut into two points.
+  let sec: [number, number][] = [...Array(sides)].map((_, j) => { const b = (j / sides) * Math.PI * 2 + Math.PI / sides; return [Math.cos(b) * r, Math.sin(b) * r]; });
+  if (chamfer > 0 && sides <= 6) {
+    const edge = Math.hypot(sec[1][0] - sec[0][0], sec[1][1] - sec[0][1]), t = Math.min(0.3, chamfer / edge);
+    sec = sec.flatMap((p, j) => {
+      const a = sec[(j + sides - 1) % sides], b = sec[(j + 1) % sides];
+      return [[p[0] + (a[0] - p[0]) * t, p[1] + (a[1] - p[1]) * t], [p[0] + (b[0] - p[0]) * t, p[1] + (b[1] - p[1]) * t]] as [number, number][];
+    });
+    sides = sec.length;
+  }
   const pt = (i: number, j: number): V3 => {
-    const a = (i / rings) * Math.PI * 2, b = (j / sides) * Math.PI * 2 + Math.PI / sides;
-    const d = R + Math.cos(b) * r;
-    return [Math.sin(a) * d, Math.sin(b) * r, Math.cos(a) * d];
+    const a = (i / rings) * Math.PI * 2, [dx, y] = sec[j % sides];
+    const d = R + dx;
+    return [Math.sin(a) * d, y, Math.cos(a) * d];
   };
   const faces: Face[] = [];
   for (let i = 0; i < rings; i++)

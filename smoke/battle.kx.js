@@ -48,7 +48,12 @@ model("well",
   box(0.04, 0.04, 0.25, { mat: "iron", pos: [0.8, 1.58, 0.12] }),
   sym("x", box(0.1, 2.0, 0.1, { mat: "woodD", pos: [0.72, 0, 0] })),
   cyl(0.06, 1.5, { mat: "wood", sides: 6, rot: [0, 0, 90], pos: [0.75, 1.6, 0] }),
-  prism(1.75, 0.45, 1.0, { mat: "woodL", pos: [0, 2.0, 0] }),
+  // roof as construction: two boards meeting at a ridge, stepped shingle rows, ridge beam
+  sym("z", tf({ pos: [0, 2.24, 0.3], rot: [40, 0, 0] },
+    box(1.95, 0.06, 0.8, { mat: "woodD", pos: [0, -0.03, 0] }),
+    [-0.27, -0.02, 0.23].map((z, i) => box(2.0 - i * 0.02, 0.035, 0.3, { mat: i % 2 ? "woodL" : "wood", pos: [0, 0.03 + i * 0.012, z], rot: [-4, 0, 0] })))),
+  tf({ pos: [0, 2.5, 0], rot: [45, 0, 0] }, box(2.06, 0.1, 0.1, { mat: "woodD", pos: [0, -0.05, 0] })),
+  sym("x", box(0.08, 0.5, 0.08, { mat: "woodD", pos: [0.72, 2.0, 0] })),
   cyl(0.01, 0.4, { mat: "rope", sides: 4, pos: [0, 1.2, 0] }),
   cyl(0.12, 0.2, { mat: "woodD", sides: 8, top: 0.1, pos: [0, 1.0, 0] }))
 model("fence",
