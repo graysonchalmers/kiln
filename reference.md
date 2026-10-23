@@ -63,13 +63,13 @@ The last argument is a material key, or an options object with `mat` plus:
 | `cyl(r, h)` | base center | `sides` (8), `top` (top radius: tapers) |
 | `cone(r, h)` | base center | `sides` (8) |
 | `sphere(r)` | center | `detail` 0–4 (1) |
-| `rock(r)` | center | `detail` (1), `rough` (0.22), `squash` (0.75), `seed` |
+| `rock(r)` | center | `detail` (1), `rough` (0.22), `squash` (0.75), `seed`, `flat` (0..1: flat underside cut that far up, so it sits on a face) |
 | `lathe([r0, y0, r1, y1, ...])` | axis | `sides` (8). Profile from bottom to top; radius 0 closes a tip. |
 | `extrude([x0, y0, x1, y1, ...], depth)` | outline coordinates | Any simple polygon (concave ok), in X/Y, extruded along Z. |
 | `prism(w, h, d)` | base center | Gable roof: triangle in X/Y, ridge along Z. |
 | `wedge(w, h, d)` | base center | Ramp: full height at the back, 0 at the front. |
 | `torus(R, r)` | center | Ring of radius R around Y, tube radius r; `rings` (24) around, `sides` (12) around the tube. Rings, tires, donuts, halos. |
-| `tube([x0, y0, z0, x1, y1, z1, ...], r)` | path coordinates | A pipe of radius r swept along the points: `sides` (8); `closed: true` joins the ends (otherwise they are capped); `top` is the end radius (linear taper by arc length). Frames are carried along the path so the tube never twists, and bends are mitered so the cross section stays full. Pipes, cables, rails, branches, tentacles, handles. |
+| `tube([x0, y0, z0, x1, y1, z1, ...], r)` | path coordinates | A pipe of radius r swept along the points: `sides` (8); `closed: true` joins the ends (otherwise they are capped); `top` is the end radius (linear taper by arc length); `r` may be a list, one radius per point (flare + taper as one mesh). Frames are carried along the path so the tube never twists, and bends are mitered so the cross section stays full. Pipes, cables, rails, branches, tentacles, handles. |
 | `terrain(w, d, { res, height, fn \| heightmap, mat })` | base center | A heightfield w × d meters: `res` cells per side (32, or `[nx, nz]`), `height` the vertical scale in meters (1). Heights 0..1 come from `fn: (x, z) => h` at world coordinates (centered) or `heightmap: "file.png"` (gray PNG, 16-bit kept, top row = back; a loom `_height.png` works as is). `mat` is a key, or `(h, slope, x, z) => key` per triangle (`slope` 0 flat .. 1 vertical): grass low, rock steep, snow high. Islands, hills, dungeon floors, dioramas. |
 
 ## Voxels

@@ -16,6 +16,8 @@ export interface ViewOpts {
   fit?: Bounds;
   /** Scene lights: when present the view switches to night (dim moon, lights do the work). */
   lights?: Light[];
+  /** "day": daylight even with lights (they add on top, as in a lit engine scene); "night": always night. */
+  mood?: "day" | "night";
 }
 
 /** Light reaching a face from punctual lights (flat: evaluated at the face center). */
@@ -97,7 +99,7 @@ export function pick(faces: Face[], b: Bounds, o: ViewOpts, x: number, y: number
 export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts = {}): Uint8Array {
   const S = 2, { W, H, center, radius, eye, proj, fwd, right, up, f } = viewCamera(b, o, S);
 
-  const lights = o.lights ?? [], night = lights.length > 0;
+  const lights = o.lights ?? [], night = o.mood ? o.mood === "night" : lights.length > 0;
   const img = new Float32Array(W * H * 3), zb = new Float32Array(W * H).fill(Infinity), ground = new Uint8Array(W * H);
   for (let y = 0; y < H; y++) {
     const t = y / H;
@@ -174,7 +176,7 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
       const sky = 0.5 + 0.5 * nn[1];
       const lightAmt = night ? 0.05 * sky + 0.02 + 0.1 * key : 0.25 * sky + 0.07 * (1 - sky) + 0.95 * key + 0.22 * fill;
       const spec = m!.metal > 0 && !night ? m!.metal * 0.6 * Math.max(0, dot(nn, norm(add(LIGHT, norm(sub(eye, c0)))))) ** 24 : 0;
-      const pl: V3 = night ? punctual(lights, scl(add(add(t.v[0], t.v[1]), t.v[2]), 1 / 3), nn) : [0, 0, 0];
+      const pl: V3 = lights.length ? punctual(lights, scl(add(add(t.v[0], t.v[1]), t.v[2]), 1 / 3), nn) : [0, 0, 0];
       return m!.c.map((v, k) => v * (lightAmt + pl[k]) * (1 - m!.metal * 0.4) + spec + (m!.e ? m!.e[k] * (night ? 1.4 : 1) : 0)) as V3;
     };
     const colF = shadeN(nn);

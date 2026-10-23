@@ -49,6 +49,8 @@ export interface Built {
   tris: number;
   pal: Palette;
   lights: Light[];
+  /** Preview lighting from settings({ mood }); unset = night when the model has lights. */
+  mood?: "day" | "night";
   /** Animatable parts (named nodes with pivots). */
   joints: Joint[];
 }
@@ -56,7 +58,7 @@ export interface Built {
 const MODEL_OPTS = ["pivot", "base", "swap", "scale"];
 const PLACE = ["pos", "rot", "scale"];
 const SHAPE_OPTS: Record<string, string[]> = {
-  box: [], cyl: ["sides", "top"], cone: ["sides"], sphere: ["detail"], rock: ["detail", "rough", "squash", "seed"],
+  box: [], cyl: ["sides", "top"], cone: ["sides"], sphere: ["detail"], rock: ["detail", "rough", "squash", "seed", "flat"],
   lathe: ["sides"], extrude: [], prism: [], wedge: [], voxels: ["size"], voxfn: ["size"],
   torus: ["sides", "rings"], tube: ["sides", "closed", "top"], terrain: ["res", "height", "fn", "heightmap"],
   voximg: ["size", "depth", "alpha", "flat"],
@@ -124,6 +126,8 @@ export class Project {
   looks: Record<string, { smooth?: number; bevel?: number }> = {};
   /** Minor parts smaller than this x the model size in two directions are dropped. */
   minorFloor = 0.025;
+  /** Preview lighting (settings({ mood })): "day" keeps a kit's lit and unlit models under the same light. */
+  mood?: "day" | "night";
   /** Set by a loader when --smooth / the viewer slider fixes SMOOTH: settings() then leaves it alone. */
   lockSmooth = false;
   private sgNext = 1;
@@ -216,7 +220,11 @@ export class Project {
     /** Look settings for the whole file: settings({ ao: 0.6, smooth: 40 }). CLI flags / viewer sliders override. */
     env.settings = (o: unknown) => at("settings", () => {
       if (!isPlain(o)) throw new KilnError("settings({ ao: 0..1, smooth: degrees })");
-      checkKeys("settings", o, ["ao", "smooth", "bevel", "looks", "minor"]);
+      checkKeys("settings", o, ["ao", "smooth", "bevel", "looks", "minor", "mood"]);
+      if (o.mood !== undefined) {
+        if (o.mood !== "day" && o.mood !== "night") throw new KilnError('settings({ mood: "day" | "night" })');
+        this.mood = o.mood;
+      }
       if (o.minor !== undefined) this.minorFloor = num(o.minor, "minor", 0);
       if (o.looks !== undefined) {
         if (!isPlain(o.looks)) throw new KilnError("settings({ looks: { stone: { smooth: 40, bevel: 0.02 }, ... } })");
@@ -253,7 +261,7 @@ export class Project {
     env.cone = (r: unknown, h: unknown, s: unknown) => geo("cone", [r, h, s], (m, o) => cyl(num(r, "r", 1e-9), num(h, "h", 1e-9), Number(o.sides ?? 8), 0, m));
     env.sphere = (r: unknown, s: unknown) => geo("sphere", [r, s], (m, o) => sphere(num(r, "r", 1e-9), Number(o.detail ?? 1), m));
     env.rock = (r: unknown, s: unknown) => geo("rock", [r, s], (m, o) =>
-      rock(num(r, "r", 1e-9), Number(o.detail ?? 1), Number(o.rough ?? 0.22), Number(o.squash ?? 0.75), Number(o.seed ?? 1), m, o.wobble === undefined ? undefined : num(o.wobble, "wobble", 1e-6)));
+      rock(num(r, "r", 1e-9), Number(o.detail ?? 1), Number(o.rough ?? 0.22), Number(o.squash ?? 0.75), Number(o.seed ?? 1), m, o.wobble === undefined ? undefined : num(o.wobble, "wobble", 1e-6), o.flat === undefined ? 0 : num(o.flat, "flat", 0)));
     env.lathe = (prof: unknown, s: unknown) => geo("lathe", [prof, s], (m, o) => {
       if (!Array.isArray(prof) || prof.length % 2) throw new KilnError("lathe profile: flat list [r0, y0, r1, y1, ...] from bottom to top");
       const pts: [number, number][] = [];
@@ -310,8 +318,9 @@ export class Project {
         throw new KilnError("tube path: a flat list [x0, y0, z0, x1, y1, z1, ...] of at least 2 points");
       const pts: V3[] = [];
       for (let i = 0; i < path.length; i += 3) pts.push([path[i], path[i + 1], path[i + 2]]);
-      const R = num(r, "r", 1e-9);
-      return tube(pts, R, Number(o.sides ?? 8), !!o.closed, m, o.top === undefined ? R : num(o.top, "top", 1e-9));
+      if (Array.isArray(r) && r.length !== pts.length) throw new KilnError(`tube r: one radius per point (${pts.length}), got ${r.length}`);
+      const R = Array.isArray(r) ? r.map((x, i) => num(x, `r[${i}]`, 1e-9)) : num(r, "r", 1e-9);
+      return tube(pts, R, Number(o.sides ?? 8), !!o.closed, m, o.top === undefined ? undefined : num(o.top, "top", 1e-9));
     });
     env.terrain = (w: unknown, d: unknown, s: unknown) => geo("terrain", [w, d, s], (m, o) => {
       const res = o.res === undefined ? [32, 32] : typeof o.res === "number" ? [o.res, o.res] : o.res;
@@ -508,7 +517,7 @@ export class Project {
     }
     if (this.ao) faces = bakeAO(faces, this.ao);
     for (const j of joints) if (j.parent && !names.has(j.parent)) throw new KilnError(`part '${j.name}': unknown parent '${j.parent}'${didYouMean(j.parent, names)}`);
-    return { name: def.name, faces, steps, bounds: bounds(faces), tris: triCount(faces), pal: def.pal, lights, joints };
+    return { name: def.name, faces, steps, bounds: bounds(faces), tris: triCount(faces), pal: def.pal, lights, joints, mood: this.mood };
   }
 
   private expand(item: unknown, depth: number): Part {

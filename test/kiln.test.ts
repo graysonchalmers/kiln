@@ -137,6 +137,12 @@ test("the preview renderer draws the model in its material color", () => {
   const img = renderView(b.faces, b.pal, b.bounds, { w: 64, h: 64, ground: false, yaw: 0, pitch: 0 });
   const i = (32 * 64 + 32) * 4;
   assert.ok(img[i] > 120 && img[i + 1] < 40 && img[i + 2] < 40, `center pixel ${img.slice(i, i + 3)} should be red`);
+  // a model with a light previews at night unless settings({ mood: "day" }) keeps it under the kit's daylight
+  const src = `model("m", box(1, 1, 1, "a"), light({ type: "point", color: "#ffffff", power: 1, pos: [3, 3, 3] }))`;
+  const px = (pre: string) => { const m = one(pre + src); assert.equal(m.mood, pre ? "day" : undefined);
+    return renderView(m.faces, m.pal, m.bounds, { w: 64, h: 64, ground: false, yaw: 0, pitch: 0, lights: m.lights, mood: m.mood })[i]; };
+  assert.ok(px(`settings({ mood: "day" })\n`) > px("") * 2, "day mood is lit by daylight, not just the model's light");
+  throwsMsg(() => one(`settings({ mood: "dusk" })`), /mood: "day" \| "night"/);
 });
 
 test("parts and clips: posing rotates about the pivot; GLB gets part nodes and animations", async () => {

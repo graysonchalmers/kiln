@@ -9,7 +9,7 @@ import { gridStep, renderView, type ViewOpts } from "../core/render.ts";
 
 export function viewPng(b: Built, o: ViewOpts): Buffer {
   const w = o.w ?? 400, h = o.h ?? 400;
-  return Buffer.from(png(w, h, renderView(b.faces, b.pal, b.bounds, { lights: b.lights, ...o }), (x) => deflateSync(x)));
+  return Buffer.from(png(w, h, renderView(b.faces, b.pal, b.bounds, { lights: b.lights, mood: b.mood, ...o }), (x) => deflateSync(x)));
 }
 
 /** A clip as a strip of 8 evenly spaced frames from the hero angle, framed on the rest pose. */

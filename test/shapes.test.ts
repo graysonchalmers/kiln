@@ -48,6 +48,21 @@ test("torus and tube are closed and outward; the tube follows its path without t
   const taper = one(`model("m", { pivot: "origin" }, tube([0, 0, 0, 0, 1, 0, 0, 3, 0], 0.6, { mat: "a", sides: 8, top: 0.2 }))`);
   const ry = (y: number) => Math.max(...taper.faces.flatMap((f) => f.v).filter((p) => Math.abs(p[1] - y) < 1e-9).map((p) => Math.hypot(p[0], p[2])));
   near(ry(0), 0.6, 1e-9); near(ry(1), 0.6 - 0.4 / 3, 1e-9, "radius follows arc length"); near(ry(3), 0.2, 1e-9);
+  // r as a list: one radius per point (a flared base in the same mesh)
+  const flare = one(`model("m", { pivot: "origin" }, tube([0, 0, 0, 0, 0.2, 0, 0, 2, 0], [0.9, 0.4, 0.3], { mat: "a", sides: 8 }))`);
+  const fy = (y: number) => Math.max(...flare.faces.flatMap((f) => f.v).filter((p) => Math.abs(p[1] - y) < 1e-9).map((p) => Math.hypot(p[0], p[2])));
+  near(fy(0), 0.9, 1e-9); near(fy(0.2), 0.4, 1e-9); near(fy(2), 0.3, 1e-9);
+  throwsMsg(() => one(`model("m", tube([0, 0, 0, 0, 1, 0], [1, 2, 3], { mat: "a" }))`), /one radius per point/);
+});
+
+test("rock flat: the underside is cut to a plane, so it sits on a face", () => {
+  const ys = (src: string) => one(`model("m", { pivot: "origin" }, ${src})`).faces.flatMap((f) => f.v.map((p) => p[1]));
+  const round = ys(`rock(1, { mat: "a", squash: 0.8, seed: 3 })`), cut = ys(`rock(1, { mat: "a", squash: 0.8, seed: 3, flat: 0.4 })`);
+  near(Math.min(...cut), -0.8 * 0.6, 1e-9, "floor at (1 - flat) of the half height");
+  assert.ok(cut.filter((y) => Math.abs(y + 0.48) < 1e-9).length >= 6, "a contact face, not a point");
+  assert.ok(Math.min(...round) < -0.48, "flat 0 leaves the rock as it was");
+  const rock = one(`model("m", { pivot: "origin" }, rock(1, { mat: "a", flat: 0.4 }))`);
+  assert.ok(volume(rock.faces) > 0, "still closed and outward");
 });
 
 test("terrain: a heightfield from a function with per-triangle materials by height and slope", () => {

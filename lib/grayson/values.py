@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """Value meter for kiln previews: values.py <out_dir|preview.png> ...
-Per hero view: floor value, warm wood/bark lit (p90) and shadow (p10), light stone lit (p90), as HSV value 0-100.
+Per model, worst of the hero/front/right views: floor value, warm wood/bark lit (p90) and shadow (p10), light stone lit (p90), as HSV value 0-100.
 Pass (2026-10-22 swamp round 1): lit wood >= 35 and >= floor + 10, wood shadow >= 15, stone lit >= floor + 15."""
 import glob, os, subprocess, sys
 import numpy as np
 
 def measure(f):
+    """Worst case over the hero, front and right views (a hero-only reading missed posts failing side-on)."""
     w, h = map(int, subprocess.check_output(["identify", "-format", "%w %h", f]).split())
-    raw = subprocess.check_output(["convert", f, "-crop", f"{w // 2}x{h // 2 - 60}+0+60", "+repage", "-depth", "8", "rgb:-"])
+    views = [measure_view(f, g) for g in (f"{w // 2}x{h // 2 - 60}+0+60", f"{w // 2}x{h // 2 - 60}+{w // 2}+60", f"{w // 2}x{h // 2 - 60}+0+{h // 2}")]
+    worst = lambda i: min((v[i] for v in views if v[i] is not None), default=None)
+    return round(sum(v[0] for v in views) / 3), worst(1), worst(2), worst(3)
+
+def measure_view(f, geo):
+    raw = subprocess.check_output(["convert", f, "-crop", geo, "+repage", "-depth", "8", "rgb:-"])
     a = np.frombuffer(raw, np.uint8).reshape(-1, 3).astype(float) / 255
     mx, mn = a.max(1), a.min(1); V = mx * 100; S = (mx - mn) / np.maximum(mx, 1e-9) * 100
     r, g, b = a.T; hue = np.degrees(np.arctan2(np.sqrt(3) * (g - b), 2 * r - g - b)) % 360

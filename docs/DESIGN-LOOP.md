@@ -40,3 +40,19 @@ nothing to drift against. (Replaces "one grader per kit" from the earlier text-t
 - Left for round 2: boulders pinch to a point underneath (needs a flat-bottom `rock()` option: the model is re-grounded
   so sinking does nothing); mangrove roots and moss strands still spindly; hut roof is one mass but plain; deck and
   branch undersides below 15% value.
+
+## Round 2: swamp kit (2026-10-23)
+
+- Asked: flat-bottom rocks, thicker mangrove/moss, lift dark undersides, clear 11 lint flags. Panel re-run fresh on the
+  round-1 result; the colour critic noticed the lit assets' preview floor was darker than the rest.
+- Root causes fixed in core: `rock({ flat })` (rocks sat on a point); `tube(path, [r0, r1, ...])` one radius per point
+  (`trunk()` is one mesh, so the flare collar seam is gone); `settings({ mood: "day" })` (any model with a `light()`
+  previewed at night, so the hut, lantern and toadstools were judged under different light from the kit).
+- Blind A/B 1: after won 9, lost 4 (boardwalk, stump, lantern, log bridge), tied 3; kit sheet to after. The losses taught:
+  lifting a dark structural swatch passes the value floor but kills post/plank separation; a lint-driven thickening
+  (cypress hanging moss) read as pegs; my stump change buried its cut ring. Fixed; woodD back to dark.
+- Targeted re-judge (6 changed assets + sheet): cypress and hut now win, boardwalk and log bridge tie, kit sheet after.
+  Stump still lost (ring read as a lid) and was fixed after, not re-judged. Lantern loses on preview lighting only.
+- Left for round 3: cattail blades need a bend (`blades()` recipe); moss as a colour on the rock's own faces (no
+  separate shell); log and moss-branch undersides and one mangrove view under the value floor (`values.py` now takes the
+  worst of hero/front/right); lantern needs a judged look under day light; thin poles (snag, mangrove stem).
