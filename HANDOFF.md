@@ -1,20 +1,21 @@
 # 🧭 Session Handoff — Tool-Blockout3D (text / image → 3D blockout generator)
 
-_Last updated: 2026-10-23 (Envy): design loop round 5 on the swamp kit._
+_Last updated: 2026-10-23 (Envy): image to blockout, round 1 (three CC0 trees)._
 
 ## 🎯 Current state
 Text / image → 3D blockout generator on a fork of `uilianks/kiln` (MIT, low-poly assets as code → GLB). Origin = `graysonchalmers/kiln`, work on branch **`grayson`**; `main` mirrors upstream, no upstream PR planned.
 - **Goal (Grayson, 2026-10-22):** text → blockout AND reference image → blockout, with a guaranteed quality floor, then into any engine.
 - **Self-improving design loop exists now:** `docs/DESIGN-LOOP.md`. Steps: refs + 6-point bar → blind lens critics (form / color / construction) → written adjudication the critics argue back on → fix (scene, recipe or core) → fresh blind judge on per-asset shuffled pairs (`lib/grayson/ab.py`) → lessons into recipes + `text-to-glb` skill + goldens. Value tests: `lib/grayson/values.py <out>`.
 - **Rounds so far (swamp):** r1 17/17. r2 9-4-3. r3 6-5-4 and lost the kit sheet (reverted). r4 beat r3 (9-2) and r2 (10 of 14 + kit sheet). r5 lost 6-3 first, kept its winners: kit sheet vs r4 after = current champion. Core: `tube` `top`/per-point radii, `rock({ flat })`, `settings({ mood })`, `cap`/`capAngle`, `blades({ bend })`, preview lights per corner (no seam); `trunk()` one mesh, branches upturn. Lint clean.
+- **Image to blockout (2026-10-23):** `docs/IMAGE-TO-BLOCKOUT.md`, `lib/grayson/shot.ts` (matched camera), `lib/grayson/likeness.py` (silhouette IoU/aspect/hue). Three CC0 trees: spec-built v1 beat the naive recipe on all three; judge-driven v2 kept for broadleaf + maple, v1 for pine (`smoke/img2blockout.kx.js`, pack `img2blockout_best`).
 - **Target look (provisional, Grayson to confirm):** Kenney Nature Kit clarity + Quaternius Stylized Nature gesture, swamp palette.
 - Gate: `npm run check` (18/18) + `lib/grayson/golden.sh check` (12/12, repo-relative paths) + `node bin/kiln.js lint <scene>` (swamp clean) + `lib/grayson/values.py <out>` (worst of hero/front/right).
 
 ## 📌 Where we stopped
-Round 5 merged to `grayson`. Proofs (gitignored, Envy): `.proof/2026-10-23-swamp-loop-r5/before_after_r5.png` (r4 vs r5) plus earlier rounds. Target-look Inbox row still open.
+Image to blockout round 1 merged to `grayson`. Proof (gitignored, Envy): `.proof/2026-10-23-img2blockout/ref_v0_best.png` (reference | naive | kept). Swamp rounds paused at r5. Target-look Inbox row still open.
 
 ## ▶️ Next concrete step
-**Pause swamp rounds; try image → blockout** with the same loop (reference image → image-decomp → recipe picks → kiln scene → grade vs the image). Swamp residuals: hut glow under the fixed renderer, log underside V12-13 (cast shadow), mangrove canopy (judge rejected 4 masses), knees mat (never enlarge: lost 3x).
+**Image to blockout round 2:** maple v3 (v2's mass + v1's trunk and 45 deg diagonal), pine v1 + a measured 20 deg droop, then a non-tree reference (rock, crate). Recipe gaps to fix: merged `canopy()` crowns, a tip-angle parameter on `leaf()`. Swamp residuals (paused): hut glow, log underside V12-13, mangrove canopy, knees mat (never enlarge).
 - Alt: **image → blockout**: reference image → image-decomp → recipe picks/proportions → kiln scene → grade against the image with the same loop.
 - Alt: package the loop as a Workflow script (needs Grayson's "use a workflow").
 
