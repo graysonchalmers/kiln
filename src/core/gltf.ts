@@ -1,6 +1,6 @@
 // glTF 2.0 binary (GLB) writer: one node per model, one primitive per material, flat normals.
 import { type ClipDef, partValues } from "./anim.ts";
-import { type Face, type Joint, type Light, faceNormal, triangulate } from "./mesh.ts";
+import { type Face, type Joint, type Light, faceNormal, smoothNormals, triangulate } from "./mesh.ts";
 import { type Palette, boxUV, srgbToLinear } from "./palette.ts";
 import type { V3 } from "./util.ts";
 
@@ -108,7 +108,7 @@ export function glb(models: GlbModel[]): Uint8Array {
   /** One mesh from faces, positions relative to `origin`; undefined when there are no faces. */
   const mesh = (name: string, faces: Face[], pal: Palette, origin: V3): number | undefined => {
     const byMat = new Map<string, Face[]>();
-    for (const f of triangulate(faces)) {
+    for (const f of smoothNormals(faces)) {
       const l = byMat.get(f.mat) ?? [];
       l.push(f);
       byMat.set(f.mat, l);
@@ -127,7 +127,7 @@ export function glb(models: GlbModel[]): Uint8Array {
           for (let c = 0; c < 3; c++) {
             const x = p[c] - origin[c];
             pos[i * 9 + k * 3 + c] = x;
-            nrm[i * 9 + k * 3 + c] = n[c];
+            nrm[i * 9 + k * 3 + c] = (t.n?.[k] ?? n)[c];
             if (x < min[c]) min[c] = x;
             if (x > max[c]) max[c] = x;
           }

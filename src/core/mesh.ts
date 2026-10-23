@@ -8,6 +8,12 @@ export interface Face {
   mat: string;
   /** Animated part this face belongs to (none = the model's static body). */
   part?: string;
+  /** Auto-smooth angle in degrees: edges to faces of the same shape (`sg`) under this angle shade smooth. */
+  sm?: number;
+  /** Smoothing group: the shape call this face came from. */
+  sg?: number;
+  /** Per-corner normals, set by smoothNormals() at output time. */
+  n?: V3[];
 }
 
 /** An animatable part: a named node that rotates / moves / scales about its pivot. */
@@ -118,7 +124,7 @@ export function triangulate(faces: Face[]): Face[] {
   const out: Face[] = [];
   for (const f of faces) {
     if (f.v.length === 3) { out.push(f); continue; }
-    for (let i = 1; i < f.v.length - 1; i++) out.push({ ...f, v: [f.v[0], f.v[i], f.v[i + 1]] });
+    for (let i = 1; i < f.v.length - 1; i++) out.push({ ...f, v: [f.v[0], f.v[i], f.v[i + 1]], n: f.n && [f.n[0], f.n[i], f.n[i + 1]] });
   }
   return out;
 }
@@ -171,3 +177,31 @@ export function earClip(pts: [number, number][]): [number, number, number][] {
   return out;
 }
 
+
+/** Triangles with per-corner normals for faces that have `sm`: each corner averages the (area-weighted)
+ * normals of same-group faces meeting there whose angle to this face is under both faces' threshold.
+ * Sharper edges keep a hard crease. Faces without `sm` stay flat. */
+export function smoothNormals(faces: Face[]): Face[] {
+  const tris = triangulate(faces);
+  if (!tris.some((t) => t.sm)) return tris;
+  const key = (t: Face, p: V3) => `${t.sg}|${p.map((c) => Math.round(c * 1e4)).join(",")}`;
+  const area: V3[] = tris.map((t) => {
+    const [a, b, c] = t.v, u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    return [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+  });
+  const unit = area.map((a) => norm(a));
+  const at = new Map<string, number[]>();
+  tris.forEach((t, i) => { if (t.sm) for (const p of t.v) { const k = key(t, p); (at.get(k) ?? at.set(k, []).get(k)!).push(i); } });
+  return tris.map((t, i) => {
+    if (!t.sm) return t;
+    const n = t.v.map((p) => {
+      const s: V3 = [0, 0, 0];
+      for (const j of at.get(key(t, p))!) {
+        if (dot(unit[i], unit[j]) < Math.cos((Math.min(t.sm!, tris[j].sm!) * Math.PI) / 180)) continue;
+        s[0] += area[j][0]; s[1] += area[j][1]; s[2] += area[j][2];
+      }
+      return norm(s);
+    });
+    return { ...t, n };
+  });
+}

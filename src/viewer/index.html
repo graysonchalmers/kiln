@@ -61,6 +61,7 @@
 <header><span class="logo">KILN</span><span class="file" id="file"></span><span class="grow"></span>
   <button id="annotbtn" title="pin notes and draw on the model for Claude (a)">✎ annotate</button>
   <label title="DETAIL for model files: resolution of recipes that read it">detail <input type="range" id="detail" min="0.25" max="4" step="0.25" value="1"> <span id="detailv">1</span></label>
+  <label title="auto-smooth: edges under this angle shade smooth, sharper edges stay hard (0 = flat)">smooth <input type="range" id="smooth" min="0" max="90" step="5" value="0"> <span id="smoothv">0°</span></label>
   <label><input type="checkbox" id="spin"> turntable</label><span class="pill" id="status">connecting</span></header>
 <aside id="list"></aside>
 <main>

@@ -98,13 +98,14 @@ es.addEventListener("build", (e) => {
   const prev = state;
   state = JSON.parse(e.data);
   if (state.detail && document.activeElement !== $("detail")) { $("detail").value = state.detail; $("detailv").textContent = state.detail; }
+  if (state.smooth !== undefined && document.activeElement !== $("smooth")) { $("smooth").value = state.smooth; $("smoothv").textContent = state.smooth + "°"; }
   $("file").textContent = `${state.file}  v${state.version}  ${state.ms}ms`;
   const bad = state.error ? 1 : state.models.filter((m) => m.error).length + state.errors.length;
   $("status").textContent = bad ? `${bad} error${bad > 1 ? "s" : ""}` : "ok";
   $("status").className = "pill " + (bad ? "bad" : "ok");
   if (!sel || !state.models.some((m) => m.name === sel)) sel = state.models.find((m) => !m.part)?.name ?? state.models[0]?.name;
   const changed = prev && state.models.find((m) => m.changed && !m.part && !m.error);
-  if (changed && prev?.detail === state.detail) { sel = changed.name; step = -1; }
+  if (changed && prev?.detail === state.detail && prev?.smooth === state.smooth) { sel = changed.name; step = -1; }
   renderList();
   show();
 });
@@ -252,3 +253,6 @@ $("send").onclick = () => sendFeedback();
 const det = $("detail");
 det.oninput = () => { $("detailv").textContent = det.value; };
 det.onchange = () => fetch(`/api/detail?d=${det.value}`, { method: "POST" });
+const smo = $("smooth");
+smo.oninput = () => { $("smoothv").textContent = smo.value + "°"; };
+smo.onchange = () => fetch(`/api/detail?s=${smo.value}`, { method: "POST" });

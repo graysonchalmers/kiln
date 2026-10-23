@@ -1,7 +1,7 @@
 // A small flat-shading software rasterizer: perspective camera orbiting the model, z-buffer,
 // world-fixed key + fill light, hemispheric ambient, emissive glow, a ground grid with a cast
 // shadow, and 2x supersampling. It is the agent's eyes; Blender is the beauty renderer.
-import { type Face, type Bounds, type Light, faceNormal, triangulate } from "./mesh.ts";
+import { type Face, type Bounds, type Light, faceNormal, smoothNormals, triangulate } from "./mesh.ts";
 import { type Palette, boxUV, srgbToLinear } from "./palette.ts";
 import { type V3, add, cross, dot, len, norm, scl, sub } from "./util.ts";
 
@@ -104,7 +104,7 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
     for (let x = 0; x < W; x++) { const i = (y * W + x) * 3; img[i] = 0.018 + 0.02 * (1 - t); img[i + 1] = 0.02 + 0.022 * (1 - t); img[i + 2] = 0.03 + 0.03 * (1 - t); }
   }
 
-  const raster = (a: V3, bb: V3, c: V3, plot: (i: number, z: number) => void) => {
+  const raster = (a: V3, bb: V3, c: V3, plot: (i: number, z: number, w0: number, w1: number, w2: number) => void) => {
     if (a[2] <= 1e-6 || bb[2] <= 1e-6 || c[2] <= 1e-6) return;
     const area = (bb[0] - a[0]) * (c[1] - a[1]) - (bb[1] - a[1]) * (c[0] - a[0]);
     if (Math.abs(area) < 1e-9) return;
@@ -118,7 +118,7 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
         const w1 = ((c[0] - px) * (a[1] - py) - (c[1] - py) * (a[0] - px)) / area;
         const w2 = 1 - w0 - w1;
         if (w0 < 0 || w1 < 0 || w2 < 0) continue;
-        plot(y * W + x, 1 / (w0 * ia + w1 * ib + w2 * ic));
+        plot(y * W + x, 1 / (w0 * ia + w1 * ib + w2 * ic), w0, w1, w2);
       }
   };
 
@@ -142,7 +142,7 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
       }
   }
 
-  const tris = triangulate(faces);
+  const tris = smoothNormals(faces);
   // Cast shadow: every triangle projected onto the ground along the light, darkening ground pixels once.
   if (o.ground !== false) {
     const shadowed = new Uint8Array(W * H);
@@ -169,16 +169,22 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
     // Two-sided: flip normals that face away from the camera (open shapes, inner faces).
     const c0 = t.v[0];
     const nn = dot(n, sub(eye, c0)) < 0 ? scl(n, -1) : n;
-    const key = Math.max(0, dot(nn, LIGHT)), fill = Math.max(0, dot(nn, FILL));
-    const sky = 0.5 + 0.5 * nn[1];
-    const lightAmt = night ? 0.05 * sky + 0.02 + 0.1 * key : 0.25 * sky + 0.07 * (1 - sky) + 0.95 * key + 0.22 * fill;
-    const spec = m.metal > 0 && !night ? m.metal * 0.6 * Math.max(0, dot(nn, norm(add(LIGHT, norm(sub(eye, c0)))))) ** 24 : 0;
-    const pl: V3 = night ? punctual(lights, scl(add(add(t.v[0], t.v[1]), t.v[2]), 1 / 3), nn) : [0, 0, 0];
-    const col = m.c.map((v, k) => v * (lightAmt + pl[k]) * (1 - m!.metal * 0.4) + spec + (m!.e ? m!.e[k] * (night ? 1.4 : 1) : 0)) as V3;
+    const shadeN = (nn: V3): V3 => {
+      const key = Math.max(0, dot(nn, LIGHT)), fill = Math.max(0, dot(nn, FILL));
+      const sky = 0.5 + 0.5 * nn[1];
+      const lightAmt = night ? 0.05 * sky + 0.02 + 0.1 * key : 0.25 * sky + 0.07 * (1 - sky) + 0.95 * key + 0.22 * fill;
+      const spec = m!.metal > 0 && !night ? m!.metal * 0.6 * Math.max(0, dot(nn, norm(add(LIGHT, norm(sub(eye, c0)))))) ** 24 : 0;
+      const pl: V3 = night ? punctual(lights, scl(add(add(t.v[0], t.v[1]), t.v[2]), 1 / 3), nn) : [0, 0, 0];
+      return m!.c.map((v, k) => v * (lightAmt + pl[k]) * (1 - m!.metal * 0.4) + spec + (m!.e ? m!.e[k] * (night ? 1.4 : 1) : 0)) as V3;
+    };
+    const colF = shadeN(nn);
+    // Smooth faces: light each corner with its own normal (flipped like the face), interpolate (Gouraud).
+    const vc = t.n ? t.n.map((cn) => shadeN(dot(n, nn) < 0 ? scl(cn, -1) : cn)) : undefined;
     const tx = m.tex, al = tx?.albedo;
-    raster(p[0], p[1], p[2], (i, z) => {
+    raster(p[0], p[1], p[2], (i, z, w0, w1, w2) => {
       if (z >= zb[i]) return;
       zb[i] = z;
+      const col = vc ? ([0, 1, 2].map((k) => vc[0][k] * w0 + vc[1][k] * w1 + vc[2][k] * w2) as V3) : colF;
       if (al && tx) {
         // back from the pixel and its depth to the surface point, then the box-projected texel
         const px = (i % W) + 0.5, py = Math.floor(i / W) + 0.5, a = ((px - W / 2) * z) / f, bb = (-(py - H / 2) * z) / f;

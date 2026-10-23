@@ -27,6 +27,7 @@ const USAGE = `kiln — low-poly and voxel 3D game assets as code
       Dimensions, triangle count, materials and build steps.
   kiln serve  <models.kx.js> [--port 4340] [--out DIR | --no-out]
   (build / serve / info) --detail N   sets DETAIL for model files (1 = default; libraries scale resolution with it)
+  (build / serve / info) --smooth DEG  auto-smooth every shape: edges under DEG shade smooth, sharper stay hard (0 = flat)
       Live viewer: drag to orbit, step through the build, rebuilds on save.
   kiln list   <models.kx.js>
 
@@ -48,6 +49,7 @@ function parse(argv: string[]): Args {
     else if (v === "--stl") a.stl = true;
     else if (v === "--port") a.port = Number(val());
     else if (v === "--detail") globals.DETAIL = Number(val());
+    else if (v === "--smooth") globals.SMOOTH = Number(val());
     else if (v === "--size") {
       const m = /^(\d+)x(\d+)$/.exec(val());
       if (!m) throw new KilnError("--size must look like 1600x1200");

@@ -113,6 +113,9 @@ export class Project {
   pathHook: (path: string) => string = (p) => p;
   /** Set by a loader: reads and decodes a PNG by its resolved path. */
   imageHook?: (path: string) => Rgba;
+  /** Default auto-smooth angle for every shape (a loader sets it from SMOOTH); the shape option `smooth` wins. */
+  smooth?: number;
+  private sgNext = 1;
   private images = new Map<string, Rgba>();
 
   private cache = new Map<string, Built>();
@@ -158,7 +161,7 @@ export class Project {
     const style = (kind: string, v: unknown): { mat: string; o: Record<string, unknown> } => {
       if (typeof v === "string") return { mat: mat(v), o: {} };
       if (!isPlain(v)) throw new KilnError(`needs a material: "${[...this.pal.mats.keys()][0]}" or { mat, pos, rot, scale, ... }`);
-      checkKeys("options", v, ["mat", ...PLACE, "jitter", "wobble", "seed", ...SHAPE_OPTS[kind].filter((k) => k !== "seed")]);
+      checkKeys("options", v, ["mat", ...PLACE, "jitter", "wobble", "smooth", "seed", ...SHAPE_OPTS[kind].filter((k) => k !== "seed")]);
       if (v.mat === undefined && !NO_MAT.includes(kind)) throw new KilnError(`${kind} needs { mat: "key" }${kind === "terrain" ? " or { mat: (h, slope, x, z) => key }" : ""}`);
       if (typeof v.mat === "function") {
         if (kind !== "terrain") throw new KilnError(`${kind}: mat must be a palette key`);
@@ -181,6 +184,8 @@ export class Project {
     const geo = (kind: string, args: unknown[], make: (mat: string, o: Record<string, unknown>) => Face[]): Geo => at(kind, (loc) => {
       const { mat: m, o } = style(kind, args[args.length - 1]);
       let faces = transform(make(m, o), placeM(o));
+      const sm = o.smooth !== undefined ? num(o.smooth, "smooth", 0) : this.smooth;
+      if (sm) { const sg = this.sgNext++; faces = faces.map((f) => ({ ...f, sm, sg })); }
       if (o.jitter !== undefined) faces = jitter(faces, num(o.jitter, "jitter"), Number(o.seed ?? hash(`${kind}|${loc}`)), o.wobble === undefined ? undefined : num(o.wobble, "wobble", 1e-6));
       return { __geo: true, faces, step: { label: `${kind}(${args.slice(0, -1).map(fmt).join(", ")})`, loc } };
     });

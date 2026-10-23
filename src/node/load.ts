@@ -26,6 +26,7 @@ export const globals: Record<string, unknown> = {};
 /** Load a model file from disk. Throws KilnError with a file:line:col location on failure. */
 export function loadProject(file: string): Project {
   const p = new Project();
+  if (typeof globals.SMOOTH === "number") p.smooth = globals.SMOOTH;
   const ctx = vm.createContext({ ...p.env(), ...globals, console, Math });
   const stack: string[] = [];
   const run = (path: string) => {
