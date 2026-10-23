@@ -7,6 +7,7 @@ First run: three CC0 trees cropped from the Quaternius Stylized Nature sheet (br
 ## Tools
 - `node lib/grayson/shot.ts <scene> <model> --yaw Y --pitch P --out x.png` renders one view with no ground, so the build
   can be shot at roughly the reference's camera (kiln `render` needs Blender; this uses the preview renderer).
+- `shot.ts --bg "#f0f0f0"` renders on a solid backdrop: give judges builds on the reference's own backdrop.
 - `python3 lib/grayson/likeness.py <ref.png> <render.png> [--cut-top F] [--mask-out m.png]` is the objective score:
   silhouette IoU after fitting both outlines into the same box (bottom-aligned), plus width/height and dominant hue.
   The reference mask is "saturated pixels" (it sits on a grey checker), the render mask is "away from the per-row
@@ -136,3 +137,19 @@ Scene: `smoke/img2blockout.kx.js`, pack `img2blockout_best`. The decomposed v1 b
   next judge. Builds are judged on a dark backdrop, references on light grey.
 - Next: render the judge's copies on the reference's backdrop (a `shot.ts --bg` option), then redo colour; a deeper,
   wider crack cut on the two-hull boulder.
+
+## Round 6 results (2026-10-23)
+
+All pairs rendered on the reference's light-grey backdrop (`shot.ts --bg`).
+
+| Object | Kept | New | Blind A/B (likeness) | Kept now |
+|---|---|---|---|---|
+| barrel | v1 | v4: wood and hoop colours with median H, S, V matched per material class | v1 7 vs 6 ("v4 saturated orange-tan") | v1 |
+| crate | v2 | v4: same, plus the canvas lifted to its measured value | v2 7 vs 6 ("v4 canvas looks unpainted") | v2 |
+| boulder | v2 | v5: v2 + a deep, wide crack cut into the body | v2 5.5 vs 5 (near tie) | v2 |
+
+- With matched backdrops the colour verdicts became consistent, and they prefer the darker builds.
+- Matching median H/S/V per class still loses: a photoreal reference carries dark seams, grime and shadow detail that a
+  flat blockout lacks, so a flat colour at the reference's median reads lighter and warmer than the reference. Next: match
+  a lower value percentile (or the mean including the dark detail), and judge flat colour against a blurred reference.
+- A deeper crack moved about 590 pixels and the judge near-tied it; at blockout scale cracks matter less than mass.

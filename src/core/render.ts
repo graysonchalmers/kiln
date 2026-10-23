@@ -18,6 +18,9 @@ export interface ViewOpts {
   lights?: Light[];
   /** "day": daylight even with lights (they add on top, as in a lit engine scene); "night": always night. */
   mood?: "day" | "night";
+  /** Solid backdrop colour ("#rrggbb") instead of the dark gradient: render a build on its reference's backdrop so a
+   * judge compares colours under the same surround. */
+  bg?: string;
 }
 
 /** Light reaching a face from punctual lights (flat: evaluated at the face center). */
@@ -101,9 +104,14 @@ export function renderView(faces: Face[], pal: Palette, b: Bounds, o: ViewOpts =
 
   const lights = o.lights ?? [], night = o.mood ? o.mood === "night" : lights.length > 0;
   const img = new Float32Array(W * H * 3), zb = new Float32Array(W * H).fill(Infinity), ground = new Uint8Array(W * H);
+  const bgLin = o.bg ? srgbToLinear(o.bg) : undefined;
   for (let y = 0; y < H; y++) {
     const t = y / H;
-    for (let x = 0; x < W; x++) { const i = (y * W + x) * 3; img[i] = 0.018 + 0.02 * (1 - t); img[i + 1] = 0.02 + 0.022 * (1 - t); img[i + 2] = 0.03 + 0.03 * (1 - t); }
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 3;
+      if (bgLin) { img[i] = bgLin[0]; img[i + 1] = bgLin[1]; img[i + 2] = bgLin[2]; }
+      else { img[i] = 0.018 + 0.02 * (1 - t); img[i + 1] = 0.02 + 0.022 * (1 - t); img[i + 2] = 0.03 + 0.03 * (1 - t); }
+    }
   }
 
   const raster = (a: V3, bb: V3, c: V3, plot: (i: number, z: number, w0: number, w1: number, w2: number) => void) => {

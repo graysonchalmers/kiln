@@ -286,6 +286,38 @@ model("crate_v3",
   box(0.02, 0.69 * CH, CD + 0.06 * CL, { mat: "canvas", pos: [-CL / 2 - 0.012, 0.16 * CH, 0] }),
   extrude([0, 0.844 * CH, 0.14 * CL, 0.844 * CH, 0, 0.6 * CH], 0.012, { mat: "canvas", pos: [-CL / 2, 0, CD / 2 + 0.001] }))
 
+// ---------- round 6 (2026-10-23): colours matched on the reference's backdrop (shot.ts --bg), hue, saturation and value
+// together per material class (hsvcls: warm wood / grey metal medians, reference vs render)
+pal({ brl4: "#947054", brl4Head: "#b38b68", hoop4: { color: "#736d66", metal: 0.6, rough: 0.5 },
+  cr4W: "#958b6b", cr4W2: "#888060", cr4L: "#a09877", cr4L2: "#968f6e", cr4Hw: "#8d9163", canvas4: "#9c9c92" })
+model("barrel_v4",
+  lathe([0, 0, ...BRP.flatMap((r, i) => [r * BRH, i * 0.1 * BRH]), 0.318 * BRH, BRH, 0.318 * BRH, 0.96 * BRH, 0, 0.96 * BRH], { mat: "brl4", sides: 30 }),
+  [[0.958, 0.055], [0.862, 0.033], [0.687, 0.049], [0.32, 0.046], [0.142, 0.032], [0.046, 0.054]].map(([c, w]) =>
+    lathe([(brR(c - w / 2) + 0.008) * BRH, (c - w / 2) * BRH, (brR(c + w / 2) + 0.008) * BRH, (c + w / 2) * BRH], { mat: "hoop4", sides: 30 })),
+  [-2, -1, 0, 1, 2].map(k => { const z = k * 0.126 * BRH, half = Math.sqrt(Math.max(0, (0.318 * BRH) ** 2 - z * z))
+    return box(half * 2 * 0.98, 0.012, 0.12 * BRH, { mat: k % 2 ? "brl4Head" : "brl4", pos: [0, 0.96 * BRH + 0.004, z] }) }),
+  tf({ rot: [0, 20, 0] }, cyl(0.028 * BRH, 0.02 * BRH, { mat: "brlBung", sides: 10, rot: [90, 0, 0], pos: [0, 0.5 * BRH, 0.425 * BRH] })))
+model("crate_v4",
+  [0.19, 0.81].map(u => box(0.083 * CL, 0.104 * CH, CD, { mat: "crDark", pos: [cu(u), 0, 0] })),
+  planks(CL, 0.817 * CH, CD, { along: "x", across: "y", n: 3, gap: 0.004, tones: ["cr4W", "cr4W2"], at: [0, 0.052 * CH, 0], seed: 2 }),
+  planks(CL, 0.156 * CH, CD + 0.041 * CL, { along: "x", across: "z", n: 3, gap: 0.004, tones: ["cr4L", "cr4L2"], at: [0, 0.844 * CH, 0.0025 * CL], seed: 3 }),
+  [0.19, 0.81].map(u => box(0.083 * CL, 0.042 * CH, CD, { mat: "cr4L", pos: [cu(u), CH, 0] })),
+  sym("x", sym("z", box(0.07 * CL, 0.567 * CH, 0.07 * CL, { mat: "cr4Hw", pos: [CL / 2 - 0.03 * CL, 0.215 * CH, CD / 2 - 0.03 * CL] }))),
+  // hasp straps: a metal strap from the lid edge down the front face to the draw latch, a staple loop over the lid seam
+  [0.256, 0.744].map(u => [box(0.03 * CL, 0.56 * CH, 0.008 * CL, { mat: "cr4Hw", pos: [cu(u), 0.44 * CH, CD / 2 + 0.024 * CL] }),
+    box(0.06 * CL, 0.16 * CH, 0.03 * CL, { mat: "cr4Hw", pos: [cu(u), 0.43 * CH, CD / 2] }),
+    box(0.075 * CL, 0.05 * CH, 0.014 * CL, { mat: "crDark", pos: [cu(u), 0.82 * CH, CD / 2 + 0.028 * CL] })]),
+  box(0.02, 0.69 * CH, CD + 0.06 * CL, { mat: "canvas4", pos: [-CL / 2 - 0.012, 0.16 * CH, 0] }),
+  extrude([0, 0.844 * CH, 0.14 * CL, 0.844 * CH, 0, 0.6 * CH], 0.012, { mat: "canvas4", pos: [-CL / 2, 0, CD / 2 + 0.001] }))
+
+// boulder v5: v2's two hulls (kept twice over the fused versions) with a crack cut deep and wide into the main body along
+// the measured line (v4's 0.035 slit read as a faint crease)
+model("boulder_v5",
+  subtract(hull({ mat: "bst", cap: "bstL", capAngle: 35, jitter: 0.025, seed: 4 }, bm(0, 0.62, 0.89, 0.58, 11), bm(-0.31, 0.54, 0.46, 0.5, 21, 0.6), bm(-0.07, 0.28, 0.51, 0.28, -21, 0.6),
+    box(0.22, 0.14, 0.24, { mat: "bst", pos: [0.06 * BW, 0.84, 0], rot: [0, 0, -9] })),
+    tf({ pos: [0.17 * BW, 0.38, 0.32], rot: [0, 0, 18] }, box(0.7, 0.1, 0.6, { mat: "bstD" }))),
+  hull({ mat: "bst", cap: "bstL", capAngle: 35, jitter: 0.02, seed: 5 }, bm(0.31, 0.55, 0.24, 0.28, -3, 0.5), bm(0.25, 0.25, 0.65, 0.44, -18, 0.7)))
+
 // Kept after the blind A/B against each reference. Round 1: broadleaf v2 (7-4), pine v1 (6-4). Round 2: maple v3, pine tie.
 // Round 3: boulder v2 (hull, 6-5), barrel v1 (8-4). Round 4: crate v1 (7-3), maple v5 (5-4); barrel v2, boulder v3 lost.
 // Round 5: crate v2 over v1 (7-6, hasp straps) and over v3 (6-5); boulder v4 (one hull + subtract() crack) lost 5-6,
