@@ -26,7 +26,7 @@ Round 2 merged to `grayson`. Proofs (gitignored, Envy): `.proof/2026-10-22-swamp
 ## 🗂️ Changed this session
 - Branch `claude/self-improving-design-loop-3215de` → `grayson` · `src/core/prims.ts`, `project.ts` (tube `top`), `lib/grayson/{nature,styles}.kx.js`, `smoke/swamp.kx.js`, `lib/grayson/{values,ab}.py`, `golden.sh` + goldens, `docs/DESIGN-LOOP.md`; skill `text-to-glb` (Skills-Private) steps 4-5 + round 12 lessons.
 - r2 decisions: day preview mood for kits (night preview judged lit pieces in other light); woodD stays dark (lifting it lost post/plank separation); thin organics go wide in one direction, not thick in two (lint-thick moss read as pegs); hanging assets are built resting (previews seat on the lowest point).
-- Decisions (+ why): fresh blind judge on shuffled pairs replaces "one grader per kit" (reused graders anchor; a fresh one has nothing to drift against); boardwalk stays level (modular piece must snap); toadstool stems keep their teal tint (no-light test: stems sit in cap shadow); flare height = 7% of tree height (shorter reads as a plinth on small trees); no stacked near-coplanar layers (AO darkens them, engines z-fight).
+- Decisions (+ why): fresh blind judge on shuffled pairs replaces "one grader per kit" (reused graders anchor; a fresh one has nothing to drift against); boardwalk stays level (modular piece must snap); toadstool stems: r1 kept the teal tint, r2 day mood shows them cream as the critic wanted; flare height = 7% of tree height (shorter reads as a plinth on small trees); no stacked near-coplanar layers (AO darkens them, engines z-fight).
 
 ---
 📜 Full session history: `handoff-log/` (one dated file per session, oldest to newest)
