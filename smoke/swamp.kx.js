@@ -6,10 +6,10 @@ include("../lib/grayson/props.kx.js")
 include("../lib/grayson/styles.kx.js")
 style("swamp")
 settings({ mood: "day" })  // review the lit pieces (hut, lantern, toadstools) under the same daylight as the rest
-pal({ reed: "#9aac58", cattail: "#9a5030", lily: "#5a8a3a", lilyL: "#7aa850", petal: "#f0e6f0", rope: "#9a8a68",
-  thatch: "#b09c58", thatchD: "#857238", capG: { color: "#4a8064", emit: "#4a9a74", glow: 1.25 }, stem: "#d8d2b8",
-  shelf: "#c89a58", glass: { color: "#ffe2a0", emit: "#ffc860", glow: 3 }, iron: { color: "#4a4e52", metal: 0.7, rough: 0.5 },
-  hangMoss: "#6f7345", barkG: "#a19378", ring: "#b89a6a", fung: "#e0a050", fungL: "#f2dcb0", gill: "#2e4a3e" })
+pal({ reed: "#b4c66a", cattail: "#9a5030", lily: "#5a8a3a", lilyL: "#7aa850", petal: "#f0e6f0", rope: "#9a8a68",
+  thatch: "#c8b26a", thatchD: "#857238", capG: { color: "#4a8064", emit: "#4a9a74", glow: 1.25 }, stem: "#b4ad94",
+  shelf: "#c89a58", glass: { color: "#ffe2a0", emit: "#ffc860", glow: 3 }, iron: { color: "#646a72", metal: 0.7, rough: 0.5 },
+  hangMoss: "#8a9a6a", barkG: "#a19378", ring: "#b89a6a", fung: "#e0a050", fungL: "#f2dcb0", gill: "#2e4a3e" })
 
 // ---------- trees
 feature(0)
@@ -22,13 +22,13 @@ model("bald_cypress",
   [[1.0, 4.35, 0.5], [1.7, 4.4, 0.1], [-0.6, 4.65, -0.2], [0.3, 5.05, 0.9]].map(([x, y, z], i) =>
     tf({ pos: [x, y, z], rot: [0, i * 40, 0], scale: [1, 1, 0.3] }, tube([0, 0, 0, 0.03, -0.35, 0, -0.02, -0.7 - i * 0.1, 0.02], 0.11, { mat: "hangMoss", top: 0.04, sides: 4 }))))
 model("cypress_knees",
-  [[0, 0, 0.5], [0.3, 0.15, 0.3], [-0.25, 0.2, 0.26], [0.12, -0.3, 0.38], [-0.12, -0.12, 0.16], [0.38, -0.2, 0.14]].map(([x, z, h], i) =>
+  [[0, 0, 0.5], [0.3, 0.15, 0.3], [-0.25, 0.2, 0.26], [0.12, -0.3, 0.38], [-0.12, -0.12, 0.16], [0.38, -0.2, 0.2]].map(([x, z, h], i) =>
     tf({ pos: [x, 0, z], rot: [(i - 2) * 6, i * 50, (i % 3 - 1) * 12] }, (w => [
-      lathe([w * 1.25, 0, w * 1.3, h * 0.3, w * 1.12, h * 0.58, w * 0.85, h * 0.8, w * 0.5, h * 0.95, 0, h], { mat: i % 2 ? "bark" : "barkD", sides: S(7), wobble: WB(0.3), jitter: 0.015, seed: i }),
-      sphere(w * 0.55, { mat: "barkG", pos: [0, h * 0.92, 0], scale: [1, 0.6, 1], detail: SD(0) })])(0.08 + h * 0.2))),
-  sphere(0.45, { mat: "grassD", scale: [1.15, 0.12, 1], pos: [0.05, 0, -0.03], detail: SD(1), wobble: WB(0.3), jitter: 0.02 }))
+      lathe([w * 1.3, 0, w * 1.05, h * 0.2, w * 0.85, h * 0.5, w * 0.55, h * 0.78, w * 0.3, h * 0.94, 0, h], { mat: i % 2 ? "bark" : "barkD", sides: S(7), wobble: WB(0.3), jitter: 0.015, seed: i }),
+      sphere(w * 0.35, { mat: "barkG", pos: [0, h * 0.93, 0], scale: [1, 0.7, 1], detail: SD(0) })])(0.06 + h * 0.16))),
+  sphere(0.42, { mat: "grass", scale: [1.1, 0.12, 1], pos: [0.05, 0, -0.03], detail: SD(1), wobble: WB(0.3), jitter: 0.02 }))
 model("dead_snag",
-  trunk(2.4, { r: 0.29, flare: 1.9, mat: "barkG", lean: [-0.25, 0.1], branches: [[0.6, 1.9, 0.1], [-0.7, 2.2, -0.2], [-0.5, 1.45, 0.4]] }),
+  trunk(2.4, { r: 0.29, flare: 1.9, mat: "barkG", lean: [-0.25, 0.1], branches: [[0.6, 1.9, 0.1], [-0.7, 2.2, -0.2], [-0.5, 1.45, 0.4], [1.05, 1.5, -0.55]] }),
   [[-0.06, 0.25, 15], [0.05, 0.18, -20], [0, 0.32, 5]].map(([x, h, a]) => cone(0.07, h, { mat: "ring", sides: 4, pos: [-0.24 + x, 2.35, 0.1], rot: [0, a * 3, a] })),
   [0.4, 1.1, 1.7].map(y => box(0.03, 0.3, 0.02, { mat: "barkD", pos: [-0.03 * y, y, 0.16], rot: [0, 0, 4], minor: true })))
 model("mangrove_roots",
@@ -43,8 +43,12 @@ model("lily_pads",
   [[0, 0, 0.32, 0], [0.55, 0.2, 0.24, 1], [-0.42, 0.38, 0.2, 2], [0.22, -0.5, 0.28, 3], [-0.33, -0.33, 0.16, 4]].map(([x, z, r, i]) =>
     extrude([...Array(S(9))].flatMap((_, k, arr) => { const a = 0.35 + (k / (arr.length - 1)) * 5.6; return [Math.cos(a) * r, Math.sin(a) * r] }).concat([0, 0]),
       0.025, { mat: i % 2 ? "lily" : "lilyL", rot: [90, i * 47, 0], pos: [x, 0.025 + i * 0.006, z] })),
-  [0, 72, 144, 216, 288].map((a, i) => tf({ rot: [0, a, 0] }, sphere(0.08, { mat: i % 2 ? "petal" : "stem", pos: [0.07, 0.1, 0], scale: [1.3, 0.6, 0.7], rot: [0, 0, 25], detail: SD(0) }))),
-  sphere(0.045, { mat: "shelf", pos: [0, 0.14, 0], detail: SD(0) }))
+  [[0, 0, 0.32, 0], [0.55, 0.2, 0.24, 1], [-0.42, 0.38, 0.2, 2], [0.22, -0.5, 0.28, 3], [-0.33, -0.33, 0.16, 4]].map(([x, z, r, i]) =>
+    tf({ rot: [90, i * 47, 0], pos: [x, 0.025 + i * 0.006, z] }, tube([...Array(10)].flatMap((_, k) => { const a = 0.45 + (k / 9) * 5.4; return [Math.cos(a) * r * 0.97, Math.sin(a) * r * 0.97, 0.0125] }),
+      0.02, { mat: i % 2 ? "lily" : "lilyL", sides: 5 }))),
+  [0, 60, 120, 180, 240, 300].map((a, i) => tf({ rot: [0, a, 0] }, sphere(0.1, { mat: "petal", pos: [0.1, 0.1, 0], scale: [1.3, 0.55, 0.65], rot: [0, 0, 22], detail: SD(0) }))),
+  [30, 150, 270].map(a => tf({ rot: [0, a, 0] }, sphere(0.07, { mat: "stem", pos: [0.05, 0.15, 0], scale: [1.2, 0.6, 0.7], rot: [0, 0, 35], detail: SD(0) }))),
+  sphere(0.05, { mat: "shelf", pos: [0, 0.18, 0], detail: SD(0) }))
 model("cattails",
   sphere(0.2, { mat: "grassD", scale: [1, 0.35, 1], detail: SD(1), wobble: WB(0.3), jitter: 0.02 }),
   blades(8, { h: 1.1, w: 0.06, sides: 4, spread: 0.28, tones: ["reed", "grass"], seed: 3, bend: 0.35 }),
@@ -55,23 +59,21 @@ model("cattails",
 model("moss_branch",
   cyl(0.12, 0.012, { mat: "ring", sides: 10, rot: [0, 0, 90], pos: [-0.9, 0.13, 0] }),
   [[0.06, 0.1, 10], [-0.05, 0.07, -25]].map(([z, h, a]) => cone(0.05, h, { mat: "bark", sides: 4, pos: [-0.9, 0.17, z], rot: [0, a, 90] })),
-  tube([-0.9, 0.13, 0, -0.5, 0.14, 0.08, -0.1, 0.13, -0.04, 0.35, 0.12, 0.03, 0.9, 0.08, -0.05], [0.13, 0.125, 0.11, 0.095, 0.06], { mat: "bark", sides: 10 }),
-  tube([0.35, 0.14, 0.03, 0.55, 0.32, 0.2, 0.65, 0.5, 0.3], 0.055, { mat: "bark", top: 0.02 }),
-  [[-0.62, 0.16, 1], [-0.32, 0.09, -1], [-0.05, 0.15, 1], [0.38, 0.08, -1], [0.66, 0.12, 1]].map(([x, r, side], i) => [
-    sphere(r, { mat: i % 2 ? "moss" : "hangMoss", pos: [x, 0.24, side * 0.02], scale: [1.5, 0.6, 1.4], detail: SD(1), jitter: 0.012, seed: i })]))
+  tube([-0.9, 0.13, 0, -0.5, 0.14, 0.08, -0.1, 0.13, -0.04, 0.35, 0.12, 0.03, 0.9, 0.08, -0.05], [0.13, 0.125, 0.11, 0.095, 0.06], { mat: "bark", sides: 10, cap: "moss", capAngle: 55 }),
+  tube([0.35, 0.14, 0.03, 0.55, 0.3, 0.2, 0.7, 0.55, 0.32, 0.78, 0.72, 0.36], [0.065, 0.05, 0.035, 0.02], { mat: "bark" }),
+  [[-0.55, 0.13, 0.14, 0.13], [-0.08, 0.11, 0.18, 0.11], [0.45, 0.1, 0.15, 0.09]].map(([x, y, r, w], i) => sphere(r, { mat: "moss", pos: [x, y + r * 0.45, 0], scale: [1.7, 0.75, w / r], detail: SD(1), wobble: WB(0.3), jitter: 0.012, seed: i })))
 
 // ---------- ground clutter
 model("fungus_stump",
-  [0, 72, 144, 216, 288].map((a, i) => tf({ rot: [0, a + 20, 0] }, cone(0.15, 0.27, { mat: "barkD", sides: S(5), pos: [0.2, -0.05, 0], rot: [0, 0, 30], jitter: 0.02 }))),
-  cyl(0.3, 0.61, { mat: "bark", sides: S(9), top: 0.25, pos: [0, -0.06, 0], wobble: WB(), jitter: 0.035 }),
-  [[10, 0.22, 8], [48, 0.12, -6], [95, 0.17, 12], [150, 0.07, 0]].map(([a, h, t], i) => tf({ rot: [0, a, 0] }, cone(0.09 - i * 0.008, h, { mat: "barkD", sides: 4, pos: [0.2, 0.54, 0], rot: [t, 0, -8] }))),
+  lathe([0.4, 0, 0.33, 0.05, 0.3, 0.14, 0.27, 0.55, 0, 0.55], { mat: "bark", sides: S(9), wobble: WB(), jitter: 0.03 }),
+  [[10, 0.22, 8], [48, 0.12, -6], [95, 0.17, 12], [150, 0.07, 0]].map(([a, h, t], i) => tf({ rot: [0, a, 0] }, cone(0.08 - i * 0.008, h, { mat: "barkD", sides: 4, pos: [0.17, 0.54, 0], rot: [t, 0, -8] }))),
   cyl(0.19, 0.012, { mat: "ring", sides: S(9), pos: [0, 0.55, 0] }),
-  [[0.12, 0.26], [0.28, 0.2], [0.42, 0.15], [0.2, 0.17]].map(([y, r], i) => tf({ rot: [0, -30 + i * 22, 0] },
-    cyl(r, 0.045, { mat: "fung", cap: "fungL", capAngle: 30, sides: S(8), scale: [1, 1, 0.6], pos: [0.27, y, 0], smooth: 40 }))))
+  [[0.12, 0.26], [0.28, 0.2], [0.42, 0.15]].map(([y, r], i) => tf({ rot: [0, -30 + i * 30, 0] },
+    lathe([r, 0, r, 0.025, r * 0.8, 0.05, 0, 0.05], { mat: "fung", cap: "fungL", capAngle: 20, sides: S(8), scale: [1, 1, 0.6], pos: [0.27, y, 0] }))))
 model("mossy_boulders", mossRock(0.5, { seed: 21, squash: 0.95 }), tf({ pos: [0.6, -0.5 * 0.95 * 0.7 + 0.28 * 0.9 * 0.7, 0.3] }, mossRock(0.28, { seed: 22, squash: 0.9 })), tf({ pos: [-0.45, -0.5 * 0.95 * 0.7 + 0.2 * 0.9 * 0.7, 0.35] }, mossRock(0.2, { seed: 23, squash: 0.9 })))
 model("glow_toadstools",
-  sphere(0.15, { mat: "ground", scale: [1.2, 0.16, 1], detail: SD(1), wobble: WB(0.2), jitter: 0.01 }),
-  [[0, 0, 1.4], [0.12, 0.08, 0.7], [-0.1, 0.1, 0.6], [0.05, -0.12, 0.8], [-0.14, -0.05, 0.5]].map(([x, z, s]) =>
+  sphere(0.15, { mat: "ground", scale: [1.25, 0.16, 1.05], detail: SD(1), wobble: WB(0.2), jitter: 0.01 }),
+  [[0, 0, 1.4], [0.14, 0.09, 0.7], [-0.115, 0.115, 0.6], [0.06, -0.14, 0.8], [-0.16, -0.06, 0.5]].map(([x, z, s]) =>
     tf({ pos: [x, 0, z], scale: [s, s, s], rot: [(x * 90) | 0, 0, (z * 90) | 0] }, lathe([0.04, 0, 0.032, 0.03, 0.022, 0.07, 0.02, 0.14], { mat: "stem", sides: S(6) }),
       lathe([0.08 + x * 0.1, 0, 0.07, 0.025 + z * 0.08, 0.03, 0.06, 0, 0.065], { mat: "capG", sides: S(8), pos: [0, 0.13, 0], smooth: 50 }))),
   light({ type: "point", color: "#9fe8c8", power: 3, pos: [0, 0.35, 0.15] }))
@@ -89,7 +91,7 @@ model("log_bridge",
 model("boardwalk",
   [...Array(10)].map((_, i) => box(1.0 + (i % 3) * 0.06, 0.05, 0.22, { mat: i % 2 ? "wood" : "woodL", pos: [(i % 2) * 0.04 - 0.02, 0.5, -1.1 + i * 0.245], rot: [0, (i % 3 - 1) * 2, 0] })),
   sym("x", box(0.08, 0.1, 2.5, { mat: "woodD", pos: [0.42, 0.4, 0] })),
-  sym("x", [-1.1, 0, 1.1].map(z => cyl(0.1, z ? 0.75 : 0.5, { mat: "barkD", sides: S(7), pos: [0.42, 0, z], top: 0.085, rot: [z * 3, 0, z ? -3 : 2], jitter: 0.01 }))))
+  sym("x", [-1.22, 0, 1.22].map(z => cyl(0.1, z ? 0.63 : 0.5, { mat: "barkD", sides: S(7), pos: [0.42, 0, z], top: 0.085, jitter: 0.01 }))))
 feature(3.25)
 model("stilt_hut",
   sym("x", sym("z", cyl(0.16, 1.4, { mat: "bark", sides: S(6), pos: [0.88, 0, 0.72], top: 0.12, rot: [3, 0, -3], jitter: 0.01 }))),
@@ -101,13 +103,14 @@ model("stilt_hut",
   box(0.4, 0.75, 0.02, { mat: "woodD", pos: [-0.35, 1.28, 0.605] }),
   box(0.3, 0.3, 0.02, { mat: "glass", pos: [0.4, 1.68, 0.605] }),
   prism(2.1, 1.0, 1.8, { mat: "thatch", pos: [0, 2.38, -0.05], jitter: 0.03 }),
+  sym("x", box(0.14, 0.07, 1.84, { mat: "thatchD", pos: [1.0, 2.36, -0.05] })),  // dark eave trim (one board, not a parallel sheet)
   box(F(0.04) * 2.2, F(0.04) * 2.2, 1.9, { mat: "woodL", pos: [0, 3.33, -0.05] }),
   [-0.6, -0.1].map(x => tf({ pos: [x, 0, 1.9], rot: [-41, 0, 0] }, box(0.07, 1.6, 0.07, { mat: "woodD" }))),
   [0.2, 0.4, 0.6, 0.8].map(t => box(0.5, 0.04, 0.12, { mat: "wood", pos: [-0.35, 1.2 * t, 1.9 - 1.05 * t] })),
   light({ type: "point", color: "#ffc070", power: 30, pos: [0.4, 1.8, 0.9] }))
 feature(1.7)
 model("lantern_post",
-  box(0.28, 0.12, 0.28, { mat: "woodD" }), box(0.2, 1.7, 0.2, { mat: "barkD" }), box(0.45, 0.09, 0.09, { mat: "woodD", pos: [0.2, 1.61, 0] }), tf({ pos: [0.13, 1.42, 0], rot: [0, 0, -45] }, box(0.08, 0.32, 0.08, { mat: "woodD" })),
+  box(0.28, 0.12, 0.28, { mat: "woodD" }), box(0.2, 1.7, 0.2, { mat: "bark", smooth: 0 }), box(0.45, 0.09, 0.09, { mat: "woodD", pos: [0.2, 1.61, 0] }), tf({ pos: [0.13, 1.42, 0], rot: [0, 0, -45] }, box(0.08, 0.32, 0.08, { mat: "woodD" })),
   [0, 1].map(k => torus(F(0.02) * 1.3, F(0.02) * 0.45, { mat: "iron", rings: 8, sides: 4, rot: [90 * (k % 2), 0, 0], pos: [0.38, 1.6 - k * 0.06, 0], minor: true })),
   cyl(0.08, 0.2, { mat: "glass", sides: S(6), pos: [0.38, 1.22, 0] }), cone(0.11, 0.1, { mat: "iron", sides: S(6), pos: [0.38, 1.42, 0] }),
   cyl(0.09, 0.025, { mat: "iron", sides: S(6), pos: [0.38, 1.2, 0] }),

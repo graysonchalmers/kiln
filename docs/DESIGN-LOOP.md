@@ -56,3 +56,18 @@ nothing to drift against. (Replaces "one grader per kit" from the earlier text-t
 - Left for round 3: cattail blades need a bend (`blades()` recipe); moss as a colour on the rock's own faces (no
   separate shell); log and moss-branch undersides and one mangrove view under the value floor (`values.py` now takes the
   worst of hero/front/right); lantern needs a judged look under day light; thin poles (snag, mangrove stem).
+
+## Rounds 3-4: swamp kit (2026-10-23)
+
+- Core: `cap` / `capAngle` on any shape (moss, snow, a shelf's cream top on the shape's own up faces; no second shell);
+  `blades({ bend })` (tapered arcs); pack overview honors `settings({ mood })`. Recipes: `mossRock()` is one capped rock;
+  `trunk()` branches leave near level and upturn, radius per point.
+- R3 blind A/B: after 6 / before 5 / tie 4, **kit sheet to before**. A lighter, redder wood ladder (the colour critic's
+  value-floor fix) blended posts into decks and walls into the window glow; a round knee shape (form critic) read as
+  boulders; olive moss read as mud. R4 reverted those, then: after 9 / before 2 / tie 6 vs round 3, and **after 10 of 14 +
+  kit sheet vs round 2** (the previous champion). Final targeted re-judge vs round 2: kit sheet, lantern, moss branch after;
+  boardwalk, hut tie; knees and toadstools before -> spacing reverted to round 2 (after the last judgment, not re-judged).
+- Process change: **judge each round against the champion, not just the previous round.** Round 3 lost overall and would
+  have become the baseline if only round-to-round deltas were judged.
+- Left: lantern post diagonal seam (per-vertex baked AO interpolated across one tall quad: subdivide long faces before
+  baking, in core); log underside V13; cypress hanging moss barely reads; mangrove canopy 8 small masses.

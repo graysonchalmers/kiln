@@ -56,6 +56,7 @@ The last argument is a material key, or an options object with `mat` plus:
 | `pos`, `rot`, `scale` | Placement (scale, then rotate, then move). Rotation pivots on the shape's origin. |
 | `jitter` | Move welded vertices randomly by up to this distance (hand-made look). |
 | `seed` | Jitter seed (and rock shape). |
+| `cap`, `capAngle` | Faces pointing up within `capAngle` degrees (default 50, edge broken by noise) take material `cap`: moss, snow or a shelf top on the shape's own faces, no second shell. |
 
 | Shape | Origin | Options |
 |---|---|---|
