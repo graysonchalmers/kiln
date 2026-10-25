@@ -1,0 +1,20 @@
+{
+ "name": "painted",
+ "size": 512,
+ "normal": "gl",
+ "depth": 0.012,
+ "seam": {
+  "worst": 1.24,
+  "map": "height"
+ },
+ "maps": {
+  "albedo": "painted_albedo.png",
+  "normal": "painted_normal.png",
+  "height": "painted_height.png",
+  "roughness": "painted_roughness.png",
+  "metallic": "painted_metallic.png",
+  "ao": "painted_ao.png",
+  "orm": "painted_orm.png",
+  "emissive": null
+ }
+}

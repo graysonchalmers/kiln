@@ -1,0 +1,20 @@
+{
+ "name": "metal",
+ "size": 512,
+ "normal": "gl",
+ "depth": 0.01,
+ "seam": {
+  "worst": 0.96,
+  "map": "albedo"
+ },
+ "maps": {
+  "albedo": "metal_albedo.png",
+  "normal": "metal_normal.png",
+  "height": "metal_height.png",
+  "roughness": "metal_roughness.png",
+  "metallic": "metal_metallic.png",
+  "ao": "metal_ao.png",
+  "orm": "metal_orm.png",
+  "emissive": null
+ }
+}

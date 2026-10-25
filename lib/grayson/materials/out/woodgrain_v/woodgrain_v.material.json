@@ -1,0 +1,20 @@
+{
+ "name": "woodgrain_v",
+ "size": 512,
+ "normal": "gl",
+ "depth": 0.015,
+ "seam": {
+  "worst": 1,
+  "map": "normal"
+ },
+ "maps": {
+  "albedo": "woodgrain_v_albedo.png",
+  "normal": "woodgrain_v_normal.png",
+  "height": "woodgrain_v_height.png",
+  "roughness": "woodgrain_v_roughness.png",
+  "metallic": "woodgrain_v_metallic.png",
+  "ao": "woodgrain_v_ao.png",
+  "orm": "woodgrain_v_orm.png",
+  "emissive": null
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "name": "canvas",
+ "size": 512,
+ "normal": "gl",
+ "depth": 0.008,
+ "seam": {
+  "worst": 1.12,
+  "map": "albedo"
+ },
+ "maps": {
+  "albedo": "canvas_albedo.png",
+  "normal": "canvas_normal.png",
+  "height": "canvas_height.png",
+  "roughness": "canvas_roughness.png",
+  "metallic": "canvas_metallic.png",
+  "ao": "canvas_ao.png",
+  "orm": "canvas_orm.png",
+  "emissive": null
+ }
+}
