@@ -105,8 +105,10 @@ cut by [reel](https://github.com/graysonchalmers/reel/tree/grayson/showcase/swam
 
 ![Reference, flat and loom-textured builds](docs/media/loom_before_after.png)
 
-Reference, flat build, loom PBR build. Barrel and crate won the blind A/B and are kept textured;
-the boulder stays flat.
+Reference, flat build, loom PBR build. Barrel and crate won the blind A/B and are kept textured.
+The boulder's crack-decal stone lost; a softer stone (broad low-contrast value, no hard shapes) won the retry 6-5:
+
+![Boulder: reference, flat, three soft-stone variants](docs/media/boulder_soft_stone.png)
 
 ### What the agent sees
 

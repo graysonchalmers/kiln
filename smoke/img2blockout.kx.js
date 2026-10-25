@@ -136,10 +136,10 @@ model("boulder_v1",
 // boulder v2: the same 6 masses joined by hull(): main body (M1 + cap + nose + belly) and the right shoulder + low slab as
 // two hulls, so the crack/step between them stays concave; v1's separate rocks read as a pile.
 const bm = (fx, fy, w, h, roll, d = 0.75) => tf({ pos: [fx * BW, fy, 0], rot: [0, 0, roll], scale: [w / h, 1, d / h] }, sphere(h / 2, { mat: "bst", detail: 1 }))
-const boulder_v2 = () => [
-  hull({ mat: "bst", cap: "bstL", capAngle: 35, jitter: 0.025, seed: 4 }, bm(0, 0.62, 0.89, 0.58, 11), bm(-0.31, 0.54, 0.46, 0.5, 21, 0.6), bm(-0.07, 0.28, 0.51, 0.28, -21, 0.6),
-    box(0.22, 0.14, 0.24, { mat: "bst", pos: [0.06 * BW, 0.84, 0], rot: [0, 0, -9] })),
-  hull({ mat: "bst", cap: "bstL", capAngle: 35, jitter: 0.02, seed: 5 }, bm(0.31, 0.55, 0.24, 0.28, -3, 0.5), bm(0.25, 0.25, 0.65, 0.44, -18, 0.7))]
+const boulder_v2 = (m = "bst", c = "bstL") => [
+  hull({ mat: m, cap: c, capAngle: 35, jitter: 0.025, seed: 4 }, bm(0, 0.62, 0.89, 0.58, 11), bm(-0.31, 0.54, 0.46, 0.5, 21, 0.6), bm(-0.07, 0.28, 0.51, 0.28, -21, 0.6),
+    box(0.22, 0.14, 0.24, { mat: m, pos: [0.06 * BW, 0.84, 0], rot: [0, 0, -9] })),
+  hull({ mat: m, cap: c, capAngle: 35, jitter: 0.02, seed: 5 }, bm(0.31, 0.55, 0.24, 0.28, -3, 0.5), bm(0.25, 0.25, 0.65, 0.44, -18, 0.7))]
 model("boulder_v2", boulder_v2())
 
 // maple v4: a tall crown along a 45 deg diagonal (judge: ~0.85 w:h, v3 ~1.2), a hull core so no background shows between
@@ -332,7 +332,7 @@ model("boulder_v5",
 // vs the flat builds: barrel and crate won (kept); boulder lost (crack decal read as blotches), trees tied (kept flat). Each key gets a
 // near-white loom detail map (lib/grayson/materials) tinted by its measured hex, lifted by the map's mean so the
 // average colour holds (kiln multiplies albedo by color).
-const MATS = "../lib/grayson/materials/out/", MEAN = { woodgrain: 0.884, woodgrain_v: 0.884, painted: 0.868, metal: 0.867, canvas: 0.916 }
+const MATS = "../lib/grayson/materials/out/", MEAN = { woodgrain: 0.884, woodgrain_v: 0.884, painted: 0.868, metal: 0.867, canvas: 0.916, stone_broad: 0.871 }
 const lift = (hex, m) => "#" + [1, 3, 5].map(i => { const c = parseInt(hex.slice(i, i + 2), 16) / 255, l = (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4) / MEAN[m] ** 2.2,
   o = Math.min(1, l <= 0.0031308 ? l * 12.92 : 1.055 * l ** (1 / 2.4) - 0.055); return Math.round(o * 255).toString(16).padStart(2, "0") }).join("")
 const T = (m, hex, uv, o = {}) => ({ tex: MATS + m, color: lift(hex, m), uv, ...o })
@@ -340,5 +340,8 @@ pal({ brl1: T("woodgrain_v", "#6a5038", 0.9), brlHead: T("woodgrain", "#806446",
   cr2W: T("painted", "#9c9470", 0.8), cr2W2: T("painted", "#8f8865", 0.8), cr2L: T("painted", "#a8a27d", 0.8), cr2L2: T("painted", "#9e9873", 0.8),
   crDark: T("woodgrain", "#272519", 0.6), crHw: T("metal", "#58593d", 0.4), canvas: T("canvas", "#64645d", 0.4) })
 for (const [n, f] of Object.entries({ barrel_v1, crate_v2 })) model(n + "_t", f())
+// boulder_v2_t (soft stone, no crack decal): broad low-contrast value variation; beat flat 6-5 (2026-10-25 retry)
+pal({ bstT: T("stone_broad", "#6a5440", 0.7), bstLT: T("stone_broad", "#86705c", 0.7) })
+model("boulder_v2_t", boulder_v2("bstT", "bstLT"))
 
-pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_v2", "barrel_v1_t", "crate_v2_t"])
+pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_v2_t", "barrel_v1_t", "crate_v2_t"])

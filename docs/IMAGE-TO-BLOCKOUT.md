@@ -168,8 +168,10 @@ kept model's geometry (bodies wrapped as functions). GLBs pass glTF-Validator (0
 | barrel | textured 7 vs 6 (stave grain, worn hoops) | barrel_v1_t |
 | crate | textured 7 vs 6 (plank grain, paint chips) | crate_v2_t |
 | boulder | flat 6 vs 5 (crack decal read as cork/camouflage, flattened facets) | boulder_v2 |
+| boulder retry (soft `stone_broad`) | textured 6 vs 5, three fresh judges (soft mottle + grain and a warm/cool hue drift also won 6-5; 3-way pick a tie, slight edge to broad) | boulder_v2_t |
 | broadleaf, maple, pine | ties (bark/leaf mottling barely visible) | flat |
 
 Lessons: grain must follow the part (box projection on a lathe put stripes across the staves until a rotated
 `woodgrain_v`); decals with hard dark shapes fight low-poly facet shading; canopy puffs gain nothing from texture at
-judging distance. The preview renderer shows albedo only, so the identity cue has to live in the albedo.
+judging distance. Stone wants broad, low-contrast value variation with no hard shapes (`docs/media/boulder_soft_stone.png`); the
+judges' remaining gap is value/hue (ref is lighter, rust-orange and grey-tan), not the map. The preview renderer shows albedo only, so the identity cue has to live in the albedo.

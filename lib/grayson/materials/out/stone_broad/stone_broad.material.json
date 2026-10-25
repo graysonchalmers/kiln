@@ -1,0 +1,20 @@
+{
+ "name": "stone_broad",
+ "size": 512,
+ "normal": "gl",
+ "depth": 0.02,
+ "seam": {
+  "worst": 0.56,
+  "map": "albedo"
+ },
+ "maps": {
+  "albedo": "stone_broad_albedo.png",
+  "normal": "stone_broad_normal.png",
+  "height": "stone_broad_height.png",
+  "roughness": "stone_broad_roughness.png",
+  "metallic": "stone_broad_metallic.png",
+  "ao": "stone_broad_ao.png",
+  "orm": "stone_broad_orm.png",
+  "emissive": null
+ }
+}
