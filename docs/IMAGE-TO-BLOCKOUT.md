@@ -153,3 +153,23 @@ All pairs rendered on the reference's light-grey backdrop (`shot.ts --bg`).
   flat blockout lacks, so a flat colour at the reference's median reads lighter and warmer than the reference. Next: match
   a lower value percentile (or the mean including the dark detail), and judge flat colour against a blurred reference.
 - A deeper crack moved about 590 pixels and the judge near-tied it; at blockout scale cracks matter less than mass.
+
+## Loom textures (2026-10-25)
+
+Kiln already consumed loom (`pal({ k: { tex, uv, bump, color } })`: box-projected UVs, albedo + ORM + GL normal embedded,
+flat colour stays the default), so no core change. Materials: `lib/grayson/materials/assets.tx.js` (woodgrain,
+woodgrain_v, painted, metal, canvas; all `seamless`), near-white detail maps tinted by each key's measured hex, the hex
+lifted by the map's mean so the average colour holds. Loom stays external: `lib/grayson/materials/build.sh`
+(`LOOM=<checkout>`); only the albedo/normal/ORM/manifest kiln reads are committed. Textured twins `<name>_t` share the
+kept model's geometry (bodies wrapped as functions). GLBs pass glTF-Validator (0 errors; tangents generated).
+
+| Object | Blind A/B flat vs textured (ref beside, `--bg #e6e6e6`) | Kept |
+|---|---|---|
+| barrel | textured 7 vs 6 (stave grain, worn hoops) | barrel_v1_t |
+| crate | textured 7 vs 6 (plank grain, paint chips) | crate_v2_t |
+| boulder | flat 6 vs 5 (crack decal read as cork/camouflage, flattened facets) | boulder_v2 |
+| broadleaf, maple, pine | ties (bark/leaf mottling barely visible) | flat |
+
+Lessons: grain must follow the part (box projection on a lathe put stripes across the staves until a rotated
+`woodgrain_v`); decals with hard dark shapes fight low-poly facet shading; canopy puffs gain nothing from texture at
+judging distance. The preview renderer shows albedo only, so the identity cue has to live in the albedo.
