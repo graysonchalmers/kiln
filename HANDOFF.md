@@ -1,6 +1,6 @@
 # 🧭 Session Handoff — Tool-Blockout3D (text / image → 3D blockout generator)
 
-_Last updated: 2026-10-25 (Envy): loom textures on the image-to-blockout pack._
+_Last updated: 2026-10-25 (Envy): loom textures on the image-to-blockout pack; swamp teaser + loom sheet in README showcase._
 
 ## 🎯 Current state
 Text / image → 3D blockout generator on a fork of `uilianks/kiln` (MIT, low-poly assets as code → GLB). Origin = `graysonchalmers/kiln`, work on branch **`grayson`**; `main` mirrors upstream, no upstream PR planned.
@@ -12,8 +12,10 @@ Text / image → 3D blockout generator on a fork of `uilianks/kiln` (MIT, low-po
 - Gate: `npm run check` (18/18) + `lib/grayson/golden.sh check` (12/12, repo-relative paths) + `node bin/kiln.js lint <scene>` (swamp clean) + `lib/grayson/values.py <out>` (worst of hero/front/right).
 
 ## 📌 Where we stopped
-**Loom textures (2026-10-25):** pack `img2blockout_best` now uses `barrel_v1_t` + `crate_v2_t` (loom-textured twins, won blind A/B); boulder lost, trees tied (stay flat). Materials `lib/grayson/materials/` (`build.sh`, loom external at `~/Projects-local/z-Git/uilianks/loom`). Doc: `docs/IMAGE-TO-BLOCKOUT.md` "Loom textures". Proof `.proof/2026-10-25-loom-textures/proof.png`. Next texture try: a softer stone (no hard crack decal) for the boulder.
+**Loom textures (2026-10-25):** pack `img2blockout_best` now uses `barrel_v1_t` + `crate_v2_t` (loom-textured twins, won blind A/B); boulder lost, trees tied (stay flat). Materials `lib/grayson/materials/` (`build.sh`, loom external at `~/Projects-local/z-Git/uilianks/loom`). Doc: `docs/IMAGE-TO-BLOCKOUT.md` "Loom textures". Proof (tracked copy) `docs/media/loom_before_after.png`. Next texture try: a softer stone (no hard crack decal) for the boulder.
 Image to blockout round 6 merged to `grayson` (nothing new kept: kept builds held on matched backdrops). Proofs (gitignored, Envy): `.proof/2026-10-23-img2blockout/r6/`, earlier `r5/round5.png` etc. Swamp rounds paused at r5. Target-look Inbox row still open.
+
+**Showcase (2026-10-25):** README has the swamp teaser (`docs/media/swamp_teaser.mp4`, 26.7 s, reel + chirp; sources in reel fork `grayson` `showcase/swamp/`, 5861d0f) and the loom before/after sheet. Sibling tools forked to graysonchalmers (`loom pxl vex chirp reel`, branch `grayson`), clones in `~/Projects-local/z-Git/uilianks/`.
 
 ## ▶️ Next concrete step
 **Image to blockout round 7:** colour against textured references: match a lower value percentile (not the median), judge on `--bg`. Then Grayson's own references, or a new object class (character, building). Swamp residuals (paused): hut glow, log underside V12-13, mangrove canopy, knees mat (never enlarge).

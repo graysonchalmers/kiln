@@ -94,6 +94,20 @@ A voxel hero, slime and chest beside low-poly trees, pines, rocks, crystals, a c
 a coin, a crate, a fence and a log cabin. It's one GLB with 17 named meshes and 3,858 triangles;
 the floating-island diorama is 5,514.
 
+### Swamp kit teaser (Grayson fork)
+
+![Swamp teaser contact sheet](docs/media/swamp_teaser_sheet.png)
+
+▶ **[26.7 s teaser with sound](docs/media/swamp_teaser.mp4)**: the swamp kit (`smoke/swamp.kx.js`) as kiln turntables,
+cut by [reel](https://github.com/graysonchalmers/reel/tree/grayson/showcase/swamp) to a chirp score.
+
+### loom textures on image-to-blockout (Grayson fork)
+
+![Reference, flat and loom-textured builds](docs/media/loom_before_after.png)
+
+Reference, flat build, loom PBR build. Barrel and crate won the blind A/B and are kept textured;
+the boulder stays flat.
+
 ### What the agent sees
 
 Every build writes a 4-view preview with dimensions, triangle count, grid scale and materials,
