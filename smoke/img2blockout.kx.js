@@ -16,7 +16,7 @@ pal({ pin: "#699d4b", pinL: "#75b545", pinD: "#4c7634", pbark: "#685852", ptwig:
 // pine: ogive (widest at 0.40H, bottom skirt narrower and left), ~7 drooping saw-tooth tiers, axis leans right to +0.08H,
 // blunt multi-tip crown, short flared trunk (0.18H visible), two bare twigs under the bottom skirt.
 const PH = 2.2
-model("pine_v1",
+const pine_v1 = () => [
   trunk(PH * 0.42, { r: PH * 0.03, flare: 1.7, taper: 0.6, mat: "pbark", lean: [PH * 0.02, 0] }),
   tube([-0.08 * PH, 0.2 * PH, 0, -0.14 * PH, 0.17 * PH, 0.02, -0.19 * PH, 0.13 * PH, 0.03], 0.014, { mat: "ptwig", top: 0.006 }),
   tube([0.04 * PH, 0.21 * PH, 0, 0.14 * PH, 0.2 * PH, -0.02, 0.23 * PH, 0.18 * PH, -0.03], 0.014, { mat: "ptwig", top: 0.006 }),
@@ -25,7 +25,8 @@ model("pine_v1",
       cone(hw * PH * 0.72, PH * 0.13, { mat: "pinD", sides: S(8), pos: [0, -PH * 0.07, 0], jitter: 0.02, seed: i }),
       fronds(8, { len: hw * PH, lift: 0.04, droop: 0.9, w0: hw * PH * 0.55, tip: 0.15, zig: 0.45, wild: 0.5, seed: 7 + i, tones: ["pin", "pinL"], thick: 0.03 }))),
   tf({ pos: [0.08 * PH, 0.86 * PH, 0] }, cone(0.11 * PH, 0.14 * PH, { mat: "pin", sides: S(6), jitter: 0.02 }),
-    fronds(4, { len: 0.1 * PH, lift: 0.12, droop: 0.2, w0: 0.06 * PH, zig: 0.4, seed: 3, tones: ["pinL", "pin"], thick: 0.03 })))
+    fronds(4, { len: 0.1 * PH, lift: 0.12, droop: 0.2, w0: 0.06 * PH, zig: 0.4, seed: 3, tones: ["pinL", "pin"], thick: 0.03 }))]
+model("pine_v1", pine_v1())
 
 // broadleaf: crown lopsided left (60% of foliage left of the axis), long bare bole (0.39H) tapering to 0.3x with a root
 // flare, kinks left into the crown at 0.36-0.53H, two-tier outline (narrow cap on a wide middle at 0.69H), toothed lobes.
@@ -74,12 +75,13 @@ model("pine_v2",
 // short left branch tucked in, no right stub
 const blobe = (x, y, rx, ry, seed, z = 0) => tf({ pos: [x * BH, y * BH, z * BH], scale: [1, ry / rx, 1] },
   canopy(rx * BH * 0.95, { seed, puffs: 6, wild: 0.6, tones: ["bl", "blL", "blD"] }))
-model("broadleaf_v2",
+const broadleaf_v2 = () => [
   tube([0.012 * BH, 0, 0, 0.008 * BH, 0.085 * BH, 0, -0.005 * BH, 0.18 * BH, 0, -0.02 * BH, 0.36 * BH, 0, -0.045 * BH, 0.46 * BH, 0, -0.066 * BH, 0.58 * BH, 0],
     [0.1, 0.085, 0.07, 0.055, 0.047, 0.04].map(r => r * BH), { mat: "blBark", sides: S(7), jitter: 0.01 }),
   tube([-0.06 * BH, 0.42 * BH, 0, -0.1 * BH, 0.43 * BH, 0.02], 0.012 * BH, { mat: "blBarkD", top: 0.006 * BH }),
   blobe(-0.01, 0.82, 0.175, 0.15, 1), blobe(-0.03, 0.66, 0.15, 0.15, 2, 0.05), blobe(-0.19, 0.67, 0.15, 0.15, 3),
-  blobe(-0.12, 0.52, 0.12, 0.09, 4), blobe(0.1, 0.6, 0.13, 0.13, 5), blobe(-0.06, 0.7, 0.14, 0.14, 6, -0.12))
+  blobe(-0.12, 0.52, 0.12, 0.09, 4), blobe(0.1, 0.6, 0.13, 0.13, 5), blobe(-0.06, 0.7, 0.14, 0.14, 6, -0.12)]
+model("broadleaf_v2", broadleaf_v2())
 
 // maple: one dense crown stretched along a 40 deg diagonal (lobes 1.6x, overlapping, upper-right end further out),
 // trunk straight along the lean, branches fanned and buried, saturated red-orange, no pebble puffs
@@ -134,10 +136,11 @@ model("boulder_v1",
 // boulder v2: the same 6 masses joined by hull(): main body (M1 + cap + nose + belly) and the right shoulder + low slab as
 // two hulls, so the crack/step between them stays concave; v1's separate rocks read as a pile.
 const bm = (fx, fy, w, h, roll, d = 0.75) => tf({ pos: [fx * BW, fy, 0], rot: [0, 0, roll], scale: [w / h, 1, d / h] }, sphere(h / 2, { mat: "bst", detail: 1 }))
-model("boulder_v2",
+const boulder_v2 = () => [
   hull({ mat: "bst", cap: "bstL", capAngle: 35, jitter: 0.025, seed: 4 }, bm(0, 0.62, 0.89, 0.58, 11), bm(-0.31, 0.54, 0.46, 0.5, 21, 0.6), bm(-0.07, 0.28, 0.51, 0.28, -21, 0.6),
     box(0.22, 0.14, 0.24, { mat: "bst", pos: [0.06 * BW, 0.84, 0], rot: [0, 0, -9] })),
-  hull({ mat: "bst", cap: "bstL", capAngle: 35, jitter: 0.02, seed: 5 }, bm(0.31, 0.55, 0.24, 0.28, -3, 0.5), bm(0.25, 0.25, 0.65, 0.44, -18, 0.7)))
+  hull({ mat: "bst", cap: "bstL", capAngle: 35, jitter: 0.02, seed: 5 }, bm(0.31, 0.55, 0.24, 0.28, -3, 0.5), bm(0.25, 0.25, 0.65, 0.44, -18, 0.7))]
+model("boulder_v2", boulder_v2())
 
 // maple v4: a tall crown along a 45 deg diagonal (judge: ~0.85 w:h, v3 ~1.2), a hull core so no background shows between
 // lobes, lumpy lobes on its surface for the clumpy edge, on v3's trunk
@@ -159,13 +162,14 @@ model("barrel_v0", lathe([0.25, 0, 0.3, 0.45, 0.25, 0.9, 0, 0.9], { mat: "brl", 
 pal({ brl1: "#6a5038", brlHead: "#806446", brlLip: "#977f66", brlBung: "#977656", hoop1: { color: "#59524c", metal: 0.6, rough: 0.5 } })
 const BRH = 0.9, BRP = [0.348, 0.368, 0.388, 0.412, 0.423, 0.429, 0.423, 0.412, 0.388, 0.368, 0.348]
 const brR = (h) => { const i = Math.min(9, Math.floor(h * 10)), t = h * 10 - i; return BRP[i] + (BRP[i + 1] - BRP[i]) * t }
-model("barrel_v1",
+const barrel_v1 = () => [
   lathe([0, 0, ...BRP.flatMap((r, i) => [r * BRH, i * 0.1 * BRH]), 0.318 * BRH, BRH, 0.318 * BRH, 0.96 * BRH, 0, 0.96 * BRH], { mat: "brl1", sides: 30 }),
   [[0.958, 0.055], [0.862, 0.033], [0.687, 0.049], [0.32, 0.046], [0.142, 0.032], [0.046, 0.054]].map(([c, w]) =>
     lathe([(brR(c - w / 2) + 0.008) * BRH, (c - w / 2) * BRH, (brR(c + w / 2) + 0.008) * BRH, (c + w / 2) * BRH], { mat: "hoop1", sides: 30 })),
   [-2, -1, 0, 1, 2].map(k => { const z = k * 0.126 * BRH, half = Math.sqrt(Math.max(0, (0.318 * BRH) ** 2 - z * z))
     return box(half * 2 * 0.98, 0.012, 0.12 * BRH, { mat: k % 2 ? "brlHead" : "brl1", pos: [0, 0.96 * BRH + 0.004, z] }) }),
-  tf({ rot: [0, 20, 0] }, cyl(0.028 * BRH, 0.02 * BRH, { mat: "brlBung", sides: 10, rot: [90, 0, 0], pos: [0, 0.5 * BRH, 0.425 * BRH] })))
+  tf({ rot: [0, 20, 0] }, cyl(0.028 * BRH, 0.02 * BRH, { mat: "brlBung", sides: 10, rot: [90, 0, 0], pos: [0, 0.5 * BRH, 0.425 * BRH] }))]
+model("barrel_v1", barrel_v1())
 
 // ---------- round 4 (2026-10-23)
 // barrel v2: v1 with hoops that read (judge: "thin dark bands that almost merge into the wood"): 35% wider, prouder,
@@ -190,12 +194,13 @@ model("boulder_v3",
 // maple v5: v3's clumpy merged lobes (no hull core) laid out along v4's tall 45 deg diagonal, brighter scarlet (judge: v3
 // "too dark, maroon")
 pal({ mapleS: "#e5352b", mapleSL: "#f45a46", mapleSD: "#b32a22" })
-model("maple_v5",
+const maple_v5 = () => [
   tube([0, 0, 0, mx(0.03), 0.1 * MH, 0, mx(0.1), 0.25 * MH, 0, mx(0.25), 0.36 * MH, 0, mx(0.35), 0.5 * MH, 0],
     [0.09, 0.065, 0.045, 0.024, 0.018].map(r => r * MH), { mat: "mBark", sides: S(7), jitter: 0.01 }),
   [[0.35, 0.5, 0.6, 0.72], [0.35, 0.5, 0.45, 0.85], [0.25, 0.36, 0.08, 0.5]].map(([a, b, c, d]) =>
     tube([a * MH, b * MH, 0, c * MH, d * MH, 0], 0.012 * MH, { mat: "mBarkD", top: 0.006 * MH })),
-  M4.map(([x, y, r], i) => canopy(r * MH * 1.0, { at: [x * MH, y * MH, (i % 2 ? 0.05 : -0.05) * MH], seed: 30 + i, puffs: 6, wild: 0.6, merge: 0.8, tones: ["mapleS", "mapleSL", "mapleSD"] })))
+  M4.map(([x, y, r], i) => canopy(r * MH * 1.0, { at: [x * MH, y * MH, (i % 2 ? 0.05 : -0.05) * MH], seed: 30 + i, puffs: 6, wild: 0.6, merge: 0.8, tones: ["mapleS", "mapleSL", "mapleSD"] }))]
+model("maple_v5", maple_v5())
 
 // crate (box-built hard surface: Poly Haven old_military_crate, CC0, by Jack Mava; the closed one of the thumbnail's two)
 pal({ crateG: "#5f6440" })
@@ -246,7 +251,7 @@ model("boulder_v4",
 // shadow tones as asked. Both go to the blind A/B.
 pal({ cr2W: "#9c9470", cr2W2: "#8f8865", cr2L: "#a8a27d", cr2L2: "#9e9873",
   cr2sW: "#524d39", cr2sW2: "#4a4533", cr2sL: "#625f48", cr2sL2: "#5a5742" })
-model("crate_v2",
+const crate_v2 = () => [
   [0.19, 0.81].map(u => box(0.083 * CL, 0.104 * CH, CD, { mat: "crDark", pos: [cu(u), 0, 0] })),
   planks(CL, 0.817 * CH, CD, { along: "x", across: "y", n: 3, gap: 0.004, tones: ["cr2W", "cr2W2"], at: [0, 0.052 * CH, 0], seed: 2 }),
   planks(CL, 0.156 * CH, CD + 0.041 * CL, { along: "x", across: "z", n: 3, gap: 0.004, tones: ["cr2L", "cr2L2"], at: [0, 0.844 * CH, 0.0025 * CL], seed: 3 }),
@@ -257,7 +262,8 @@ model("crate_v2",
     box(0.06 * CL, 0.16 * CH, 0.03 * CL, { mat: "crHw", pos: [cu(u), 0.43 * CH, CD / 2] }),
     box(0.075 * CL, 0.05 * CH, 0.014 * CL, { mat: "crDark", pos: [cu(u), 0.82 * CH, CD / 2 + 0.028 * CL] })]),
   box(0.02, 0.69 * CH, CD + 0.06 * CL, { mat: "canvas", pos: [-CL / 2 - 0.012, 0.16 * CH, 0] }),
-  extrude([0, 0.844 * CH, 0.14 * CL, 0.844 * CH, 0, 0.6 * CH], 0.012, { mat: "canvas", pos: [-CL / 2, 0, CD / 2 + 0.001] }))
+  extrude([0, 0.844 * CH, 0.14 * CL, 0.844 * CH, 0, 0.6 * CH], 0.012, { mat: "canvas", pos: [-CL / 2, 0, CD / 2 + 0.001] })]
+model("crate_v2", crate_v2())
 model("crate_v2s",
   [0.19, 0.81].map(u => box(0.083 * CL, 0.104 * CH, CD, { mat: "crDark", pos: [cu(u), 0, 0] })),
   planks(CL, 0.817 * CH, CD, { along: "x", across: "y", n: 3, gap: 0.004, tones: ["cr2sW", "cr2sW2"], at: [0, 0.052 * CH, 0], seed: 2 }),
@@ -322,4 +328,17 @@ model("boulder_v5",
 // Round 3: boulder v2 (hull, 6-5), barrel v1 (8-4). Round 4: crate v1 (7-3), maple v5 (5-4); barrel v2, boulder v3 lost.
 // Round 5: crate v2 over v1 (7-6, hasp straps) and over v3 (6-5); boulder v4 (one hull + subtract() crack) lost 5-6,
 // barrel v3 (values matched by measurement, wood went orange) lost 7-8, crate v2s (shadow tones) tied v1.
-pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_v2", "barrel_v1", "crate_v2"])
+// ---------- loom textures (2026-10-25): textured twins (`<name>_t`), same geometry. Blind A/B
+// vs the flat builds: barrel and crate won (kept); boulder lost (crack decal read as blotches), trees tied (kept flat). Each key gets a
+// near-white loom detail map (lib/grayson/materials) tinted by its measured hex, lifted by the map's mean so the
+// average colour holds (kiln multiplies albedo by color).
+const MATS = "../lib/grayson/materials/out/", MEAN = { woodgrain: 0.884, woodgrain_v: 0.884, painted: 0.868, metal: 0.867, canvas: 0.916 }
+const lift = (hex, m) => "#" + [1, 3, 5].map(i => { const c = parseInt(hex.slice(i, i + 2), 16) / 255, l = (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4) / MEAN[m] ** 2.2,
+  o = Math.min(1, l <= 0.0031308 ? l * 12.92 : 1.055 * l ** (1 / 2.4) - 0.055); return Math.round(o * 255).toString(16).padStart(2, "0") }).join("")
+const T = (m, hex, uv, o = {}) => ({ tex: MATS + m, color: lift(hex, m), uv, ...o })
+pal({ brl1: T("woodgrain_v", "#6a5038", 0.9), brlHead: T("woodgrain", "#806446", 0.9), brlBung: T("woodgrain", "#977656", 0.5), hoop1: T("metal", "#59524c", 0.5, { metal: 0.6, rough: 0.5 }),
+  cr2W: T("painted", "#9c9470", 0.8), cr2W2: T("painted", "#8f8865", 0.8), cr2L: T("painted", "#a8a27d", 0.8), cr2L2: T("painted", "#9e9873", 0.8),
+  crDark: T("woodgrain", "#272519", 0.6), crHw: T("metal", "#58593d", 0.4), canvas: T("canvas", "#64645d", 0.4) })
+for (const [n, f] of Object.entries({ barrel_v1, crate_v2 })) model(n + "_t", f())
+
+pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_v2", "barrel_v1_t", "crate_v2_t"])
