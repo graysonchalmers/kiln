@@ -352,4 +352,28 @@ pal({ brl1: T("woodgrain_v", sc("#6a5038", 1.322), 0.9), brlHead: T("woodgrain",
   hoop1: T("metal", sc("#59524c", 1.322), 0.5, { metal: 0.6, rough: 0.5 }) })
 model("barrel_r7", barrel_v1())
 
-pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_v2_t", "barrel_r7", "crate_v2_t"])
+// ---------- round 8 (2026-10-25): boulder craggy crown (form), crate olive hue from the reference's dark band
+// boulder r8a: v2_t's two hulls with the crown cut into flat tilted facets by subtract() slabs (a cut crown, not a dome).
+// A cutter is a box whose base plane passes through (fx, y, z), tilted rz/rx.
+const slab = (fx, y, z, w, rz, rx = 0) => tf({ pos: [fx * BW, y, z], rot: [rx, 0, rz] }, box(w, 0.6, 1.4, { mat: "bstT" }))
+// wide overlapping planes only: narrow cutters left fins between them, contained notches left a castle-like stub
+// (a flat top plane too made v3's losing plateau, so the peak stays)
+const crown = [slab(-0.62, 0.52, 0, 1.0, 36), slab(0.5, 0.66, 0, 1.0, -40), slab(0.32, 0.5, 0, 0.6, -24)]
+const boulder_r8a = () => [subtract(boulder_v2("bstT", "bstLT")[0], ...crown.slice(0, 2)), subtract(boulder_v2("bstT", "bstLT")[1], crown[2])]
+model("boulder_r8a", boulder_r8a())
+// boulder r8b: v2_t + an embedded cluster of angular chunks (jittered rotated boxes) on the crown: blocky fractured masses
+// with shadowed seams between them, like the reference's top; small horn crags read as ears and were dropped
+const chunk = (fx, y, z, w, h, d, rx, ry, rz, seed) => hull({ mat: "bstT", cap: "bstLT", capAngle: 30, jitter: 0.02, seed },
+  box(w, h, d, { mat: "bstT", pos: [fx * BW, y, z], rot: [rx, ry, rz] }))
+model("boulder_r8b", boulder_v2("bstT", "bstLT"), chunk(-0.2, 0.6, 0.08, 0.32, 0.26, 0.4, 12, 20, 24, 1), chunk(0.05, 0.66, 0.02, 0.3, 0.26, 0.42, -10, -25, -12, 2),
+  chunk(-0.4, 0.46, 0.12, 0.24, 0.22, 0.34, 20, 35, 30, 3), chunk(0.22, 0.56, 0.12, 0.22, 0.2, 0.3, -18, 10, -28, 4), chunk(-0.05, 0.42, 0.26, 0.26, 0.2, 0.2, 30, -15, 8, 5))
+
+// r8 blind A/B vs kept: boulder r8a 4.5-4, r8b 6-4; crate r8a 6.5-5, r8b 6.5-6. Head-to-head: boulder r8b 6-4.5, crate r8a 6.5-5.5 (r8b "too yellow-green"). Kept: boulder_r8b, crate_r8a.
+// crate r8a/r8b: wood tints from the reference's dark band (p0-40 of its object pixels: H51 S30 V35) instead of the median;
+// walls x0.75, lid x0.65 (lit from above, it rendered V62 vs the reference's 44). r8b nudges hue greener (H58 S34).
+pal({ cr2W: T("painted", "#757052", 0.8), cr2W2: T("painted", "#6b664b", 0.8), cr2L: T("painted", "#6d684c", 0.8), cr2L2: T("painted", "#676248", 0.8) })
+model("crate_r8a", crate_v2())
+pal({ cr2W: T("painted", "#75744d", 0.8), cr2W2: T("painted", "#6b6a47", 0.8), cr2L: T("painted", "#6d6c48", 0.8), cr2L2: T("painted", "#676644", 0.8) })
+model("crate_r8b", crate_v2())
+
+pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_r8b", "barrel_r7", "crate_r8a"])

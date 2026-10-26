@@ -193,3 +193,23 @@ judge per pair, reference beside it.
 - Value is no longer the gap. Judges name hue for the crate (yellow khaki vs olive drab) and hue + form for the boulder
   (rust and grey patches, craggy facets). Next colour round: match hue/saturation of the darker percentile band, not V alone;
   the boulder's next gain is form (craggy crown), not colour.
+
+## Round 8: craggy crown, olive from the dark band (2026-10-25)
+
+Shots on `--bg #e6e6e6`, boulder yaw 0 / pitch 15, crate yaw -15 / pitch 15 (recovered by matching r7's shots). One fresh
+blind judge per pair, reference beside it, then a head-to-head between the two winners.
+
+| Object | Variant | vs kept | Head-to-head | Kept now |
+|---|---|---|---|---|
+| boulder | r8a: v2_t with shoulders cut flat by wide `subtract()` planes | 4.5-4 | lost 4.5-6 | |
+| boulder | r8b: v2_t + five embedded angular chunks (jittered rotated boxes) on the crown | **6-4** ("stepped, broken crown, fractured") | **won 6-4.5** | boulder_r8b |
+| crate | r8a: wood tints from the ref's p0-40 band (H51 S30 V35), walls x0.75, lid x0.65 | **6.5-5** | **won 6.5-5.5** | crate_r8a |
+| crate | r8b: same values, hue H58 S34 | 6.5-6 | lost ("too yellow-green") | |
+
+- Form beat facet trimming: added fractured masses won where planar cuts only tidied the dome. Failed tries along the way:
+  narrow neighbouring cutters leave fins between them; contained notches leave a castle-like stub; a flat top plane
+  rebuilds v3's losing plateau; small stretched crags read as ears. `box` pos is base-anchored, so a cutter's pos is its cut plane.
+- The crate's "yellow" was value on the lid, not hue (ref and render hue were both ~H51). Darkening toward the dark band won;
+  pushing the hue greener lost. Judges still call it a little light and warm.
+- `values.py` flags crate_r8a wood lit 25 (swamp rule >= 35); kept builds were already flagged. Blind judge outranks the meter.
+- Next: boulder colour variation (rust/grey patches, judges' remaining gap), crate stencil marking, then Grayson's own refs.
