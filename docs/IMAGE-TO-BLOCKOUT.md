@@ -231,3 +231,24 @@ boulder win; a head-to-head between the two crate winners.
 - A marking is an identity cue: the triangle alone moved a full point, and abstract bars stand in for lettering at this scale.
 - Remaining gaps the judges name: the boulder tints are blocky (patches per face, not mottled), the crate reads a little tall
   and lacks the "12" in the triangle.
+
+## Round 10: mottled stone, lower crate (2026-10-25)
+
+Same cameras and backdrop. One fresh blind judge per pair vs the kept build, a head-to-head between the two variants, and a
+tiebreak (order swapped) where every margin was half a point.
+
+| Object | Variant | vs kept | Follow-up | Kept now |
+|---|---|---|---|---|
+| boulder | r10a: r9a's form, every mass on loom `stone_mottle` (rust/tan/grey/dark blotches baked into the albedo, broad scale) | **6-5.5** | **h2h won 6-5.5** | boulder_r10a |
+| boulder | r10b: same, finer blotches (`stone_mottle_f`) | **6.5-5** | h2h lost ("even pinkish speckle") | |
+| crate | r10a: crate_r9b at 0.88 height | 6.5-6 | h2h won 6.5-6; tiebreak vs r9b **6-6** | crate_r9b |
+| crate | r10b: 0.80 height | 6.5-6 | h2h lost | |
+
+- Colour inside a face beat per-face tints: both mottled boulders won, judges named "mottled rust and grey" against r9a's
+  "flat browns plus slate patches read as plastic". Broad patches beat fine speckle (speckle evens out into one pinkish tone).
+- The first mottle palette was too dark and saturated (render S61 vs ref S40): it read as rusted metal. Measure the render's
+  S/V against the reference before judging; the fixed palette landed at S39 / V40 vs the ref's S40 / V35.
+- Height cut: every crate margin was 0.5 and the judges' reasons named wear and colour, which were identical, so the
+  verdicts were noise; the tiebreak tied and the champion stays. Proportion at x0.88 is a marginal gain at best.
+- Judges' remaining gaps: the boulder's chunks read blocky and small next to the reference's wide, sloping right lobe and
+  deep crevices; the crate's grey canvas flap on the left reads foreign, and the lid text is slots, not lettering.

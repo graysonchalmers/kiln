@@ -397,4 +397,18 @@ pal({ cr2W: T("painted", "#757052", 0.8), cr2W2: T("painted", "#6b664b", 0.8), c
 model("crate_r9a", crate_v2(), stencilTri())
 model("crate_r9b", crate_v2(), stencilTri(), lidText())
 
-pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_r9a", "barrel_r7", "crate_r9b"])
+// ---------- round 10 (2026-10-25): mottled stone (colour varies inside a face, not one tint per face), lower crate
+// r10 blind A/B vs kept: boulder r10a 6-5.5, r10b 6.5-5, h2h r10a 6-5.5 (broad grey/rust areas beat fine pink speckle). Crate r10a 6.5-6,
+// r10b 6.5-6, h2h r10a 6.5-6, tiebreak r10a vs r9b 6-6 (tie): split judges keep the champion. Kept: boulder_r10a, crate_r9b.
+// boulder r10a/r10b: boulder_r9a's form, every mass on one loom material with rust/tan/grey blotches baked in (tinted white; the first, darker and more saturated palette read as rusted metal, measured S61 vs the ref S40);
+// r10a broad blotches, r10b finer ones
+pal({ bstM: { tex: MATS + "stone_mottle", color: "#ffffff", uv: 0.7 }, bstMF: { tex: MATS + "stone_mottle_f", color: "#ffffff", uv: 0.7 } })
+const M = ["bstM", "bstM"], MF = ["bstMF", "bstMF"]
+model("boulder_r10a", boulder_r8b([M, M, M, M, M, M]))
+model("boulder_r10b", boulder_r8b([MF, MF, MF, MF, MF, MF]))
+// crate r10a/r10b: crate_r9b squashed in height (judge: "taller than the reference, which looks longer and lower"), x0.88 / x0.8
+const crate_r9b = () => [crate_v2(), stencilTri(), lidText()]
+model("crate_r10a", tf({ scale: [1, 0.88, 1] }, crate_r9b()))
+model("crate_r10b", tf({ scale: [1, 0.8, 1] }, crate_r9b()))
+
+pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_r10a", "barrel_r7", "crate_r9b"])
