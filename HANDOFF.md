@@ -18,7 +18,7 @@ Image to blockout round 6 merged to `grayson` (nothing new kept: kept builds hel
 **Showcase (2026-10-25):** README has the swamp teaser (`docs/media/swamp_teaser.mp4`, 26.7 s, reel + chirp; sources in reel fork `grayson` `showcase/swamp/`, 5861d0f) and the loom before/after sheet. Sibling tools forked to graysonchalmers (`loom pxl vex chirp reel`, branch `grayson`), clones in `~/Projects-local/z-Git/uilianks/`.
 
 ## ▶️ Next concrete step
-**Image to blockout round 11:** r10 done (boulder_r10a mottled stone won 6-5.5 + h2h; crate lowered x0.88 tied, crate_r9b kept). Next: boulder right lobe wider and sloping + deeper crevices, crate canvas flap (judges: reads foreign), then Grayson's own references or a new object class. Swamp residuals (paused): hut glow, log underside V12-13, mangrove canopy, knees mat (never enlarge).
+**Image to blockout round 12:** r11 done (crate_r11a, canvas flap removed, won 6-5; the boulder right-lobe widening lost 5.5-6 and crevices tied, so boulder_r10a stays). Next: raise the boulder's upper-left mass (the judges' real gap), crate rope handles, then Grayson's own references or a new object class. Swamp residuals (paused): hut glow, log underside V12-13, mangrove canopy, knees mat (never enlarge).
 - Alt: **image → blockout**: reference image → image-decomp → recipe picks/proportions → kiln scene → grade against the image with the same loop.
 - Alt: package the loop as a Workflow script (needs Grayson's "use a workflow").
 

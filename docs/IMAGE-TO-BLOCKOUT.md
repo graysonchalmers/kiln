@@ -252,3 +252,18 @@ tiebreak (order swapped) where every margin was half a point.
   verdicts were noise; the tiebreak tied and the champion stays. Proportion at x0.88 is a marginal gain at best.
 - Judges' remaining gaps: the boulder's chunks read blocky and small next to the reference's wide, sloping right lobe and
   deep crevices; the crate's grey canvas flap on the left reads foreign, and the lid text is slots, not lettering.
+
+## Round 11: right lobe and crevices, canvas flap (2026-10-25)
+
+| Object | Variant | vs kept | Follow-up | Kept now |
+|---|---|---|---|---|
+| boulder | r11a: r10a with the right lobe rebuilt wide, low and sloping right | lost 5.5-6 ("long tapering tail; misses the tall upper-left mass") | | boulder_r10a |
+| boulder | r11b: r11a + three crevices cut by `subtract()` | tie 5.5-5.5 | | |
+| crate | r11a: crate_r9b without the grey canvas flap | **6-5** ("grey slab doesn't belong") | h2h tie 6.5-6.5 | crate_r11a |
+| crate | r11b: flap kept, painted the crate's olive | **6-5.5** | h2h tie | |
+
+- The judges' "wide sloping right lobe" request lost when built: widening the low lobe shifted the mass right and read as a
+  tail, while the reference's weight sits upper left. The next try should raise the upper-left mass, not stretch the right.
+- Crevices 6-8 cm wide still read as faint creases at judging distance (same lesson as r5-r6): mass beats cuts.
+- Removing a part the reference lacks wins as much as fixing it; on a tie, keep the build with fewer parts.
+- Remaining crate gaps per judges: "12" in the triangle, lid lettering, and rope handles.

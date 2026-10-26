@@ -411,4 +411,22 @@ const crate_r9b = () => [crate_v2(), stencilTri(), lidText()]
 model("crate_r10a", tf({ scale: [1, 0.88, 1] }, crate_r9b()))
 model("crate_r10b", tf({ scale: [1, 0.8, 1] }, crate_r9b()))
 
-pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_r10a", "barrel_r7", "crate_r9b"])
+// ---------- round 11 (2026-10-25): boulder wide sloping right lobe + crevices, crate canvas flap (judges: "reads foreign")
+// r11 blind A/B vs kept: boulder r11a lost 5.5-6 ("long tapering tail misses the tall upper-left mass"), r11b tied 5.5-5.5: r10a stays.
+// Crate r11a (no flap) won 6-5, r11b (olive flap) won 6-5.5, h2h tied 6.5-6.5: kept r11a (wider margin, fewer parts).
+// boulder r11a: r10a with the right lobe rebuilt wide and low, sloping down to the right (the reference's long shelf)
+const lobeR = () => hull({ mat: "bstM", cap: "bstM", capAngle: 35, jitter: 0.02, seed: 5 }, bm(0.3, 0.5, 0.26, 0.3, -6, 0.55),
+  bm(0.3, 0.24, 0.7, 0.42, -16, 0.72), bm(0.54, 0.17, 0.42, 0.34, -14, 0.7))
+const boulder_r11a = () => [boulder_v2("bstM", "bstM")[0], lobeR(), CHUNKS.map((a) => chunk(...a, "bstM", "bstM"))]
+model("boulder_r11a", boulder_r11a())
+// boulder r11b: r11a + crevices cut by subtract(): the seam between body and lobe, two fractures across the front face
+const crev = (fx, y, z, rz, ry, len, w = 0.06) => tf({ pos: [fx * BW, y, z], rot: [0, ry, rz] }, box(len, w, 0.5, { mat: "bstM" }))
+const cracks = [crev(0.18, 0.3, 0.2, 72, 0, 0.7, 0.08), crev(-0.12, 0.3, 0.3, 14, 0, 0.5), crev(0.42, 0.22, 0.26, 28, -10, 0.4)]
+model("boulder_r11b", subtract(boulder_v2("bstM", "bstM")[0], ...cracks), subtract(lobeR(), ...cracks), CHUNKS.map((a) => chunk(...a, "bstM", "bstM")))
+// crate r11a: crate_r9b without the grey canvas flap; r11b: the flap kept but painted the crate's olive (a paint-flake, not cloth)
+model("crate_r11a", crate_v2().slice(0, -2), stencilTri(), lidText())
+model("crate_r11b", crate_v2().slice(0, -2), stencilTri(), lidText(),
+  box(0.02, 0.69 * CH, CD + 0.06 * CL, { mat: "cr2W2", pos: [-CL / 2 - 0.012, 0.16 * CH, 0] }),
+  extrude([0, 0.844 * CH, 0.14 * CL, 0.844 * CH, 0, 0.6 * CH], 0.012, { mat: "cr2W2", pos: [-CL / 2, 0, CD / 2 + 0.001] }))
+
+pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_r10a", "barrel_r7", "crate_r11a"])
