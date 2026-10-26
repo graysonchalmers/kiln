@@ -175,3 +175,21 @@ Lessons: grain must follow the part (box projection on a lathe put stripes acros
 `woodgrain_v`); decals with hard dark shapes fight low-poly facet shading; canopy puffs gain nothing from texture at
 judging distance. Stone wants broad, low-contrast value variation with no hard shapes (`docs/media/boulder_soft_stone.png`); the
 judges' remaining gap is value/hue (ref is lighter, rust-orange and grey-tan), not the map. The preview renderer shows albedo only, so the identity cue has to live in the albedo.
+
+## Round 7: value percentile (2026-10-25)
+
+Base tints of the textured kept builds scaled by k = (reference V at the 30th / 40th percentile of its object pixels) /
+(render's median V), measured on `--bg #e6e6e6` shots; textures kept. Renders landed within 3% of target. One fresh blind
+judge per pair, reference beside it.
+
+| Object | k p30 / p40 | Blind A/B vs kept | Kept now |
+|---|---|---|---|
+| barrel | 1.17 / 1.32 (render was darker than the ref) | p30 tie 6-6; p40 won 6.5-6 ("lighter, warmer oak") | barrel_r7 (p40) |
+| crate | 0.89 / 0.93 | p30 lost 6-6.2; p40 tie 5-5 ("both too light and yellow vs olive drab") | crate_v2_t |
+| boulder | 0.82 / 0.95 | p30 lost 4-5 ("darker, muddier"); p40 tie 4-4 | boulder_v2_t |
+
+- The premise held only for the crate (median render lighter than ref); the barrel was already darker than the ref, and its win
+  came from lifting toward the p40 value, not lowering. Value percentile matching is a calibration, not a direction.
+- Value is no longer the gap. Judges name hue for the crate (yellow khaki vs olive drab) and hue + form for the boulder
+  (rust and grey patches, craggy facets). Next colour round: match hue/saturation of the darker percentile band, not V alone;
+  the boulder's next gain is form (craggy crown), not colour.

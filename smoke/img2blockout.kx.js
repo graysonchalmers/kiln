@@ -344,4 +344,12 @@ for (const [n, f] of Object.entries({ barrel_v1, crate_v2 })) model(n + "_t", f(
 pal({ bstT: T("stone_broad", "#6a5440", 0.7), bstLT: T("stone_broad", "#86705c", 0.7) })
 model("boulder_v2_t", boulder_v2("bstT", "bstLT"))
 
-pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_v2_t", "barrel_v1_t", "crate_v2_t"])
+// ---------- round 7 (2026-10-25): base tints scaled so the render's median value meets the reference's 40th value
+// percentile on its object pixels (k = ref V p40 / render V median, --bg #e6e6e6 shots). Texture kept. Barrel won 6.5-6;
+// barrel p30 tied, crate and boulder p30 lost and p40 tied (their gap is hue: crate too yellow, boulder lacks rust/grey).
+const sc = (hex, k) => "#" + [1, 3, 5].map(i => Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * k)).toString(16).padStart(2, "0")).join("")
+pal({ brl1: T("woodgrain_v", sc("#6a5038", 1.322), 0.9), brlHead: T("woodgrain", sc("#806446", 1.322), 0.9), brlBung: T("woodgrain", sc("#977656", 1.322), 0.5),
+  hoop1: T("metal", sc("#59524c", 1.322), 0.5, { metal: 0.6, rough: 0.5 }) })
+model("barrel_r7", barrel_v1())
+
+pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_v2_t", "barrel_r7", "crate_v2_t"])
