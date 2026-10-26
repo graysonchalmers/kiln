@@ -1,0 +1,20 @@
+{
+ "name": "stone_mottle_f",
+ "size": 512,
+ "normal": "gl",
+ "depth": 0.02,
+ "seam": {
+  "worst": 0.79,
+  "map": "albedo"
+ },
+ "maps": {
+  "albedo": "stone_mottle_f_albedo.png",
+  "normal": "stone_mottle_f_normal.png",
+  "height": "stone_mottle_f_height.png",
+  "roughness": "stone_mottle_f_roughness.png",
+  "metallic": "stone_mottle_f_metallic.png",
+  "ao": "stone_mottle_f_ao.png",
+  "orm": "stone_mottle_f_orm.png",
+  "emissive": null
+ }
+}
