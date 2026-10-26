@@ -363,10 +363,12 @@ const boulder_r8a = () => [subtract(boulder_v2("bstT", "bstLT")[0], ...crown.sli
 model("boulder_r8a", boulder_r8a())
 // boulder r8b: v2_t + an embedded cluster of angular chunks (jittered rotated boxes) on the crown: blocky fractured masses
 // with shadowed seams between them, like the reference's top; small horn crags read as ears and were dropped
-const chunk = (fx, y, z, w, h, d, rx, ry, rz, seed) => hull({ mat: "bstT", cap: "bstLT", capAngle: 30, jitter: 0.02, seed },
-  box(w, h, d, { mat: "bstT", pos: [fx * BW, y, z], rot: [rx, ry, rz] }))
-model("boulder_r8b", boulder_v2("bstT", "bstLT"), chunk(-0.2, 0.6, 0.08, 0.32, 0.26, 0.4, 12, 20, 24, 1), chunk(0.05, 0.66, 0.02, 0.3, 0.26, 0.42, -10, -25, -12, 2),
-  chunk(-0.4, 0.46, 0.12, 0.24, 0.22, 0.34, 20, 35, 30, 3), chunk(0.22, 0.56, 0.12, 0.22, 0.2, 0.3, -18, 10, -28, 4), chunk(-0.05, 0.42, 0.26, 0.26, 0.2, 0.2, 30, -15, 8, 5))
+const chunk = (fx, y, z, w, h, d, rx, ry, rz, seed, m = "bstT", c = "bstLT") => hull({ mat: m, cap: c, capAngle: 30, jitter: 0.02, seed },
+  box(w, h, d, { mat: m, pos: [fx * BW, y, z], rot: [rx, ry, rz] }))
+const CHUNKS = [[-0.2, 0.6, 0.08, 0.32, 0.26, 0.4, 12, 20, 24, 1], [0.05, 0.66, 0.02, 0.3, 0.26, 0.42, -10, -25, -12, 2],
+  [-0.4, 0.46, 0.12, 0.24, 0.22, 0.34, 20, 35, 30, 3], [0.22, 0.56, 0.12, 0.22, 0.2, 0.3, -18, 10, -28, 4], [-0.05, 0.42, 0.26, 0.26, 0.2, 0.2, 30, -15, 8, 5]]
+const boulder_r8b = (mats = []) => [boulder_v2(...(mats[5] ?? ["bstT", "bstLT"])), CHUNKS.map((a, i) => chunk(...a, ...(mats[i] ?? [])))]
+model("boulder_r8b", boulder_r8b())
 
 // r8 blind A/B vs kept: boulder r8a 4.5-4, r8b 6-4; crate r8a 6.5-5, r8b 6.5-6. Head-to-head: boulder r8b 6-4.5, crate r8a 6.5-5.5 (r8b "too yellow-green"). Kept: boulder_r8b, crate_r8a.
 // crate r8a/r8b: wood tints from the reference's dark band (p0-40 of its object pixels: H51 S30 V35) instead of the median;
@@ -376,4 +378,23 @@ model("crate_r8a", crate_v2())
 pal({ cr2W: T("painted", "#75744d", 0.8), cr2W2: T("painted", "#6b6a47", 0.8), cr2L: T("painted", "#6d6c48", 0.8), cr2L2: T("painted", "#676644", 0.8) })
 model("crate_r8b", crate_v2())
 
-pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_r8b", "barrel_r7", "crate_r8a"])
+// ---------- round 9 (2026-10-25): boulder rust/grey patches per mass (judges' remaining gap), crate stencil marks
+// r9 blind A/B vs kept: boulder r9a 6-5.5 + tiebreak 6-5, r9b lost 5-5.5 (grey chunks "boxes stuck on"); crate r9a 6.5-5.5, r9b 6.5-5.5,
+// head-to-head r9b 6.5-6. Kept: boulder_r9a, crate_r9b.
+// boulder r9a: r8b with chunks alternating rust and grey; r9b: rust body, grey chunks (the reference's grey sits in the fractures)
+pal({ bstR: T("stone_broad", "#6c4a35", 0.7), bstRL: T("stone_broad", "#85614a", 0.7), bstG: T("stone_broad", "#5c5852", 0.7), bstGL: T("stone_broad", "#726d65", 0.7) })
+const R = ["bstR", "bstRL"], G = ["bstG", "bstGL"]
+model("boulder_r9a", boulder_r8b([R, G, R, G, R]))
+model("boulder_r9b", boulder_r8b([G, G, G, G, G, R]))
+// crate r9a: crate_r8a + the stenciled warning triangle on the front (outline = triangle minus inner triangle), raised 3 mm
+// so it doesn't z-fight; r9b adds the lid's stencil text line as broken dark bars. Flat paint, no texture.
+pal({ stencil: "#2b2a20" })
+const tri = (s) => [-s / 2, 0, s / 2, 0, 0, s * 0.87]
+const stencilTri = () => tf({ pos: [cu(0.57), 0.3 * CH, CD / 2] }, subtract(extrude(tri(0.13), 0.003, { mat: "stencil" }),
+  extrude(tri(0.09), 0.01, { mat: "stencil", pos: [0, 0.012, -0.003] })))
+const lidText = () => [0.3, 0.37, 0.45, 0.52, 0.6, 0.67].map((u, i) => box(0.05 * CL, 0.003, 0.025, { mat: "stencil", pos: [cu(u), CH, CD * 0.18] }))
+pal({ cr2W: T("painted", "#757052", 0.8), cr2W2: T("painted", "#6b664b", 0.8), cr2L: T("painted", "#6d684c", 0.8), cr2L2: T("painted", "#676248", 0.8) })
+model("crate_r9a", crate_v2(), stencilTri())
+model("crate_r9b", crate_v2(), stencilTri(), lidText())
+
+pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_r9a", "barrel_r7", "crate_r9b"])

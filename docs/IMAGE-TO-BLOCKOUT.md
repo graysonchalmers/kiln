@@ -213,3 +213,21 @@ blind judge per pair, reference beside it, then a head-to-head between the two w
   pushing the hue greener lost. Judges still call it a little light and warm.
 - `values.py` flags crate_r8a wood lit 25 (swamp rule >= 35); kept builds were already flagged. Blind judge outranks the meter.
 - Next: boulder colour variation (rust/grey patches, judges' remaining gap), crate stencil marking, then Grayson's own refs.
+
+## Round 9: rust/grey patches, stencil marks (2026-10-25)
+
+Same cameras and backdrop as r8. One fresh blind judge per pair vs the kept build; a tiebreak judge (X/Y swapped) on the narrow
+boulder win; a head-to-head between the two crate winners.
+
+| Object | Variant | vs kept | Follow-up | Kept now |
+|---|---|---|---|---|
+| boulder | r9a: r8b's chunks alternating muted rust (#6c4a35) and grey (#5c5852) stone_broad | **6-5.5** | tiebreak **6-5** | boulder_r9a |
+| boulder | r9b: rust body, all chunks grey | 5-5.5 ("grey chunks look like boxes stuck on") | | |
+| crate | r9a: crate_r8a + front warning triangle (outline by `subtract()`, raised 3 mm) | **6.5-5.5** | lost h2h 6-6.5 | |
+| crate | r9b: r9a + lid stencil text as six dark bars | **6.5-5.5** | **won h2h 6.5-6** | crate_r9b |
+
+- Colour variation wins when it follows the masses and stays a minority; grey on every chunk turned them into pasted-on boxes.
+  First tints (#7a4c30 rust, #6b6862 grey) read orange and blue-grey on sight and were muted before judging.
+- A marking is an identity cue: the triangle alone moved a full point, and abstract bars stand in for lettering at this scale.
+- Remaining gaps the judges name: the boulder tints are blocky (patches per face, not mottled), the crate reads a little tall
+  and lacks the "12" in the triangle.
