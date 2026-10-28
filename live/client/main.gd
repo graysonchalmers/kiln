@@ -27,6 +27,11 @@ var wire_color := Color(0.2, 0.9, 1.0)
 
 var prompt_open := false
 var prompt_edit: LineEdit
+var prompt_panel: PanelContainer
+var pips: Label
+var height_set := false
+var fill_box := false
+var gen_done := false
 var status: Label
 var ui_root: Control
 
@@ -67,7 +72,7 @@ func _ready() -> void:
 	net.failed.connect(_on_failed)
 	net.status.connect(_set_status)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	_set_status("Tab: mouse | B: box mode | Enter: prompt | <-/->: stages | L: lock | %s" % server_url)
+	_set_status("B: draw a box | Tab: mouse | <-/->: stages | L: lock | F: fill | %s" % server_url)
 
 
 func _parse_server() -> void:
@@ -151,18 +156,50 @@ func _build_ui() -> void:
 	layer.add_child(ui_root)
 
 	status = Label.new()
-	status.position = Vector2(12, 8)
+	status.position = Vector2(14, 10)
+	status.add_theme_font_size_override("font_size", 20)
+	status.add_theme_color_override("font_outline_color", Color.BLACK)
+	status.add_theme_constant_override("outline_size", 6)
 	ui_root.add_child(status)
 
+	pips = Label.new()
+	pips.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	pips.offset_left = 14
+	pips.offset_top = -120
+	pips.offset_bottom = -80
+	pips.add_theme_font_size_override("font_size", 22)
+	pips.add_theme_color_override("font_outline_color", Color.BLACK)
+	pips.add_theme_constant_override("outline_size", 6)
+	ui_root.add_child(pips)
+
+	prompt_panel = PanelContainer.new()
+	prompt_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	prompt_panel.offset_left = 40
+	prompt_panel.offset_right = -40
+	prompt_panel.offset_top = -76
+	prompt_panel.offset_bottom = -24
+	prompt_panel.visible = false
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.08, 0.12, 0.92)
+	sb.border_color = Color(0.2, 0.9, 1.0)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(8)
+	sb.set_content_margin_all(10)
+	prompt_panel.add_theme_stylebox_override("panel", sb)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	prompt_panel.add_child(row)
+	var lab := Label.new()
+	lab.text = "What goes in the box?"
+	lab.add_theme_font_size_override("font_size", 22)
+	row.add_child(lab)
 	prompt_edit = LineEdit.new()
-	prompt_edit.placeholder_text = "describe the asset, Enter to send, Esc to cancel"
-	prompt_edit.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	prompt_edit.custom_minimum_size = Vector2(560, 36)
-	prompt_edit.position = Vector2(360, 640)
-	prompt_edit.size = Vector2(560, 36)
-	prompt_edit.visible = false
+	prompt_edit.placeholder_text = "e.g. rusty vending machine   (Enter = build, Esc = cancel, wheel = box height)"
+	prompt_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	prompt_edit.add_theme_font_size_override("font_size", 22)
 	prompt_edit.text_submitted.connect(_on_prompt_submitted)
-	ui_root.add_child(prompt_edit)
+	row.add_child(prompt_edit)
+	ui_root.add_child(prompt_panel)
 
 
 func _set_status(t: String) -> void:
@@ -175,6 +212,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if prompt_open:
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 			_close_prompt()
+		elif event is InputEventMouseButton and event.pressed:
+			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_adjust_height(0.25)
+			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				_adjust_height(-0.25)
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -188,7 +230,18 @@ func _unhandled_input(event: InputEvent) -> void:
 				box_mode = not box_mode
 				dragging = false
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if box_mode else Input.MOUSE_MODE_CAPTURED
-				_set_status("BOX MODE: drag on floor, wheel = height, Enter = prompt" if box_mode else "fly mode")
+				_set_status("BOX MODE: drag a footprint on the floor (wheel = height); the prompt box opens when you let go" if box_mode else "fly mode")
+			KEY_LEFT:
+				_scrub(-1)
+			KEY_RIGHT:
+				_scrub(1)
+			KEY_L:
+				_lock_stage()
+			KEY_F:
+				fill_box = not fill_box
+				_set_status("fit: stretch to fill the box" if fill_box else "fit: keep proportions")
+				if strip.selected >= 0:
+					_show_stage(strip.selected, false)
 			KEY_ENTER, KEY_KP_ENTER:
 				if has_box:
 					_open_prompt()
@@ -215,6 +268,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				var h = _floor_hit(event.position)
 				if h != null:
 					dragging = true
+					height_set = false
 					p0 = h
 					p1 = h
 					has_box = false
@@ -222,13 +276,21 @@ func _unhandled_input(event: InputEvent) -> void:
 				dragging = false
 				if (p1 - p0).abs().x > 0.05 and (p1 - p0).abs().z > 0.05:
 					has_box = true
+					if not height_set:
+						box_h = clampf(maxf(absf(p1.x - p0.x), absf(p1.z - p0.z)) * 1.6, 0.6, 3.0)
 					_redraw_wire()
+					box_mode = false  # leave box mode and ask what goes in it
+					_open_prompt()
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			box_h = minf(box_h + 0.25, 10.0)
-			_redraw_wire()
+			_adjust_height(0.25)
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			box_h = maxf(box_h - 0.25, 0.25)
-			_redraw_wire()
+			_adjust_height(-0.25)
+
+
+func _adjust_height(d: float) -> void:
+	height_set = true
+	box_h = clampf(box_h + d, 0.25, 10.0)
+	_redraw_wire()
 
 
 ## Returns Vector3 on the y=0 floor or null.
@@ -241,14 +303,14 @@ func _floor_hit(screen_pos: Vector2) -> Variant:
 func _open_prompt() -> void:
 	prompt_open = true
 	prompt_edit.text = ""
-	prompt_edit.visible = true
+	prompt_panel.visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	prompt_edit.call_deferred("grab_focus")
 
 
 func _close_prompt() -> void:
 	prompt_open = false
-	prompt_edit.visible = false
+	prompt_panel.visible = false
 	prompt_edit.release_focus()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if box_mode else Input.MOUSE_MODE_CAPTURED
 
@@ -303,6 +365,8 @@ func _send_request(prompt: String) -> void:
 		holder.queue_free()
 		holder = null
 	cur_slug = _slug(prompt)
+	gen_done = false
+	_update_pips()
 	net.generate(prompt, req_size)
 
 
@@ -320,10 +384,27 @@ func _on_stage(index: int, glb: PackedByteArray, tris: int) -> void:
 
 
 func _on_finished(n: int) -> void:
-	_set_status("done: %d stages | <-/-> scrub | L lock" % n)
+	gen_done = true
+	_update_pips()
+	_set_status("finished: %d stages | <-/-> scrub | L lock | F stretch-to-fill | B new box" % n)
+
+
+func _update_pips() -> void:
+	var t := ""
+	for i in strip.count():
+		t += "● " if i == strip.selected else "○ "
+	if strip.count() == 0:
+		t = "waiting for the first voxels ..."
+	elif gen_done:
+		t += "  ✓ finished"
+	else:
+		t += "  building ..."
+	pips.text = t
 
 
 func _on_failed(code: String, message: String) -> void:
+	gen_done = true
+	_update_pips()
 	_set_status("%s: %s" % ["generator unavailable" if code == "generator_unavailable" else code, message])
 
 
@@ -368,15 +449,17 @@ func _show_stage(i: int, animate: bool) -> void:
 	if aabb.size.x <= 0.0001 or aabb.size.y <= 0.0001 or aabb.size.z <= 0.0001:
 		_set_status("asset has degenerate bounds")
 		return
-	var s := minf(req_size.x / aabb.size.x, minf(req_size.y / aabb.size.y, req_size.z / aabb.size.z))
-	holder.scale = Vector3.ONE * s
+	var u := minf(req_size.x / aabb.size.x, minf(req_size.y / aabb.size.y, req_size.z / aabb.size.z))
+	var s := Vector3(req_size.x / aabb.size.x, req_size.y / aabb.size.y, req_size.z / aabb.size.z) if fill_box else Vector3.ONE * u
+	holder.scale = s
 	var target := Vector3(req_min.x + req_size.x * 0.5, req_min.y, req_min.z + req_size.z * 0.5)
 	var src := Vector3(aabb.get_center().x, aabb.position.y, aabb.get_center().z)
 	holder.position = target - src * s
 
 	reveal_base = req_min.y
-	reveal_top = req_min.y + aabb.size.y * s
-	_set_status("stage %d/%d (%d tris) | <-/-> scrub | L lock" % [i + 1, strip.count(), strip.stages[i]["tris"]])
+	reveal_top = req_min.y + aabb.size.y * s.y
+	_update_pips()
+	_set_status("stage %d/%d (%d tris) | <-/-> scrub | L lock | F fill" % [i + 1, strip.count(), strip.stages[i]["tris"]])
 	if animate:
 		_start_reveal(meshes)
 
