@@ -58,6 +58,7 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
     workdir = pathlib.Path(workdir)
     emitted = 0
     attempt = 0
+    t_function = 0.0
     sem = asyncio.Semaphore(BUILD_PARALLEL)
     tasks: list[asyncio.Task] = []
 
@@ -68,7 +69,8 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
 
     async def make_levels(pal_src: str, f_src: str) -> str | None:
         """Build and emit every level; returns an error message if nothing could be emitted."""
-        nonlocal emitted, attempt
+        nonlocal emitted, attempt, t_function
+        t_function = round(time.time() - t0, 3)  # the model's function is complete: levels can start
         attempt += 1
         master = await asyncio.to_thread(eval_master, pal_src, f_src)
         runs = await asyncio.to_thread(master_runs, master)
@@ -85,7 +87,7 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
             r = await task
             if r.ok:
                 await emit({"type": "stage", "index": emitted, "level": n, "tris": r.tris,
-                            "t_ready": round(time.time() - t0, 3)}, r.glb)
+                            "t_function": t_function, "t_ready": round(time.time() - t0, 3)}, r.glb)
                 emitted += 1
             else:
                 first_error = first_error or r.error

@@ -86,6 +86,9 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([e["index"] for e in stages], [0, 1, 2, 3, 4])
         self.assertEqual([e["level"] for e in stages], list(LEVELS))
         self.assertEqual(c.types(), ["stage"] * 5 + ["done"])
+        for e in stages:  # timing breakdown: the function arrives before any level can land
+            self.assertGreaterEqual(e["t_function"], 0)
+            self.assertLessEqual(e["t_function"], e["t_ready"])
         self.assertEqual(c.events[-1]["stages"], 5)
         self.assertTrue(all(b.startswith(b"glTF") for b in c.blobs[:5]))
         self.assertTrue(lease.released_kill)
