@@ -14,6 +14,7 @@ import numpy as np
 from materials import infer_tag
 
 LEVELS = (4, 8, 16, 32)  # the client draws the solid block itself, the instant Enter is pressed
+AIR = "_"  # reserved key: deliberate interior air (a hollow barrel). solidify leaves it empty instead of filling it
 MASTER_N = 64
 FILL_FRACTION = 0.5   # a cell is solid when at least this share of its master voxels are occupied
 FEATURE_SHARE = 0.02  # a thin minority material covering this share of a cell wins the cell's key
@@ -162,7 +163,9 @@ def eval_materials(pal_src: str, timeout: float = 3.0) -> dict[str, str]:
 
 def solidify(master: np.ndarray) -> np.ndarray:
     """Fill sealed interior voids (empty voxels not connected to the outside) with the surrounding material, so
-    every shape is built solid. Open shapes (a cup, an arch) are left as they are. Returns a new array."""
+    every shape is built solid. Open shapes (a cup, an arch) are left as they are. Voxels the shape marked AIR are
+    deliberate hollows: they are never filled and come back as empty ('.'), so walls, ribs and heads around them show.
+    Returns a new array."""
     empty = master == "."
     border = np.ones(master.shape, dtype=bool)
     border[1:-1, 1:-1, 1:-1] = False
@@ -182,11 +185,12 @@ def solidify(master: np.ndarray) -> np.ndarray:
         for axis in range(3):
             for shift in (1, -1):
                 neighbour = np.roll(out, shift, axis)
-                take = void & (neighbour != ".")
+                take = void & (neighbour != ".") & (neighbour != AIR)  # never fill a void with air
                 out[take] = neighbour[take]
                 void &= ~take
         if int(void.sum()) == before:
             break
+    out[out == AIR] = "."
     return out
 
 
