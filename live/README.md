@@ -30,7 +30,7 @@ sparks, scatter, implode (the reverse-particle one), dissolve.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s live/server/tests          # 52 tests, no network (SKIP_KILN=1 skips the slow kiln builds)
+python3 -m unittest discover -s live/server/tests          # 63 tests, no network (SKIP_KILN=1 skips the slow kiln builds)
 LIVE_CLAUDE=1 python3 -m unittest test_pool.LivePoolTests   # run from live/server/tests; uses the real claude
 ```
 
@@ -110,6 +110,15 @@ as MultiMesh custom data) to roughness, metallic, grain, rim and seam AO, adds p
 between bricks, and multiplies the palette colour by loom textures for stone, wood, metal and cloth (`client/materials/*.png`, 256 px,
 albedo + normal; rebuild with loom from `brick_mats.tx.js`). Projection is per brick face (boxes are axis aligned, so triplanar reduces to
 the dominant axis) with a random offset per brick. Glass gets fresnel glint, emissive self-light below the bloom threshold.
+
+## Insides and destruction (2026-10-28)
+
+A shape returns `"_"` for deliberate interior air; `solidify` keeps it hollow (plain sealed voids are still filled solid), so walls, heads and
+ribs around it show when the prop is cut or damaged. The model marks load-bearing parts `mat:"structural"` (hoops, frames, battens), which survive
+`damage()` (`server/damage.py`: `burn` chars from the top, `break` is ragged; adds charred `~` and ember `^` keys). The stage prompt teaches both,
+with closed lids and caps over the hollow. Eval: 6 props x 2 runs, hollow insides on 8 of 12 (2 of 11 before). Design and open items:
+`docs/superpowers/specs/2026-10-28-insides-and-destruction-design.md`; demo: `live/tools/insides_demo.py`. Not done: client shader looks for
+`structural` and `charred`, a damage request in the protocol, parts dropping when their support goes.
 
 ## How it works
 

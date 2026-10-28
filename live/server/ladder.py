@@ -134,7 +134,7 @@ def _palette_raw(pal_src: str, timeout: float) -> dict:
     out = {}
     for k, v in (data.items() if isinstance(data, dict) else ()):
         color = v.get("color") if isinstance(v, dict) else v
-        if len(k) == 1 and isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+        if len(k) == 1 and k != AIR and isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color):
             out[k] = (color.lower(), v)
     return out
 

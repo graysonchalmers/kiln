@@ -39,6 +39,14 @@ class AirTests(unittest.TestCase):
         self.assertNotEqual(cells[2, 8, 8], ".")
 
 
+class PaletteAirTests(unittest.TestCase):
+    def test_air_key_is_never_a_palette_colour(self):
+        from ladder import eval_materials, eval_palette
+        pal = 'pal({s:"#aa5522",_:{color:"#888888",mat:"metal"}})'
+        self.assertEqual(eval_palette(pal), {"s": "#aa5522"})
+        self.assertEqual(eval_materials(pal), {"s": "wood"})
+
+
 class DamageTests(unittest.TestCase):
     def test_zero_amount_is_unchanged_and_deterministic(self):
         c = grid()
