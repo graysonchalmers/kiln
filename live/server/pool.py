@@ -27,8 +27,16 @@ class Lease:
 
     async def generate(self, prompt: str, size_m: tuple[float, float, float]) -> AsyncIterator[str]:
         x, y, z = size_m
-        self.proc.stdin.write(_user_line(
-            f"Box: {x:.2f} x {y:.2f} x {z:.2f} metres (width x height x depth); the prop must fill it.\nBuild: {prompt}"))
+        async for d in self._stream(
+                f"Box: {x:.2f} x {y:.2f} x {z:.2f} metres (width x height x depth); the prop must fill it.\nBuild: {prompt}"):
+            yield d
+
+    async def followup(self, text: str) -> AsyncIterator[str]:
+        async for d in self._stream(text):
+            yield d
+
+    async def _stream(self, user_text: str) -> AsyncIterator[str]:
+        self.proc.stdin.write(_user_line(user_text))
         await self.proc.stdin.drain()
         done = False
         try:
