@@ -23,7 +23,7 @@ powershell -NoProfile -File C:\Users\Grayson\claude-tmp\live-client\run_client.p
 ```
 
 Controls: **B** draw a box (drag a footprint, wheel = height; the prompt bar opens on release), **Enter** build,
-**Esc** cancel, **Left/Right** scrub levels, **L** lock the shown level to `assets/`, **F** stretch to fill the box,
+**Esc** cancel, **Left/Right** scrub levels, **L** lock the shown level's GLB to `assets/`,
 **Tab** free the mouse, WASD/QE fly.
 
 ## Tests
@@ -38,9 +38,10 @@ Godot (run on the Legion over `ssh legion`): `live/client/tests/parse_check.ps1 
 
 ## Smoke test (watch the transition without a server)
 
-`--smoke` fills a fixed box with the four barrel levels (`live/client/tests/ladder_<n>.glb`, made by
-`live/tools/make_smoke_fixtures.py`) so you can see the sweep: a glowing line climbs the box, the new level appears
-below it and grows into full size while the old level, still above it, shrinks away. Renders with Godot's Movie
+`--smoke` fills a fixed box with the four barrel levels (`live/client/tests/ladder_<n>.glb/.json`, made by
+`live/tools/make_smoke_fixtures.py`) so you can see the transition: a glowing band of about 2-3 rows of bricks climbs
+the box; each brick flips on its own, shrinking or growing about its own centre, with the old level still above the
+band and the new one below it. Renders with Godot's Movie
 Maker in the logged-in desktop session (a Godot window flashes for about 10 s).
 
 ```bash
@@ -55,8 +56,10 @@ Output: `C:\Users\Grayson\claude-tmp\smoke\smoke.avi` plus `smoke.avi.png` (a fr
 --tools "" --model claude-haiku-5-5`; plain `claude -p` loads your config and bills Opus). The model replies with
 `pal({...})` and `function f(u,v,w)`. `ladder.py` samples `f` once on a 64^3 grid in a node `vm` sandbox, pools it into
 levels with one rule (cells solid at 50% fill or when they hold a part thinner than 1.5 cells; a thin minority
-material covering 2% of a cell wins its key), and `pipeline.py` builds each level with kiln and sends it over the
-WebSocket in `ws_server.py`. The client queues levels (`stage_pacer.gd`, 0.9 s each).
+material covering 2% of a cell wins its key), `solidify` first fills sealed interior voids so every shape is built solid (open shapes such as a cup stay open),
+and `pipeline.py` builds each level with kiln and sends it over the WebSocket in `ws_server.py`: a stage event
+with the voxel grid and palette, then the GLB. The client draws the grid as individual bricks (`voxel_view.gd`,
+surface bricks only) and queues levels (`stage_pacer.gd`, 0.9 s each); the GLB is kept for locking to disk.
 
 ## Measured (2026-10-28, real server, warm pool, 5 props)
 

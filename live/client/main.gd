@@ -3,11 +3,11 @@ extends Node3D
 ## Keys: WASD move, Q/E down/up, mouse look, Tab capture toggle,
 ## B box mode (click-drag floor, wheel = height), Enter prompt, Esc cancel prompt.
 
-const REVEAL_SECS := 0.8   # one glowing line sweeps up: the new level appears under it, the old one is left above it
-const SHRINK_TO := 0.9     # the departing level shrinks to this fraction of its size
-const GROW_FROM := 0.88    # the arriving level grows up from this fraction into its final size
-const BAND := 0.08
-const SHADER_PATH := "res://reveal.gdshader"
+const REVEAL_SECS := 0.8   # the glowing line climbs the box in this long; bricks flip one row at a time as it passes
+const SHRINK_TO := 0.9     # the placeholder block shrinks to this fraction as it fades
+const SWEEP_SHADER := "res://voxel_sweep.gdshader"
+const ROWS_IN_BAND := 2.5  # the flipping zone is about this many rows of the finer level tall
+const VoxelView = preload("res://voxel_view.gd")
 const Net = preload("res://net.gd")
 const Strip = preload("res://stage_strip.gd")
 const Pacer = preload("res://stage_pacer.gd")
@@ -33,7 +33,6 @@ var prompt_edit: LineEdit
 var prompt_panel: PanelContainer
 var pips: Label
 var height_set := false
-var fill_box := false
 var gen_done := false
 var status: Label
 var ui_root: Control
@@ -42,28 +41,27 @@ var net: Node
 var strip = Strip.new()
 var pacer = Pacer.new()
 var placeholder: MeshInstance3D = null
-var holder: Node3D = null
+var cur_view: MultiMeshInstance3D = null
+var cur_mat: ShaderMaterial = null
+var old_view: MultiMeshInstance3D = null
+var old_mat: ShaderMaterial = null
 var cur_slug := "asset"
 var req_min := Vector3.ZERO
 var req_size := Vector3.ONE
 
-var reveal_mats: Array[ShaderMaterial] = []
-var reveal_meshes: Array = []  # [[MeshInstance3D, surface_count], ...]
 var reveal_t := -1.0
-var old_holder: Node3D = null
-var old_mats: Array[ShaderMaterial] = []
 var sweep_line: MeshInstance3D = null
 var clock := 0.0
 var smoke := false
 var smoke_pending := false
 var reveal_base := 0.0
 var reveal_top := 1.0
-var shader: Shader
+var sweep_shader: Shader
 
 
 func _ready() -> void:
 	_parse_server()
-	shader = load(SHADER_PATH) as Shader
+	sweep_shader = load(SWEEP_SHADER) as Shader
 	_build_room()
 	_build_ui()
 	wire_mesh = ImmediateMesh.new()
@@ -86,7 +84,7 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--smoke"):
 		_start_smoke()
 		return
-	_set_status("B: draw a box | Tab: mouse | <-/->: stages | L: lock | F: fill | %s" % server_url)
+	_set_status("B: draw a box | Tab: mouse | <-/->: stages | L: lock | %s" % server_url)
 
 
 ## Scripted run for screenshots and video: a fixed box and the four barrel levels, no server needed.
@@ -277,11 +275,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				_scrub(1)
 			KEY_L:
 				_lock_stage()
-			KEY_F:
-				fill_box = not fill_box
-				_set_status("fit: stretch to fill the box" if fill_box else "fit: keep proportions")
-				if strip.selected >= 0:
-					_show_stage(strip.selected, false)
 			KEY_ENTER, KEY_KP_ENTER:
 				if has_box:
 					_open_prompt()
@@ -403,9 +396,7 @@ func _send_request(prompt: String) -> void:
 	strip.clear()
 	pacer.reset()
 	_show_placeholder()
-	if holder != null:
-		holder.queue_free()
-		holder = null
+	_drop_views()
 	cur_slug = _slug(prompt)
 	gen_done = false
 	_update_pips()
@@ -419,8 +410,8 @@ func _slug(t: String) -> String:
 	return out.left(24).strip_edges() if out != "" else "asset"
 
 
-func _on_stage(_index: int, glb: PackedByteArray, tris: int) -> void:
-	pacer.push(glb, tris)  # shown by _process, one level per hold interval
+func _on_stage(_index: int, glb: PackedByteArray, tris: int, grid: Dictionary) -> void:
+	pacer.push(glb, tris, grid)  # shown by _process, one level per hold interval
 
 
 func _on_finished(_n: int) -> void:
@@ -486,125 +477,51 @@ func _lock_stage() -> void:
 
 func _show_stage(i: int, animate: bool) -> void:
 	_end_transition()
-	if holder != null:
-		if animate:
-			old_holder = holder  # stays on screen until the new level has swept over it
-			_prepare_old(old_holder)
-		else:
-			holder.queue_free()
-		holder = null
-	var buf: PackedByteArray = strip.stages[i]["glb"]
-	var doc := GLTFDocument.new()
-	var gstate := GLTFState.new()
-	var err := doc.append_from_buffer(buf, "", gstate)
-	if err != OK:
-		_set_status("GLB parse failed: %d" % err)
+	var grid: Dictionary = strip.stages[i]["grid"]
+	if grid.is_empty():
+		_set_status("level %d has no voxel grid" % (i + 1))
 		return
-	var root := doc.generate_scene(gstate)
-	if root == null:
-		_set_status("generate_scene returned null")
-		return
-	holder = Node3D.new()
-	holder.add_child(root)
-	add_child(holder)  # identity transform, at origin
-
-	var meshes: Array = []
-	_collect_meshes(holder, meshes)
-	var aabb := _world_aabb(meshes)
-	if aabb.size.x <= 0.0001 or aabb.size.y <= 0.0001 or aabb.size.z <= 0.0001:
-		_set_status("asset has degenerate bounds")
-		return
-	var u := minf(req_size.x / aabb.size.x, minf(req_size.y / aabb.size.y, req_size.z / aabb.size.z))
-	var s := Vector3(req_size.x / aabb.size.x, req_size.y / aabb.size.y, req_size.z / aabb.size.z) if fill_box else Vector3.ONE * u
-	holder.scale = s
-	var target := Vector3(req_min.x + req_size.x * 0.5, req_min.y, req_min.z + req_size.z * 0.5)
-	var src := Vector3(aabb.get_center().x, aabb.position.y, aabb.get_center().z)
-	holder.position = target - src * s
-	holder.set_meta("fit", {"s": s, "target": target, "src": src})
-
+	var mat := ShaderMaterial.new()
+	mat.shader = sweep_shader
+	mat.set_shader_parameter("mode", 1.0)
+	var view := VoxelView.build(grid, req_min, req_size, mat)
+	add_child(view)
+	if animate and cur_view != null:
+		old_view = cur_view  # stays on screen, shrinking brick by brick, until the line has passed it
+		old_mat = cur_mat
+		old_mat.set_shader_parameter("mode", 0.0)
+	else:
+		_drop_current()
+	cur_view = view
+	cur_mat = mat
 	reveal_base = req_min.y
 	reveal_top = req_min.y + req_size.y
-	_update_pips()
-	_set_status("stage %d/%d (%d tris) | <-/-> scrub | L lock | F fill" % [i + 1, strip.count(), strip.stages[i]["tris"]])
 	if animate:
-		_start_reveal(meshes)
+		var band: float = ROWS_IN_BAND * req_size.y / float(grid["n"])
+		for m in [cur_mat, old_mat]:
+			if m != null:
+				m.set_shader_parameter("band", band)
+				m.set_shader_parameter("line_y", reveal_base - band)  # the line starts below the box
+		reveal_t = 0.0
+		_start_sweep_line()
 	else:
+		cur_mat.set_shader_parameter("line_y", 1.0e6)  # fully passed: every brick at full size
 		_clear_placeholder()
+	_update_pips()
+	_set_status("level %d/%d (%d cells a side) | <-/-> scrub | L lock" % [i + 1, strip.count(), int(grid["n"])])
 
 
-func _collect_meshes(n: Node, out: Array) -> void:
-	if n is MeshInstance3D and n.mesh != null:
-		out.append(n)
-	for c in n.get_children():
-		_collect_meshes(c, out)
+func _drop_current() -> void:
+	if cur_view != null:
+		cur_view.queue_free()
+	cur_view = null
+	cur_mat = null
 
 
-func _world_aabb(meshes: Array) -> AABB:
-	var have := false
-	var res := AABB()
-	for mi in meshes:
-		var a: AABB = mi.global_transform * mi.get_aabb()
-		if not have:
-			res = a
-			have = true
-		else:
-			res = res.merge(a)
-	return res
-
-
-func _make_mat(mi: MeshInstance3D, i: int, invert: bool) -> ShaderMaterial:
-	var orig := mi.get_active_material(i)
-	var sm := ShaderMaterial.new()
-	sm.shader = shader
-	var bm := orig as BaseMaterial3D
-	if bm != null:
-		sm.set_shader_parameter("albedo_color", bm.albedo_color)
-		sm.set_shader_parameter("roughness_v", bm.roughness)
-		sm.set_shader_parameter("metallic_v", bm.metallic)
-		if bm.albedo_texture != null:
-			sm.set_shader_parameter("albedo_tex", bm.albedo_texture)
-			sm.set_shader_parameter("use_tex", true)
-	sm.set_shader_parameter("band", BAND)
-	sm.set_shader_parameter("invert", invert)
-	sm.set_shader_parameter("clip_y", reveal_base - BAND)
-	return sm
-
-
-func _start_reveal(meshes: Array) -> void:
-	reveal_mats.clear()
-	reveal_meshes.clear()
-	for mi: MeshInstance3D in meshes:
-		var n := mi.mesh.get_surface_count()
-		for i in n:
-			var sm := _make_mat(mi, i, false)
-			mi.set_surface_override_material(i, sm)
-			reveal_mats.append(sm)
-		reveal_meshes.append([mi, n])
-	_apply_mult(holder, GROW_FROM)
-	_start_sweep_line()
-	reveal_t = 0.0
-
-
-func _prepare_old(h: Node3D) -> void:
-	old_mats.clear()
-	var meshes: Array = []
-	_collect_meshes(h, meshes)
-	for mi: MeshInstance3D in meshes:
-		for i in mi.mesh.get_surface_count():
-			var sm := _make_mat(mi, i, true)
-			mi.set_surface_override_material(i, sm)
-			old_mats.append(sm)
-
-
-## Scale a fitted holder about the centre of its base (the asset's base stays on the box floor).
-func _apply_mult(h: Node3D, m: float) -> void:
-	if h == null or not is_instance_valid(h):
-		return
-	var fit: Dictionary = h.get_meta("fit", {})
-	if fit.is_empty():
-		return
-	h.scale = fit["s"] * m
-	h.position = fit["target"] - fit["src"] * fit["s"] * m
+## Remove every level from the scene (a new request starts from the block).
+func _drop_views() -> void:
+	_end_transition()
+	_drop_current()
 
 
 func _start_sweep_line() -> void:
@@ -612,51 +529,43 @@ func _start_sweep_line() -> void:
 		sweep_line = MeshInstance3D.new()
 		sweep_line.mesh = BoxMesh.new()
 		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.3, 1.0, 1.0)
-		m.emission_enabled = true
-		m.emission = Color(0.3, 1.0, 1.0)
-		m.emission_energy_multiplier = 5.0
+		m.albedo_color = Color(0.3, 1.0, 1.0, 0.18)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
 		sweep_line.material_override = m
 		add_child(sweep_line)
-	(sweep_line.mesh as BoxMesh).size = Vector3(req_size.x * 1.15, 0.012, req_size.z * 1.15)
+	(sweep_line.mesh as BoxMesh).size = Vector3(req_size.x * 1.05, 0.004, req_size.z * 1.05)
 	sweep_line.position = Vector3(req_min.x + req_size.x * 0.5, reveal_base, req_min.z + req_size.z * 0.5)
 	sweep_line.visible = true
 
 
-## Finish whatever transition is running: new level at full size and plain materials, old level and block gone.
+## Finish whatever transition is running: the new level at full size, the old level and the block gone.
 func _end_transition() -> void:
-	for e in reveal_meshes:
-		var mi: MeshInstance3D = e[0]
-		if is_instance_valid(mi):
-			for i in e[1]:
-				mi.set_surface_override_material(i, null)
-	reveal_mats.clear()
-	reveal_meshes.clear()
-	old_mats.clear()
 	reveal_t = -1.0
-	_apply_mult(holder, 1.0)
-	if old_holder != null:
-		old_holder.queue_free()
-		old_holder = null
+	if cur_mat != null:
+		cur_mat.set_shader_parameter("line_y", 1.0e6)
+	if old_view != null:
+		old_view.queue_free()
+		old_view = null
+		old_mat = null
 	_clear_placeholder()
 	if sweep_line != null:
 		sweep_line.visible = false
 
 
-func _update_reveal(delta: float) -> void:
+func _update_transition(delta: float) -> void:
 	if reveal_t < 0.0:
 		return
 	reveal_t += delta
 	var k := clampf(reveal_t / REVEAL_SECS, 0.0, 1.0)
-	var y := lerpf(reveal_base - BAND, reveal_top + BAND, k)
-	var e := k * k * (3.0 - 2.0 * k)
-	for m in reveal_mats:
-		m.set_shader_parameter("clip_y", y)
-	for m in old_mats:
-		m.set_shader_parameter("clip_y", y)
-	_apply_mult(holder, lerpf(GROW_FROM, 1.0, e))
-	_apply_mult(old_holder, lerpf(1.0, SHRINK_TO, e))
+	var band: float = cur_mat.get_shader_parameter("band")
+	var y := lerpf(reveal_base - band, reveal_top + band, k)
+	cur_mat.set_shader_parameter("line_y", y)
+	if old_mat != null:
+		old_mat.set_shader_parameter("line_y", y)
 	if placeholder != null and is_instance_valid(placeholder):  # the block fades and shrinks as the first level arrives
+		var e := k * k * (3.0 - 2.0 * k)
 		var pm := placeholder.material_override as StandardMaterial3D
 		pm.albedo_color.a = lerpf(0.5, 0.0, e)
 		var mm := lerpf(1.0, SHRINK_TO, e)
@@ -664,7 +573,7 @@ func _update_reveal(delta: float) -> void:
 		placeholder.position = Vector3(req_min.x + req_size.x * 0.5, req_min.y + req_size.y * 0.5 * mm, req_min.z + req_size.z * 0.5)
 	if sweep_line != null:
 		sweep_line.position.y = y
-		(sweep_line.material_override as StandardMaterial3D).emission_energy_multiplier = 5.0 * (1.0 - k * k)
+		(sweep_line.material_override as StandardMaterial3D).albedo_color.a = 0.18 * (1.0 - k * k)
 	if k >= 1.0:
 		_end_transition()
 
@@ -673,21 +582,22 @@ func _update_reveal(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	clock += delta
-	_update_reveal(delta)
+	_update_transition(delta)
 	if smoke_pending and clock >= 0.5:
 		smoke_pending = false
 		for n in [4, 8, 16, 32]:
-			pacer.push(FileAccess.get_file_as_bytes("res://tests/ladder_%d.glb" % n), n)
+			var grid = JSON.parse_string(FileAccess.get_file_as_string("res://tests/ladder_%d.json" % n))
+			pacer.push(FileAccess.get_file_as_bytes("res://tests/ladder_%d.glb" % n), n, grid)
 		pacer.finish()
 	var nxt: Dictionary = pacer.pop_ready(clock)
 	if not nxt.is_empty():
-		var i: int = strip.add(nxt["glb"], nxt["tris"])
+		var i: int = strip.add(nxt["glb"], nxt["tris"], nxt["grid"])
 		strip.select(i)
 		_show_stage(i, true)
 	if pacer.drained() and not gen_done:
 		gen_done = true
 		_update_pips()
-		_set_status("finished: %d levels | <-/-> scrub | L lock | F stretch-to-fill | B new box" % strip.count())
+		_set_status("finished: %d levels | <-/-> scrub | L lock | B new box" % strip.count())
 	if prompt_open:
 		return
 	var d := Vector3.ZERO

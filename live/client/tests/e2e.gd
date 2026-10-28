@@ -15,9 +15,9 @@ func _init() -> void:
 	root.add_child(net)
 	t0 = Time.get_ticks_msec() / 1000.0
 	net.status.connect(func(t): print("status: ", t))
-	net.stage_received.connect(func(i, g, tris):
+	net.stage_received.connect(func(i, g, tris, grid):
 		stages += 1
-		print("stage %d tris=%d bytes=%d at %.2fs magic=%s" % [i, tris, g.size(), Time.get_ticks_msec() / 1000.0 - t0, g.slice(0, 4).get_string_from_ascii()]))
+		print("stage %d tris=%d bytes=%d at %.2fs magic=%s grid_n=%s" % [i, tris, g.size(), Time.get_ticks_msec() / 1000.0 - t0, g.slice(0, 4).get_string_from_ascii(), grid.get("n", "none")]))
 	net.finished.connect(func(n):
 		ok = stages == n and n > 0
 		print("finished ", n, " stages ok=", ok)

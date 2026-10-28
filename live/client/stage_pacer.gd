@@ -8,8 +8,8 @@ var _last := -1000.0
 var _finished := false
 
 
-func push(glb: PackedByteArray, tris: int) -> void:
-	_queue.append({"glb": glb, "tris": tris})
+func push(glb: PackedByteArray, tris: int, grid: Dictionary = {}) -> void:
+	_queue.append({"glb": glb, "tris": tris, "grid": grid})
 
 
 func finish() -> void:

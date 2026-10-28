@@ -1,7 +1,7 @@
 extends Node
 ## WebSocket client for the Live Blockout server. Text events describe a stage; the next binary frame is its GLB.
 
-signal stage_received(index: int, glb: PackedByteArray, tris: int)
+signal stage_received(index: int, glb: PackedByteArray, tris: int, grid: Dictionary)
 signal finished(stages: int)
 signal failed(code: String, message: String)
 signal status(text: String)
@@ -46,7 +46,8 @@ func ingest(is_text: bool, data: PackedByteArray) -> void:
 	elif not _pending_stage.is_empty():
 		var st := _pending_stage
 		_pending_stage = {}
-		stage_received.emit(int(st.get("index", 0)), data, int(st.get("tris", 0)))
+		var g = st.get("grid", {})
+		stage_received.emit(int(st.get("index", 0)), data, int(st.get("tris", 0)), g if typeof(g) == TYPE_DICTIONARY else {})
 
 
 func _close() -> void:

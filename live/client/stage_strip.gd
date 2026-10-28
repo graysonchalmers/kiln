@@ -1,7 +1,7 @@
 extends RefCounted
 ## Holds the GLB of each stage, the selected one, and locking a stage to disk.
 
-var stages: Array = []  # [{glb: PackedByteArray, tris: int}]
+var stages: Array = []  # [{glb: PackedByteArray, tris: int, grid: Dictionary}]
 var selected := -1
 
 
@@ -10,8 +10,8 @@ func clear() -> void:
 	selected = -1
 
 
-func add(glb: PackedByteArray, tris: int) -> int:
-	stages.append({"glb": glb, "tris": tris})
+func add(glb: PackedByteArray, tris: int, grid: Dictionary = {}) -> int:
+	stages.append({"glb": glb, "tris": tris, "grid": grid})
 	return stages.size() - 1
 
 

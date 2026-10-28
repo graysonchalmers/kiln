@@ -77,6 +77,12 @@ halving the cell size, like a 1 m block, then a 0.5 m block, and so on.
 - Each level is built with kiln as soon as the previous finishes emitting, in parallel (3 at a time), and
   sent in level order. The client queues arriving levels and shows one per 0.9 s (`stage_pacer.gd`) so the
   dial-in is visible even when levels land together.
+- Every shape is built solid: after sampling, sealed interior voids (empty voxels with no path to the outside) are
+  filled with the surrounding material. Open shapes (a cup, an arch) are left open.
+- The client draws each level as individual bricks (the server sends the voxel grid and palette in the stage event
+  next to the GLB, which is kept for locking). One glowing band of about 2-3 rows climbs the box; a brick flips
+  when the band passes its centre, the old level shrinking away and the new one growing in, each brick about its
+  own centre, so the old level stays on screen until the new rows replace it.
 - Voxel levels cannot be smoothed: kiln's `smooth`/`bevel` do nothing to axis-aligned voxel faces. A
   smooth final level would need a different mesher (marching cubes) and is out of scope.
 - If `f` is missing, throws, times out or is empty, the server retries once on the same process with the
