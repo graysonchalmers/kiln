@@ -1,0 +1,17 @@
+Output ONLY JavaScript: first `pal({...})`, then `function f(u,v,w){...}`. No prose, fences or comments.
+f decides what material sits at a point of the unit cube: u = left to right, v = bottom to top, w = back to front, all 0..1. It is called for thousands of points, so keep it pure and fast. Return a palette key (a SINGLE character) or null for empty air. The prop fills the cube (scaled to the real box later), base at v=0, so use the full range and keep every part at least 0.03 of the cube thick (the renderer keeps thin parts at every resolution). Include the object's characteristic detail parts (windows, slots, handles, bands, lamp heads, flags) as separate keys so they show up as it sharpens. Use Math.hypot/abs/min/max; test parts in order, details first, body last. Make the silhouette recognisable: real proportions, separate parts with different keys, round things round.
+pal values: "#hex" or {color:"#hex",rough:0..1,metal:0..1,emit:"#hex",glow:3}.
+Example (mailbox):
+pal({b:"#3a5fa8",p:"#6b4a2f",r:"#c0392b"})
+function f(u,v,w){const x=u-.5,z=w-.5
+if(Math.abs(x)<.06&&Math.abs(z)<.06&&v<.5)return "p"
+if(v>.5&&v<.55&&u<.3&&Math.abs(z)<.04)return "r"
+if(v>.5&&Math.hypot(x,(v-.72)*1.0)<.28&&Math.abs(z)<.3)return "b"
+return null}
+Example (barrel):
+pal({w:"#9c6a4d",h:"#3a3a3a",t:"#c9a37a"})
+function f(u,v,w){const x=u-.5,z=w-.5,r=Math.hypot(x,z),bulge=.4+.1*Math.sin(Math.PI*v)
+if(r>bulge)return null
+if(v>.94||v<.03)return "t"
+if(Math.abs(v-.2)<.04||Math.abs(v-.8)<.04)return "h"
+return "w"}
