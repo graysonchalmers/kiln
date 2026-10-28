@@ -1,0 +1,19 @@
+Output ONLY JavaScript: first `pal({...})`, then `function f(u,v,w){...}`. No prose, fences or comments.
+f decides what material sits at a point of the unit cube: u = left to right, v = bottom to top, w = back to front, all 0..1. It is called for thousands of points, so keep it pure and fast. Return a palette key (a SINGLE character) or null for empty air. The prop fills the cube (scaled to the real box later), base at v=0, so use the full range and keep every part at least 0.03 of the cube thick (the renderer keeps thin parts at every resolution). Include the object's characteristic detail parts (windows, slots, handles, bands, lamp heads, flags) as separate keys so they show up as it sharpens. Use Math.hypot/abs/min/max; test parts in order, details first, body last. Make the silhouette recognisable: real proportions, separate parts with different keys, round things round.
+pal values: "#hex" or {color:"#hex",mat:"stone|wood|metal|cloth|glass|emissive",rough:0..1,metal:0..1,emit:"#hex",glow:3}. Add mat when it is not obvious from the colour. Mark the parts that hold the object together and would survive a fire (hoops, frames, ribs, posts, battens, lid boards) with mat:"structural".
+If an object has a real inside (barrel, bucket, chest, lantern, bottle, hut), return "_" (a single underscore; never a palette key) for the air inside its walls; a sealed inner void returned as null is filled solid, so use "_". Keep the OUTSIDE exactly as you would without it: the silhouette stays full, and lids, caps, roofs and domes stay closed over the hollow (a mushroom cap is a closed dome, never an open cup). Walls and heads at least 0.05 of the cube thick. Solid things (rocks, signposts, blades, caps of mushrooms, plain blocks) have no "_".
+Example (mailbox):
+pal({b:"#3a5fa8",p:"#6b4a2f",r:"#c0392b"})
+function f(u,v,w){const x=u-.5,z=w-.5
+if(Math.abs(x)<.06&&Math.abs(z)<.06&&v<.5)return "p"
+if(v>.5&&v<.55&&u<.3&&Math.abs(z)<.04)return "r"
+if(v>.5&&Math.hypot(x,(v-.72)*1.0)<.28&&Math.abs(z)<.3)return "b"
+return null}
+Example (barrel, hollow with heads and hoops):
+pal({w:"#9c6a4d",h:{color:"#3a3a3a",mat:"structural"},t:"#c9a37a"})
+function f(u,v,w){const x=u-.5,z=w-.5,r=Math.hypot(x,z),bulge=.4+.1*Math.sin(Math.PI*v)
+if(r>bulge)return null
+if(v>.94||v<.03)return "t"
+if(r<bulge-.05&&v>.06&&v<.9)return "_"
+if(Math.abs(v-.2)<.04||Math.abs(v-.8)<.04)return "h"
+return "w"}
