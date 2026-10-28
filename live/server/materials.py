@@ -3,7 +3,7 @@ metallic, grain and fresnel. A tag comes from the palette entry's `mat` field, e
 from its colour."""
 import colorsys
 
-TAGS = ("default", "stone", "wood", "metal", "cloth", "glass", "emissive")
+TAGS = ("default", "stone", "wood", "metal", "cloth", "glass", "emissive", "structural", "charred")
 
 
 def _num(v, default=None):
