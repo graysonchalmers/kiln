@@ -10,6 +10,7 @@ const SWEEP_SHADER := "res://voxel_sweep.gdshader"
 const ROWS_IN_BAND := 2.5  # the flipping zone is about this many rows of the finer level tall
 const VoxelView = preload("res://voxel_view.gd")
 const Styles = preload("res://transition_styles.gd")
+const Settings = preload("res://settings.gd")
 const Net = preload("res://net.gd")
 const Strip = preload("res://stage_strip.gd")
 const Pacer = preload("res://stage_pacer.gd")
@@ -54,7 +55,11 @@ var req_size := Vector3.ONE
 var reveal_t := -1.0
 var sweep_line: MeshInstance3D = null
 var sparks: CPUParticles3D = null
-var style := 0
+var style := Styles.index_of(Settings.DEFAULT_STYLE)
+var settings = Settings.new()
+var settings_panel: PanelContainer
+var style_opt: OptionButton
+var settings_open := false
 var clock := 0.0
 var smoke := false
 var smoke_pending := false
@@ -85,11 +90,13 @@ func _ready() -> void:
 	net.failed.connect(_on_failed)
 	net.status.connect(_set_status)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	_parse_style()
+	settings.load_from()
+	style = Styles.index_of(settings.transition_style)
+	_parse_style()  # --style / VS_STYLE override the saved setting for this run
 	if OS.get_cmdline_user_args().has("--smoke"):
 		_start_smoke()
 		return
-	_set_status("B: draw a box | Tab: mouse | <-/->: stages | L: lock | T: style (%s) | %s" % [Styles.NAMES[style], server_url])
+	_set_status("B: draw a box | Tab: mouse | <-/->: stages | L: lock | T: style (%s) | O: settings | %s" % [Styles.NAMES[style], server_url])
 
 
 ## Scripted run for screenshots and video: a fixed box and the four barrel levels, no server needed.
@@ -253,6 +260,34 @@ func _build_ui() -> void:
 	row.add_child(prompt_edit)
 	ui_root.add_child(prompt_panel)
 
+	settings_panel = PanelContainer.new()
+	settings_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	settings_panel.offset_left = -330
+	settings_panel.offset_right = -14
+	settings_panel.offset_top = 46
+	settings_panel.visible = false
+	settings_panel.add_theme_stylebox_override("panel", sb)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	settings_panel.add_child(col)
+	var title := Label.new()
+	title.text = "Settings   (O or Esc closes)"
+	title.add_theme_font_size_override("font_size", 20)
+	col.add_child(title)
+	var srow := HBoxContainer.new()
+	col.add_child(srow)
+	var slab := Label.new()
+	slab.text = "Transition style  "
+	slab.add_theme_font_size_override("font_size", 18)
+	srow.add_child(slab)
+	style_opt = OptionButton.new()
+	style_opt.add_theme_font_size_override("font_size", 18)
+	for nm in Styles.NAMES:
+		style_opt.add_item(nm)
+	style_opt.item_selected.connect(_on_style_picked)
+	srow.add_child(style_opt)
+	ui_root.add_child(settings_panel)
+
 
 func _set_status(t: String) -> void:
 	status.text = t
@@ -261,6 +296,10 @@ func _set_status(t: String) -> void:
 # ---------------------------------------------------------------- input
 
 func _unhandled_input(event: InputEvent) -> void:
+	if settings_open:
+		if event is InputEventKey and event.pressed and (event.keycode == KEY_ESCAPE or event.keycode == KEY_O):
+			_toggle_settings()
+		return
 	if prompt_open:
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 			_close_prompt()
@@ -283,8 +322,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				dragging = false
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if box_mode else Input.MOUSE_MODE_CAPTURED
 				_set_status("BOX MODE: drag a footprint on the floor (wheel = height); the prompt box opens when you let go" if box_mode else "fly mode")
+			KEY_O:
+				_toggle_settings()
 			KEY_T:
-				style = Styles.next_index(style)
+				_set_style(Styles.next_index(style))
 				_set_status("transition style: %s (T = next)" % Styles.NAMES[style])
 			KEY_LEFT:
 				_scrub(-1)
@@ -335,6 +376,29 @@ func _unhandled_input(event: InputEvent) -> void:
 			_adjust_height(0.25)
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_adjust_height(-0.25)
+
+
+func _set_style(i: int) -> void:
+	style = i
+	settings.transition_style = Styles.NAMES[style]
+	settings.save_to()
+	if style_opt != null:
+		style_opt.select(style)
+
+
+func _on_style_picked(i: int) -> void:
+	_set_style(i)
+	_set_status("transition style: %s" % Styles.NAMES[style])
+
+
+func _toggle_settings() -> void:
+	settings_open = not settings_open
+	settings_panel.visible = settings_open
+	style_opt.select(style)
+	if settings_open:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	else:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if box_mode else Input.MOUSE_MODE_CAPTURED
 
 
 func _adjust_height(d: float) -> void:
@@ -658,7 +722,7 @@ func _process(delta: float) -> void:
 		gen_done = true
 		_update_pips()
 		_set_status("finished: %d levels | <-/-> scrub | L lock | B new box" % strip.count())
-	if prompt_open:
+	if prompt_open or settings_open:
 		return
 	var d := Vector3.ZERO
 	if Input.is_physical_key_pressed(KEY_W): d.z -= 1

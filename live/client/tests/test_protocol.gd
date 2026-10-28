@@ -5,6 +5,7 @@ const Strip = preload("res://stage_strip.gd")
 const Pacer = preload("res://stage_pacer.gd")
 const VoxelView = preload("res://voxel_view.gd")
 const Styles = preload("res://transition_styles.gd")
+const Settings = preload("res://settings.gd")
 
 var failures: Array[String] = []
 
@@ -79,6 +80,23 @@ func _init() -> void:
 	check(Styles.index_of("implode") == 4 and Styles.index_of("SPARKS") == 2, "style by name, any case")
 	check(Styles.index_of("3") == 3 and Styles.index_of("9") == 0 and Styles.index_of("nope") == 0, "style by number; unknown falls back to flip")
 	check(Styles.next_index(5) == 0 and Styles.next_index(0) == 1, "T cycles and wraps")
+
+	# settings: implode by default, saved and loaded, garbage falls back to the default
+	var sets = Settings.new()
+	check(sets.transition_style == "implode", "default style is implode")
+	sets.load_from("user://does_not_exist.cfg")
+	check(sets.transition_style == "implode", "a missing file keeps the default")
+	sets.transition_style = "sparks"
+	check(sets.save_to("user://t_settings.cfg"), "settings saved")
+	var sets2 = Settings.new()
+	sets2.load_from("user://t_settings.cfg")
+	check(sets2.transition_style == "sparks", "saved style loads back")
+	var cf := ConfigFile.new()
+	cf.set_value("display", "transition_style", "nope")
+	cf.save("user://t_bad.cfg")
+	var sets3 = Settings.new()
+	sets3.load_from("user://t_bad.cfg")
+	check(sets3.transition_style == "implode", "an unknown style name falls back to the default")
 
 	var pc = Pacer.new()
 	pc.hold = 0.9

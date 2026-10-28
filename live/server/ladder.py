@@ -171,6 +171,20 @@ def master_runs(master: np.ndarray) -> np.ndarray:
     return runs
 
 
+def _thin_cells(share: np.ndarray) -> np.ndarray:
+    """Cells claimed by a thin part: the cell must hold at least as much of it as each axis neighbour. A sliver of a wall
+    that mostly sits in the next cell is not claimed (so a thin wall does not balloon by a cell); a pole that straddles
+    two cells equally is claimed by both."""
+    keep = share > 0
+    padded = np.pad(share, 1)
+    for axis in range(3):
+        for shift in (-1, 1):
+            sl = [slice(1, -1)] * 3
+            sl[axis] = slice(1 + shift, share.shape[axis] + 1 + shift)
+            keep &= share >= padded[tuple(sl)] - 1e-9
+    return keep
+
+
 def level_cells(master: np.ndarray, n: int, runs: np.ndarray | None = None) -> np.ndarray:
     """n^3 cells (y, z, x) of key characters pooled from the master volume (pass runs=master_runs(master) to reuse)."""
     N = master.shape[0]
@@ -180,7 +194,8 @@ def level_cells(master: np.ndarray, n: int, runs: np.ndarray | None = None) -> n
     keys = sorted(set(np.unique(master)) - {"."})
     blocks = lambda a: a.reshape(n, b, n, b, n, b)  # noqa: E731
     fraction = blocks(occ).mean(axis=(1, 3, 5))
-    solid = (fraction >= FILL_FRACTION) | blocks(thin).any(axis=(1, 3, 5))
+    thin_share = blocks(thin).mean(axis=(1, 3, 5))
+    solid = (fraction >= FILL_FRACTION) | _thin_cells(thin_share)
     total = np.stack([blocks(master == k).sum(axis=(1, 3, 5)) for k in keys])
     thin_n = np.stack([blocks((master == k) & thin).sum(axis=(1, 3, 5)) for k in keys])
     cell_voxels = b ** 3

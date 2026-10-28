@@ -137,6 +137,14 @@ class LevelTests(unittest.TestCase):
             want = {"h", "s"} if n == 4 else {"g", "h", "s"}
             self.assertTrue(want <= present, (n, present))
 
+    def test_thin_wall_does_not_balloon_by_a_cell(self):
+        m = solidify(eval_master(PAL, CUP, n=64))                       # the cup spans 0.1 to 0.9: 6.4 cells at n=8
+        for n, limit in ((8, 7), (16, 14)):                              # real width 6.4 and 12.8 cells; an edge cell at exactly 50% counts
+            cells = level_cells(m, n)
+            xs = np.where((cells != ".").any(axis=(0, 1)))[0]
+            self.assertLessEqual(len(xs), limit, (n, len(xs)))
+            self.assertIn(".", set(np.unique(cells[n // 2, n // 2])), n)   # and it is still open in the middle
+
     def test_sphere_silhouette_does_not_balloon(self):
         m = eval_master(PAL, SPHERE, n=64)
         fine = float((m != ".").mean())
