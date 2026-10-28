@@ -6,6 +6,7 @@ per material) are kept, and a thin minority material covering 2% of a cell wins 
 windows survive the coarse levels.
 """
 import json
+import re
 import subprocess
 
 import numpy as np
@@ -30,6 +31,18 @@ for(let y=0;y<n;y++)for(let z=0;z<n;z++)for(let x=0;x<n;x++){
 return out.join('');})()`;
   try { process.stdout.write(vm.runInContext(code, ctx, { timeout })); }
   catch (e) { process.stderr.write(String((e && e.message) || e)); process.exit(2); }
+});
+"""
+
+
+_PALETTE_JS = r"""
+const vm = require('vm');
+let input = '';
+process.stdin.on('data', d => input += d).on('end', () => {
+  const { pal_src, timeout } = JSON.parse(input);
+  const ctx = vm.createContext({}, { codeGeneration: { strings: false, wasm: false } });
+  try { process.stdout.write(String(vm.runInContext('var __P=null;function pal(o){__P=o}\n' + pal_src + '\n;JSON.stringify(__P)', ctx, { timeout }))); }
+  catch (e) { process.stdout.write('null'); }
 });
 """
 
@@ -91,6 +104,52 @@ def eval_master(pal_src: str, f_src: str, n: int = MASTER_N, timeout: float = 6.
     if not (vol != ".").any():
         raise LadderError("empty", "f returned nothing inside the unit cube")
     return vol
+
+
+def eval_palette(pal_src: str, timeout: float = 3.0) -> dict[str, str]:
+    """{key: '#rrggbb'} from pal({...}) (string or {color: ...} values); {} if it cannot be read."""
+    try:
+        r = subprocess.run(["node", "-e", _PALETTE_JS], input=json.dumps({"pal_src": pal_src, "timeout": int(timeout * 1000)}),
+                           capture_output=True, text=True, timeout=timeout + 3)
+        data = json.loads(r.stdout) if r.returncode == 0 else None
+    except (subprocess.TimeoutExpired, ValueError):
+        return {}
+    out = {}
+    for k, v in (data.items() if isinstance(data, dict) else ()):
+        color = v.get("color") if isinstance(v, dict) else v
+        if len(k) == 1 and isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+            out[k] = color.lower()
+    return out
+
+
+def solidify(master: np.ndarray) -> np.ndarray:
+    """Fill sealed interior voids (empty voxels not connected to the outside) with the surrounding material, so
+    every shape is built solid. Open shapes (a cup, an arch) are left as they are. Returns a new array."""
+    empty = master == "."
+    border = np.ones(master.shape, dtype=bool)
+    border[1:-1, 1:-1, 1:-1] = False
+    outside = empty & border
+    while True:
+        grown = outside.copy()
+        for axis in range(3):
+            for shift in (1, -1):
+                grown |= np.roll(outside, shift, axis) & empty
+        if (grown == outside).all():
+            break
+        outside = grown
+    void = empty & ~outside
+    out = master.copy()
+    while void.any():
+        before = int(void.sum())
+        for axis in range(3):
+            for shift in (1, -1):
+                neighbour = np.roll(out, shift, axis)
+                take = void & (neighbour != ".")
+                out[take] = neighbour[take]
+                void &= ~take
+        if int(void.sum()) == before:
+            break
+    return out
 
 
 def _run_lengths(occ: np.ndarray, axis: int) -> np.ndarray:

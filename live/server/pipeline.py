@@ -6,7 +6,8 @@ import time
 from typing import Awaitable, Callable
 
 from kiln_runner import build_glb
-from ladder import LEVELS, LadderError, eval_master, level_cells, level_script, master_runs, parse_reply
+from ladder import (LEVELS, LadderError, eval_master, eval_palette, level_cells, level_script, master_runs,
+                    parse_reply, solidify)
 from pool import PoolUnavailable
 
 MAX_PROMPT = 500
@@ -72,6 +73,9 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
         t_function = round(time.time() - t0, 3)  # the model's function is complete: levels can start
         attempt += 1
         master = await asyncio.to_thread(eval_master, pal_src, f_src)
+        master = await asyncio.to_thread(solidify, master)  # no sealed voids: every shape is built solid
+        palette = await asyncio.to_thread(eval_palette, pal_src)
+        grids: dict[int, dict] = {}
         started: list[tuple[int, asyncio.Task]] = []
 
         def start(n: int, script: str) -> None:  # builds begin as soon as each script exists
@@ -82,12 +86,13 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
         runs = await asyncio.to_thread(master_runs, master)
         for n in LEVELS:
             cells = await asyncio.to_thread(level_cells, master, n, runs)
+            grids[n] = {"n": n, "cells": "".join(cells.reshape(-1)), "palette": palette}
             start(n, level_script("prop", pal_src, cells, n, size_m))
         first_error = None
         for n, task in started:  # emit in level order as each build lands
             r = await task
             if r.ok:
-                await emit({"type": "stage", "index": emitted, "level": n, "tris": r.tris,
+                await emit({"type": "stage", "index": emitted, "level": n, "tris": r.tris, "grid": grids[n],
                             "t_function": t_function, "t_ready": round(time.time() - t0, 3)}, r.glb)
                 emitted += 1
             else:

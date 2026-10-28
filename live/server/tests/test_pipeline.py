@@ -86,6 +86,10 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([e["index"] for e in stages], [0, 1, 2, 3])
         self.assertEqual([e["level"] for e in stages], list(LEVELS))
         self.assertEqual(c.types(), ["stage"] * 4 + ["done"])
+        for e in stages:  # each level also carries its voxel grid for the client to draw brick by brick
+            self.assertEqual(e["grid"]["n"], e["level"])
+            self.assertEqual(len(e["grid"]["cells"]), e["level"] ** 3)
+            self.assertEqual(e["grid"]["palette"], {"s": "#aa5522"})
         for e in stages:  # timing breakdown: the function arrives before any level can land
             self.assertGreaterEqual(e["t_function"], 0)
             self.assertLessEqual(e["t_function"], e["t_ready"])
