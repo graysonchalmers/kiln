@@ -8,6 +8,7 @@ uniform float roughness_v : hint_range(0.0, 1.0) = 0.7;
 uniform float metallic_v : hint_range(0.0, 1.0) = 0.0;
 uniform float clip_y = 0.0;
 uniform float band = 0.08;
+uniform bool invert = false;   // false: show below the line (the arriving level); true: show above it (the departing one)
 uniform vec4 edge_color : source_color = vec4(0.3, 0.9, 1.0, 1.0);
 
 varying vec3 world_pos;
@@ -17,7 +18,8 @@ void vertex() {
 }
 
 void fragment() {
-	if (world_pos.y > clip_y) {
+	float d = invert ? (world_pos.y - clip_y) : (clip_y - world_pos.y);
+	if (d < 0.0) {
 		discard;
 	}
 	vec4 c = albedo_color;
@@ -27,6 +29,6 @@ void fragment() {
 	ALBEDO = c.rgb;
 	ROUGHNESS = roughness_v;
 	METALLIC = metallic_v;
-	float e = smoothstep(clip_y - band, clip_y, world_pos.y);
-	EMISSION = edge_color.rgb * e * 3.0;
+	float e = 1.0 - smoothstep(0.0, band, d);
+	EMISSION = edge_color.rgb * e * 4.0;
 }

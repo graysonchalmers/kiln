@@ -36,6 +36,19 @@ LIVE_CLAUDE=1 python3 -m unittest test_pool.LivePoolTests   # run from live/serv
 Godot (run on the Legion over `ssh legion`): `live/client/tests/parse_check.ps1 -Project <dir> -Script res://tests/test_protocol.gd`
 (protocol, strip, pacer), `-Script res://tests/e2e.gd -UserArg --server=ws://<tailnet-ip>:8795` (needs a server).
 
+## Smoke test (watch the transition without a server)
+
+`--smoke` fills a fixed box with the four barrel levels (`live/client/tests/ladder_<n>.glb`, made by
+`live/tools/make_smoke_fixtures.py`) so you can see the sweep: a glowing line climbs the box, the new level appears
+below it and grows into full size while the old level, still above it, shrinks away. Renders with Godot's Movie
+Maker in the logged-in desktop session (a Godot window flashes for about 10 s).
+
+```bash
+ssh legion 'powershell -NoProfile -File C:\Users\Grayson\claude-tmp\live-client\tests\task_smoke.ps1 -Sheet "-From 1.35 -Len 1.0 -Tile 4x2 -SheetFps 8 -TileW 480"'
+```
+
+Output: `C:\Users\Grayson\claude-tmp\smoke\smoke.avi` plus `smoke.avi.png` (a frame sheet). Logic only, no window: `tests/run_smoke.ps1 -Headless`.
+
 ## How it works
 
 `pool.py` keeps 2 warm isolated Haiku processes (`--setting-sources "" --strict-mcp-config --disable-slash-commands
