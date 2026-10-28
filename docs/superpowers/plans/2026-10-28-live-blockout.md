@@ -128,6 +128,23 @@
 - [ ] **Step 2: Run** the server on port 0 and the script with `LIVE_CLAUDE=1`; expect median first-stage at or under 3.0 s and 10 of 10 under 5 s, as in the spikes. Report respawn times from `Pool.respawn_seconds`. If it misses, record the numbers in the plan's commit message rather than tuning blindly.
 - [ ] **Step 3: Commit** `feat(live): server timing script`.
 
+### Task 6b: Blob-first stage prompt (added 2026-10-28)
+
+**Files:**
+- Modify: `docs/superpowers/specs/2026-10-28-live-blockout-stage-prompt.txt`
+- Create: `live/tools/judge_stages.md` (how stages were judged, the 5 props, the result sheets' paths)
+
+**Interfaces:**
+- Consumes: `Pool` (Task 3) via the server; kiln `settings()`, `rock()`, `sphere()`, `voxfn` (see `reference.md`).
+- Produces: a stage prompt where stage 1 is a soft blobby mass, stage 2 real construction, stage 3 detail, still separated by `//---STAGE---`.
+
+- [ ] **Step 1: Spike result:** take the best prompt from the S3 spike, install it as the stage prompt.
+- [ ] **Step 2: Run the real server timing** (`live/tools/measure_server.py`) with the new prompt; expected median first stage at or under 3.0 s (stage 1 is shorter, so not slower).
+- [ ] **Step 3: Look at the five props' stage-by-stage renders** (kiln previews) and record in `judge_stages.md` whether each stage is a visible step up and which stages got worse; a stage that looks worse than the previous one is flagged in the doc, not hidden.
+- [ ] **Step 4: Commit** `feat(live): blob-first stage prompt`.
+
+---
+
 ### Task 7: Godot client
 
 **Files:**

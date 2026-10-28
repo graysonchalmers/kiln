@@ -56,6 +56,18 @@ second, and a spike showed a small LLM can write those scripts fast enough.
 - Godot shell (box drawing, prompt, runtime GLB load, reveal shader, stub server) is written but has never
   been run. Treat the GDScript as unverified.
 
+## Stage design (revised 2026-10-28 after Grayson's first run)
+
+Grayson saw almost no difference between stage 1 and stage 2: both were blocky voxel shapes at finer
+grids. Stages must each be a visible step:
+1. **Blob:** a soft, rounded mass of the right proportions and colour (rounded primitives plus kiln's
+   `settings({ smooth, bevel })` shading), one or two colours, a few lines so it appears fast.
+2. **Construction:** the real parts and shapes (voxels and/or boxes and cylinders), bevels, several
+   materials, using the fork's material looks.
+3. **Detail and wear:** rust, bands, handles, windows, trim.
+Kiln has no metaball/SDF tool, so "blobby" means rounded primitives, not a smooth-voxel mesher. Stage
+quality is checked on the five props by looking at the renders, not by counting triangles.
+
 ## Shape of the system (decided in conversation, unless marked as my call)
 
 1. Godot client (Legion): first-person fly camera, box mode, wireframe box, prompt field. On submit it
@@ -92,7 +104,7 @@ second, and a spike showed a small LLM can write those scripts fast enough.
 
 - Godot, not Unity.
 - Prompt-to-script by Haiku through a warm process pool, not the local model and not TRELLIS.
-- Stage 2 and later are kiln detail passes (LLM-written refinement scripts), not image-to-3D.
+- Stage 2 and later are kiln LLM-written stages (see Stage design), not image-to-3D.
 - It lives in `Tool-Blockout3D` for now (it is a client and server around kiln); a separate repo is a
   later decision.
 - Voice is a later step, using the existing Hey Server wake word and transcript, not a new recognizer.
