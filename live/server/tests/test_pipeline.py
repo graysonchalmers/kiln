@@ -79,6 +79,19 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(run_request(pool, prompt, size, c, pathlib.Path(d), build=build), 30)
         return c
 
+    async def test_mat_tag_reaches_the_client_but_not_kiln(self):
+        scripts = []
+
+        def spy_build(script, workdir):
+            scripts.append(script)
+            return ok_build(script, workdir)
+        good = 'pal({s:{color:"#aa5522",mat:"wood"}})\nfunction f(u,v,w){return "s"}'
+        c = await self.run_it(FakePool(FakeLease([good])), build=spy_build)
+        self.assertEqual([e["grid"]["materials"] for e in c.events if e["type"] == "stage"], [{"s": "wood"}] * 4)
+        self.assertEqual(len(scripts), 4)
+        for sc in scripts:  # kiln's pal() rejects unknown options: the mat tag must be stripped from its script
+            self.assertNotIn('"mat"', sc)
+
     async def test_emits_four_levels_in_order(self):
         lease = FakeLease([GOOD])
         c = await self.run_it(FakePool(lease))
