@@ -24,7 +24,8 @@ powershell -NoProfile -File C:\Users\Grayson\claude-tmp\live-client\run_client.p
 
 Controls: **B** draw a box (drag a footprint, wheel = height; the prompt bar opens on release), **Enter** build,
 **Esc** cancel, **Left/Right** scrub levels, **L** lock the shown level's GLB to `assets/`,
-**Tab** free the mouse, WASD/QE fly.
+**T** next transition style, **Tab** free the mouse, WASD/QE fly. Styles (`--style=<name|number>` or `VS_STYLE`): flip, plane,
+sparks, scatter, implode (the reverse-particle one), dissolve.
 
 ## Tests
 

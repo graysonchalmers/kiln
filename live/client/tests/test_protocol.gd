@@ -4,6 +4,7 @@ const Net = preload("res://net.gd")
 const Strip = preload("res://stage_strip.gd")
 const Pacer = preload("res://stage_pacer.gd")
 const VoxelView = preload("res://voxel_view.gd")
+const Styles = preload("res://transition_styles.gd")
 
 var failures: Array[String] = []
 
@@ -73,6 +74,11 @@ func _init() -> void:
 	var pg = Pacer.new()
 	pg.push(glb, 7, {"n": 4})
 	check(pg.pop_ready(0.0).get("grid", {}).get("n") == 4, "pacer carries the grid")
+
+	check(Styles.NAMES == ["flip", "plane", "sparks", "scatter", "implode", "dissolve"], "six styles in order")
+	check(Styles.index_of("implode") == 4 and Styles.index_of("SPARKS") == 2, "style by name, any case")
+	check(Styles.index_of("3") == 3 and Styles.index_of("9") == 0 and Styles.index_of("nope") == 0, "style by number; unknown falls back to flip")
+	check(Styles.next_index(5) == 0 and Styles.next_index(0) == 1, "T cycles and wraps")
 
 	var pc = Pacer.new()
 	pc.hold = 0.9

@@ -1,8 +1,8 @@
 # Legion (PowerShell 5.1): run run_smoke.ps1 -Movie in the interactive desktop session via a one-off scheduled task, wait, print its log.
-param([string]$Movie = "C:\Users\Grayson\claude-tmp\smoke\smoke.avi", [int]$Frames = 180, [string]$Sheet = "")
+param([string]$Movie = "C:\Users\Grayson\claude-tmp\smoke\smoke.avi", [int]$Frames = 180, [string]$Sheet = "", [string]$Style = "flip")
 $dir = Split-Path $Movie; New-Item -ItemType Directory -Force $dir | Out-Null
 $log = Join-Path $dir "smoke.log"; if (Test-Path $log) { Remove-Item $log }
-$cmd = "powershell -NoProfile -File C:\Users\Grayson\claude-tmp\live-client\tests\run_smoke.ps1 -Movie `"$Movie`" -Frames $Frames $Sheet *> `"$log`""
+$cmd = "powershell -NoProfile -File C:\Users\Grayson\claude-tmp\live-client\tests\run_smoke.ps1 -Movie `"$Movie`" -Frames $Frames -Style $Style $Sheet *> `"$log`""
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -Command `"$cmd`""
 $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
 $name = "LiveBlockoutSmoke"

@@ -4,10 +4,12 @@ extends Node3D
 ## B box mode (click-drag floor, wheel = height), Enter prompt, Esc cancel prompt.
 
 const REVEAL_SECS := 0.8   # the glowing line climbs the box in this long; bricks flip one row at a time as it passes
+const PLANE_ALPHA := 0.24  # the 'plane' style only: one faint translucent plane
 const SHRINK_TO := 0.9     # the placeholder block shrinks to this fraction as it fades
 const SWEEP_SHADER := "res://voxel_sweep.gdshader"
 const ROWS_IN_BAND := 2.5  # the flipping zone is about this many rows of the finer level tall
 const VoxelView = preload("res://voxel_view.gd")
+const Styles = preload("res://transition_styles.gd")
 const Net = preload("res://net.gd")
 const Strip = preload("res://stage_strip.gd")
 const Pacer = preload("res://stage_pacer.gd")
@@ -51,6 +53,8 @@ var req_size := Vector3.ONE
 
 var reveal_t := -1.0
 var sweep_line: MeshInstance3D = null
+var sparks: CPUParticles3D = null
+var style := 0
 var clock := 0.0
 var smoke := false
 var smoke_pending := false
@@ -81,10 +85,11 @@ func _ready() -> void:
 	net.failed.connect(_on_failed)
 	net.status.connect(_set_status)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_parse_style()
 	if OS.get_cmdline_user_args().has("--smoke"):
 		_start_smoke()
 		return
-	_set_status("B: draw a box | Tab: mouse | <-/->: stages | L: lock | %s" % server_url)
+	_set_status("B: draw a box | Tab: mouse | <-/->: stages | L: lock | T: style (%s) | %s" % [Styles.NAMES[style], server_url])
 
 
 ## Scripted run for screenshots and video: a fixed box and the four barrel levels, no server needed.
@@ -107,6 +112,15 @@ func _start_smoke() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_show_placeholder()
 	_set_status("smoke test: block, then 4, 8, 16, 32 cells")
+
+
+func _parse_style() -> void:
+	var env := OS.get_environment("VS_STYLE")
+	if env != "":
+		style = Styles.index_of(env)
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--style="):
+			style = Styles.index_of(a.substr(8))
 
 
 func _parse_server() -> void:
@@ -269,6 +283,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				dragging = false
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if box_mode else Input.MOUSE_MODE_CAPTURED
 				_set_status("BOX MODE: drag a footprint on the floor (wheel = height); the prompt box opens when you let go" if box_mode else "fly mode")
+			KEY_T:
+				style = Styles.next_index(style)
+				_set_status("transition style: %s (T = next)" % Styles.NAMES[style])
 			KEY_LEFT:
 				_scrub(-1)
 			KEY_RIGHT:
@@ -484,12 +501,14 @@ func _show_stage(i: int, animate: bool) -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = sweep_shader
 	mat.set_shader_parameter("mode", 1.0)
+	mat.set_shader_parameter("style", style)
 	var view := VoxelView.build(grid, req_min, req_size, mat)
 	add_child(view)
 	if animate and cur_view != null:
 		old_view = cur_view  # stays on screen, shrinking brick by brick, until the line has passed it
 		old_mat = cur_mat
 		old_mat.set_shader_parameter("mode", 0.0)
+		old_mat.set_shader_parameter("style", style)
 	else:
 		_drop_current()
 	cur_view = view
@@ -498,6 +517,8 @@ func _show_stage(i: int, animate: bool) -> void:
 	reveal_top = req_min.y + req_size.y
 	if animate:
 		var band: float = ROWS_IN_BAND * req_size.y / float(grid["n"])
+		if style >= 3:
+			band = maxf(band, 0.28 * req_size.y)  # the particle styles need room for bricks to travel
 		for m in [cur_mat, old_mat]:
 			if m != null:
 				m.set_shader_parameter("band", band)
@@ -525,11 +546,17 @@ func _drop_views() -> void:
 
 
 func _start_sweep_line() -> void:
+	if style == 2:
+		_start_sparks()
+	if style != 1:
+		if sweep_line != null:
+			sweep_line.visible = false
+		return
 	if sweep_line == null:
 		sweep_line = MeshInstance3D.new()
 		sweep_line.mesh = BoxMesh.new()
 		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.3, 1.0, 1.0, 0.18)
+		m.albedo_color = Color(0.3, 1.0, 1.0, PLANE_ALPHA)
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -538,6 +565,35 @@ func _start_sweep_line() -> void:
 	(sweep_line.mesh as BoxMesh).size = Vector3(req_size.x * 1.05, 0.004, req_size.z * 1.05)
 	sweep_line.position = Vector3(req_min.x + req_size.x * 0.5, reveal_base, req_min.z + req_size.z * 0.5)
 	sweep_line.visible = true
+
+
+func _start_sparks() -> void:
+	if sparks == null:
+		sparks = CPUParticles3D.new()
+		sparks.amount = 260
+		sparks.lifetime = 0.55
+		sparks.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		sparks.direction = Vector3(0, 1, 0)
+		sparks.spread = 70.0
+		sparks.initial_velocity_min = 0.5
+		sparks.initial_velocity_max = 1.6
+		sparks.gravity = Vector3(0, -1.2, 0)
+		sparks.scale_amount_min = 0.5
+		sparks.scale_amount_max = 1.3
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.02, 0.02, 0.02)
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = Color(0.5, 1.0, 1.0)
+		m.emission_enabled = true
+		m.emission = Color(0.4, 1.0, 1.0)
+		m.emission_energy_multiplier = 4.0
+		bm.material = m
+		sparks.mesh = bm
+		add_child(sparks)
+	sparks.emission_box_extents = Vector3(req_size.x * 0.5, 0.01, req_size.z * 0.5)
+	sparks.position = Vector3(req_min.x + req_size.x * 0.5, reveal_base, req_min.z + req_size.z * 0.5)
+	sparks.emitting = true
 
 
 ## Finish whatever transition is running: the new level at full size, the old level and the block gone.
@@ -552,6 +608,8 @@ func _end_transition() -> void:
 	_clear_placeholder()
 	if sweep_line != null:
 		sweep_line.visible = false
+	if sparks != null:
+		sparks.emitting = false
 
 
 func _update_transition(delta: float) -> void:
@@ -571,9 +629,11 @@ func _update_transition(delta: float) -> void:
 		var mm := lerpf(1.0, SHRINK_TO, e)
 		placeholder.scale = Vector3.ONE * mm
 		placeholder.position = Vector3(req_min.x + req_size.x * 0.5, req_min.y + req_size.y * 0.5 * mm, req_min.z + req_size.z * 0.5)
-	if sweep_line != null:
+	if sweep_line != null and sweep_line.visible:
 		sweep_line.position.y = y
-		(sweep_line.material_override as StandardMaterial3D).albedo_color.a = 0.18 * (1.0 - k * k)
+		(sweep_line.material_override as StandardMaterial3D).albedo_color.a = PLANE_ALPHA * (1.0 - k * k)
+	if sparks != null and sparks.emitting:
+		sparks.position.y = y
 	if k >= 1.0:
 		_end_transition()
 
