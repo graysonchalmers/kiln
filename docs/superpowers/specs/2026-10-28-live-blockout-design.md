@@ -74,9 +74,8 @@ halving the cell size, like a 1 m block, then a 0.5 m block, and so on.
   cell wins the cell's key. (The first spike switched rules between levels, which made features vanish; the
   pooled master fixes that.)
 - Each level is built with kiln as soon as the previous finishes emitting, in parallel (3 at a time), and
-  sent in level order. The client still shows an instant placeholder is NOT implemented yet: the block
-  level is built by the server once `f` arrives. Showing a client-side block the moment Enter is pressed is
-  a follow-up.
+  sent in level order. The block level is built by the server once `f` arrives; showing a client-side
+  block the instant Enter is pressed (before the model replies) is not implemented yet and is a follow-up.
 - Voxel levels cannot be smoothed: kiln's `smooth`/`bevel` do nothing to axis-aligned voxel faces. A
   smooth final level would need a different mesher (marching cubes) and is out of scope.
 - If `f` is missing, throws, times out or is empty, the server retries once on the same process with the
