@@ -35,7 +35,7 @@ async def one(host, port, prompt):
         elif op == ws_proto.TEXT:
             ev = json.loads(data)
             if ev["type"] == "stage":
-                stages.append((ev["tris"], ev["t_ready"]))
+                stages.append((ev["tris"], ev["t_ready"], ev.get("t_function")))
             elif ev["type"] == "error":
                 err = ev
                 break
@@ -51,6 +51,7 @@ async def main(a):
         for prop in PROPS:
             first, stages, err = await one(a.host, a.port, prop)
             print(f"round {rnd + 1} {prop:22} first={first and round(first, 2)}s stages={len(stages)} "
+                  f"fn={stages and stages[0][2]}s +build={stages and round(stages[0][1] - (stages[0][2] or 0), 2)}s "
                   f"tris={[s[0] for s in stages]} t_ready={[round(s[1], 1) for s in stages]} err={err and err['code']}", flush=True)
             if first is not None:
                 firsts.append(first)

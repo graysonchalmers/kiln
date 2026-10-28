@@ -3,11 +3,12 @@ extends Node3D
 ## Keys: WASD move, Q/E down/up, mouse look, Tab capture toggle,
 ## B box mode (click-drag floor, wheel = height), Enter prompt, Esc cancel prompt.
 
-const REVEAL_SECS := 1.5
+const REVEAL_SECS := 0.6   # each ladder level sweeps in quickly; the pacer spaces the levels out
 const BAND := 0.08
 const SHADER_PATH := "res://reveal.gdshader"
 const Net = preload("res://net.gd")
 const Strip = preload("res://stage_strip.gd")
+const Pacer = preload("res://stage_pacer.gd")
 
 var server_url := "ws://envy:8795"
 var cam: Camera3D
@@ -37,6 +38,8 @@ var ui_root: Control
 
 var net: Node
 var strip = Strip.new()
+var pacer = Pacer.new()
+var placeholder: MeshInstance3D = null
 var holder: Node3D = null
 var cur_slug := "asset"
 var req_min := Vector3.ZERO
@@ -361,6 +364,8 @@ func _send_request(prompt: String) -> void:
 	req_min = b[0]
 	req_size = b[1]
 	strip.clear()
+	pacer.reset()
+	_show_placeholder()
 	if holder != null:
 		holder.queue_free()
 		holder = null
@@ -377,16 +382,34 @@ func _slug(t: String) -> String:
 	return out.left(24).strip_edges() if out != "" else "asset"
 
 
-func _on_stage(index: int, glb: PackedByteArray, tris: int) -> void:
-	var i := strip.add(glb, tris)
-	strip.select(i)
-	_show_stage(i, true)
+func _on_stage(_index: int, glb: PackedByteArray, tris: int) -> void:
+	pacer.push(glb, tris)  # shown by _process, one level per hold interval
 
 
-func _on_finished(n: int) -> void:
-	gen_done = true
-	_update_pips()
-	_set_status("finished: %d stages | <-/-> scrub | L lock | F stretch-to-fill | B new box" % n)
+func _on_finished(_n: int) -> void:
+	pacer.finish()  # "finished" is announced when the queue has been shown
+
+
+func _show_placeholder() -> void:
+	_clear_placeholder()
+	placeholder = MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = req_size
+	placeholder.mesh = bm
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.75, 0.62, 0.5, 0.5)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.emission_enabled = true
+	m.emission = Color(0.3, 0.22, 0.15)
+	placeholder.material_override = m
+	placeholder.position = req_min + req_size * 0.5
+	add_child(placeholder)
+
+
+func _clear_placeholder() -> void:
+	if placeholder != null:
+		placeholder.queue_free()
+		placeholder = null
 
 
 func _update_pips() -> void:
@@ -403,6 +426,9 @@ func _update_pips() -> void:
 
 
 func _on_failed(code: String, message: String) -> void:
+	pacer.reset()
+	if strip.count() == 0:
+		_clear_placeholder()
 	gen_done = true
 	_update_pips()
 	_set_status("%s: %s" % ["generator unavailable" if code == "generator_unavailable" else code, message])
@@ -532,6 +558,16 @@ func _update_reveal(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_update_reveal(delta)
+	var nxt: Dictionary = pacer.pop_ready(Time.get_ticks_msec() / 1000.0)
+	if not nxt.is_empty():
+		var i: int = strip.add(nxt["glb"], nxt["tris"])
+		strip.select(i)
+		_clear_placeholder()
+		_show_stage(i, true)
+	if pacer.drained() and not gen_done:
+		gen_done = true
+		_update_pips()
+		_set_status("finished: %d levels | <-/-> scrub | L lock | F stretch-to-fill | B new box" % strip.count())
 	if prompt_open:
 		return
 	var d := Vector3.ZERO

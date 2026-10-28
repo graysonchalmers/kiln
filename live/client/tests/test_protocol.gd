@@ -2,6 +2,7 @@ extends SceneTree
 ## Headless: godot --headless --path <client> --script res://tests/test_protocol.gd
 const Net = preload("res://net.gd")
 const Strip = preload("res://stage_strip.gd")
+const Pacer = preload("res://stage_pacer.gd")
 
 var failures: Array[String] = []
 
@@ -46,6 +47,24 @@ func _init() -> void:
 	var path: String = strip.lock("vend", "user://lock_test")
 	check(path == "user://lock_test/vend_s2.glb", "lock path %s" % path)
 	check(FileAccess.get_file_as_bytes(path).size() == 27816, "locked file size")
+
+	var pc = Pacer.new()
+	pc.hold = 0.9
+	for i in 3:
+		pc.push(glb, 100 + i)
+	check(pc.pop_ready(0.0).get("tris", -1) == 100, "first level shows immediately")
+	check(pc.pop_ready(0.5).is_empty(), "second level waits out the hold")
+	check(pc.pop_ready(0.9).get("tris", -1) == 101, "second level after the hold")
+	check(pc.pop_ready(1.0).is_empty(), "third level waits")
+	check(not pc.drained(), "not drained while a level is queued")
+	check(pc.pop_ready(1.8).get("tris", -1) == 102, "third level after another hold")
+	check(not pc.drained(), "not drained until the server says done")
+	pc.finish()
+	check(pc.drained(), "drained once finished and empty")
+	pc.push(glb, 1)
+	check(not pc.drained(), "a new level makes it undrained")
+	pc.reset()
+	check(pc.pop_ready(99.0).is_empty() and not pc.drained(), "reset clears the queue and the finished flag")
 
 	if failures.is_empty():
 		print("PASS test_protocol")

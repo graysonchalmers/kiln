@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 import _path  # noqa: F401
 from kiln_runner import build_glb
-from ladder import LEVELS, LadderError, block_script, eval_master, level_cells, level_script, parse_reply
+from ladder import LEVELS, LadderError, eval_master, level_cells, level_script, parse_reply
 
 PAL = 'pal({s:"#aa5522",p:"#222222",g:"#88ccff",h:"#444444"})'
 SPHERE = 'function f(u,v,w){return Math.hypot(u-.5,v-.5,w-.5)<.5?"s":null}'
@@ -66,7 +66,7 @@ class EvalTests(unittest.TestCase):
 
 class LevelTests(unittest.TestCase):
     def test_levels_constant(self):
-        self.assertEqual(LEVELS, (0, 4, 8, 16, 32))
+        self.assertEqual(LEVELS, (4, 8, 16, 32))  # the client draws the block itself
 
     def test_cube_is_full_at_every_level(self):
         m = eval_master(PAL, CUBE, n=64)
@@ -105,11 +105,9 @@ class BuildTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             return build_glb(script, pathlib.Path(d), timeout=15)
 
-    def test_block_and_levels_build_in_kiln_and_fit_the_box(self):
+    def test_levels_build_in_kiln(self):
         m = eval_master(PAL, SPHERE, n=64)
         size = (1.0, 2.0, 0.8)
-        r = self.build(block_script("prop", PAL, m, size))
-        self.assertTrue(r.ok, r.error)
         for n in (4, 16, 32):
             r = self.build(level_script("prop", PAL, level_cells(m, n), n, size))
             self.assertTrue(r.ok and r.tris > 0, (n, r.error))

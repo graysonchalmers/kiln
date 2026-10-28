@@ -1,4 +1,4 @@
-"""Resolution ladder: one model-written shape function f(u,v,w) becomes a block, then 4, 8, 16, 32 cell voxel levels.
+"""Resolution ladder: one model-written shape function f(u,v,w) becomes 4, 8, 16, 32 cell voxel levels (after the client's block).
 
 f is sampled ONCE on a 64^3 master volume (in a node vm sandbox); every level is pooled from that master with one
 rule, so a level never contains something a finer level lacks. Parts thinner than ~1.5 cells (measured
@@ -10,7 +10,7 @@ import subprocess
 
 import numpy as np
 
-LEVELS = (0, 4, 8, 16, 32)
+LEVELS = (4, 8, 16, 32)  # the client draws the solid block itself, the instant Enter is pressed
 MASTER_N = 64
 FILL_FRACTION = 0.5   # a cell is solid when at least this share of its master voxels are occupied
 FEATURE_SHARE = 0.02  # a thin minority material covering this share of a cell wins the cell's key
@@ -130,17 +130,6 @@ def level_cells(master: np.ndarray, n: int, runs: np.ndarray | None = None) -> n
     pick = np.where(score.max(axis=0) >= 0, score.argmax(axis=0), total.argmax(axis=0))
     winner = np.array(keys)[pick]
     return np.where(solid, winner, ".")
-
-
-def _majority_key(master: np.ndarray) -> str:
-    keys, counts = np.unique(master[master != "."], return_counts=True)
-    return str(keys[counts.argmax()])
-
-
-def block_script(name: str, pal_src: str, master: np.ndarray, size_m: tuple[float, float, float]) -> str:
-    """Level 0: one solid block filling the box, in the prop's most common material."""
-    w, h, d = size_m
-    return f"{pal_src}\nmodel({name!r}, box({w}, {h}, {d}, {{ mat: {_majority_key(master)!r} }}))\n"
 
 
 def level_script(name: str, pal_src: str, cells: np.ndarray, n: int, size_m: tuple[float, float, float]) -> str:

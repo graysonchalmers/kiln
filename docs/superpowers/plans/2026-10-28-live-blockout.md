@@ -138,7 +138,7 @@
 - Delete: `live/server/stages.py`, `live/server/tests/test_stages.py`
 
 **Interfaces:**
-- Produces: `LEVELS = (0, 4, 8, 16, 32)`; `parse_reply(text) -> (pal_src, f_src)`; `eval_master(pal_src, f_src, n=64, timeout=6.0) -> ndarray (y, z, x)` of key chars ('.' empty); `master_runs(master)`; `level_cells(master, n, runs=None)`; `block_script(...)`, `level_script(...)`; `LadderError(code, message)` with codes `bad_reply`, `eval_error`, `empty`.
+- Produces: `LEVELS = (4, 8, 16, 32)` (the Godot client draws the block); `parse_reply(text) -> (pal_src, f_src)`; `eval_master(pal_src, f_src, n=64, timeout=6.0) -> ndarray (y, z, x)` of key chars ('.' empty); `master_runs(master)`; `level_cells(master, n, runs=None)`; `level_script(...)`; `LadderError(code, message)` with codes `bad_reply`, `eval_error`, `empty`.
 - Pipeline events: `stage {index, level, tris, t_ready}` + GLB, `done {stages}`, `error {code, message}` (`bad_reply`, `eval_error`, `empty`, `build_failed`, plus the earlier codes).
 
 - [x] Tests written first (RED), then code: sampling consistency, thin pole, window and hoop keys, sandbox timeout and `require` blocked, block and levels build in kiln and fit the box.

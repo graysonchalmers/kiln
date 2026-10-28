@@ -18,8 +18,8 @@ second, and a spike showed a small LLM can write those scripts fast enough.
 
 - First visible voxels about 3 s after submitting a prompt (measured median 3.0 s in a spike; 5 of 10
   runs under 3 s, 10 of 10 under 5 s).
-- Five levels (block, 4, 8, 16, 32 cells) arriving within a few seconds of each other once the model's
-  function is complete.
+- A solid block at 0 s, then four levels (4, 8, 16, 32 cells) once the model's function is complete,
+  shown one per 0.9 s.
 - The asset always fits the drawn box (bounds and base on the box floor).
 - Scrub back and forth through the stages; lock a stage as the final asset (a GLB saved to disk).
 - The build looks good while it happens: voxels reveal bottom-up with an edge band inside the wireframe.
@@ -64,18 +64,19 @@ halving the cell size, like a 1 m block, then a 0.5 m block, and so on.
 
 - The model writes ONE reply: `pal({...})` plus a pure function `f(u, v, w)` over the unit cube (u across,
   v up, w front/back) that returns a one-character palette key or null. No staged scripts.
-- The server samples `f` once on a 64 x 64 x 64 master volume inside a node `vm` sandbox (10 s cap, no
-  `require`, no code-from-strings), then builds levels by pooling that one volume: **block, 4, 8, 16, 32
-  cells per side** (the 2-cell level duplicated the block and was dropped). The block is a box in the
-  prop's most common material; the others are voxel grids scaled to the box so the mesh fits it exactly.
+- The server samples `f` once on a 64 x 64 x 64 master volume inside a node `vm` sandbox (6 s cap, no
+  `require`, no code-from-strings), then builds levels by pooling that one volume: **4, 8, 16, 32 cells per
+  side**, voxel grids scaled to the box so the mesh fits it exactly. The solid block (level 0) is drawn by
+  the client itself the instant Enter is pressed, so the server does not build it (the 2-cell level
+  duplicated the block and was dropped).
 - One pooling rule for every level, so a level never lacks something a finer level has. A cell is solid
   when at least half its master voxels are occupied, or when it holds a part thinner than 1.5 cells
   (measured per material, so poles, hoops and inset windows count). A thin minority material covering 2% of a
   cell wins the cell's key. (The first spike switched rules between levels, which made features vanish; the
   pooled master fixes that.)
 - Each level is built with kiln as soon as the previous finishes emitting, in parallel (3 at a time), and
-  sent in level order. The block level is built by the server once `f` arrives; showing a client-side
-  block the instant Enter is pressed (before the model replies) is not implemented yet and is a follow-up.
+  sent in level order. The client queues arriving levels and shows one per 0.9 s (`stage_pacer.gd`) so the
+  dial-in is visible even when levels land together.
 - Voxel levels cannot be smoothed: kiln's `smooth`/`bevel` do nothing to axis-aligned voxel faces. A
   smooth final level would need a different mesher (marching cubes) and is out of scope.
 - If `f` is missing, throws, times out or is empty, the server retries once on the same process with the

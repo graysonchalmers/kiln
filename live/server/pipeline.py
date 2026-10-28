@@ -1,4 +1,4 @@
-"""One generate request: the model writes a shape function, the server builds a block then 4/8/16/32-cell levels."""
+"""One generate request: the model writes a shape function, the server builds the 4/8/16/32-cell levels."""
 import asyncio
 import math
 import pathlib
@@ -6,13 +6,12 @@ import time
 from typing import Awaitable, Callable
 
 from kiln_runner import build_glb
-from ladder import (LEVELS, LadderError, block_script, eval_master, level_cells, level_script, master_runs,
-                    parse_reply)
+from ladder import LEVELS, LadderError, eval_master, level_cells, level_script, master_runs, parse_reply
 from pool import PoolUnavailable
 
 MAX_PROMPT = 500
 MAX_DIM_M = 20.0
-BUILD_PARALLEL = 3
+BUILD_PARALLEL = 2
 Emit = Callable[[dict, "bytes | None"], Awaitable[None]]
 
 
@@ -73,17 +72,19 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
         t_function = round(time.time() - t0, 3)  # the model's function is complete: levels can start
         attempt += 1
         master = await asyncio.to_thread(eval_master, pal_src, f_src)
+        started: list[tuple[int, asyncio.Task]] = []
+
+        def start(n: int, script: str) -> None:  # builds begin as soon as each script exists
+            t = asyncio.create_task(build_level(script, workdir / f"a{attempt}_l{n}"))
+            tasks.append(t)
+            started.append((n, t))
+
         runs = await asyncio.to_thread(master_runs, master)
-        scripts = []
         for n in LEVELS:
-            if n == 0:
-                scripts.append((n, block_script("prop", pal_src, master, size_m)))
-            else:
-                cells = await asyncio.to_thread(level_cells, master, n, runs)
-                scripts.append((n, level_script("prop", pal_src, cells, n, size_m)))
-        tasks.extend(asyncio.create_task(build_level(s, workdir / f"a{attempt}_l{n}")) for n, s in scripts)
+            cells = await asyncio.to_thread(level_cells, master, n, runs)
+            start(n, level_script("prop", pal_src, cells, n, size_m))
         first_error = None
-        for (n, _), task in zip(scripts, tasks[-len(scripts):]):  # emit in level order as each build lands
+        for n, task in started:  # emit in level order as each build lands
             r = await task
             if r.ok:
                 await emit({"type": "stage", "index": emitted, "level": n, "tris": r.tris,

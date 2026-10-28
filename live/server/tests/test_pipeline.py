@@ -79,18 +79,18 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(run_request(pool, prompt, size, c, pathlib.Path(d), build=build), 30)
         return c
 
-    async def test_emits_five_levels_in_order(self):
+    async def test_emits_four_levels_in_order(self):
         lease = FakeLease([GOOD])
         c = await self.run_it(FakePool(lease))
         stages = [e for e in c.events if e["type"] == "stage"]
-        self.assertEqual([e["index"] for e in stages], [0, 1, 2, 3, 4])
+        self.assertEqual([e["index"] for e in stages], [0, 1, 2, 3])
         self.assertEqual([e["level"] for e in stages], list(LEVELS))
-        self.assertEqual(c.types(), ["stage"] * 5 + ["done"])
+        self.assertEqual(c.types(), ["stage"] * 4 + ["done"])
         for e in stages:  # timing breakdown: the function arrives before any level can land
             self.assertGreaterEqual(e["t_function"], 0)
             self.assertLessEqual(e["t_function"], e["t_ready"])
-        self.assertEqual(c.events[-1]["stages"], 5)
-        self.assertTrue(all(b.startswith(b"glTF") for b in c.blobs[:5]))
+        self.assertEqual(c.events[-1]["stages"], 4)
+        self.assertTrue(all(b.startswith(b"glTF") for b in c.blobs[:4]))
         self.assertTrue(lease.released_kill)
 
     async def test_stops_reading_once_the_function_is_complete(self):
@@ -113,9 +113,9 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
     async def test_failed_level_is_skipped_and_indices_stay_contiguous(self):
         c = await self.run_it(FakePool(FakeLease([GOOD])), build=reject8_build)
         stages = [e for e in c.events if e["type"] == "stage"]
-        self.assertEqual([e["level"] for e in stages], [0, 4, 16, 32])
-        self.assertEqual([e["index"] for e in stages], [0, 1, 2, 3])
-        self.assertEqual(c.events[-1], {"type": "done", "stages": 4})
+        self.assertEqual([e["level"] for e in stages], [4, 16, 32])
+        self.assertEqual([e["index"] for e in stages], [0, 1, 2])
+        self.assertEqual(c.events[-1], {"type": "done", "stages": 3})
 
     async def test_eval_error_retries_once_with_error_text(self):
         lease = FakeLease([BAD_F], followup_chunks=[GOOD])
