@@ -1,6 +1,6 @@
 # 🧭 Session Handoff — Tool-Blockout3D (text / image → 3D blockout generator)
 
-_Last updated: 2026-10-28 06:13 CDT (Envy): Live Blockout (`live/`) built on branch `live-blockout-build`; story in `handoff-log/2026-10-28-live-blockout.md`._
+_Last updated: 2026-10-28 18:30 CDT (Envy): Live Blockout materials pass, Legion baseline and insides prototype merged to `grayson`; story in `handoff-log/2026-10-28-live-blockout-materials.md` and `...-fast-3d-comparison.md`._
 
 ## 🎯 Current state
 Text / image → 3D blockout generator on a fork of `uilianks/kiln` (MIT, low-poly assets as code → GLB). Origin = `graysonchalmers/kiln`, work on branch **`grayson`**; `main` mirrors upstream, no upstream PR planned.
@@ -18,8 +18,10 @@ Text / image → 3D blockout generator on a fork of `uilianks/kiln` (MIT, low-po
 
 ## 🎬 Live Blockout (`live/`, merged into `grayson`)
 Draw a box in a Godot level, type a prompt, watch a voxel asset dial in. Haiku writes one shape function `f(u,v,w)`; the Envy server (`live/server`, port 8795, tailnet IP) samples it once (64^3), fills sealed voids, pools 4/8/16/32-cell levels and sends grid + GLB; the Godot client on the Legion (`live/client`) draws bricks with six transition styles (default implode; settings panel `O`, saved). Run docs, tests, measured numbers: `live/README.md`. Design/plan: `docs/superpowers/{specs,plans}/2026-10-28-live-blockout*`. Gates: 49 server tests (`python3 -m unittest discover -s live/server/tests`, `SKIP_KILN=1` for the fast set), Godot tests over `ssh legion`, visual baselines `live/tools/gallery_check_stealth.sh` (windowless, ~50 s) and `gallery_check.sh` (Legion window), SSIM 1.000 on repeat. Branch merged into `grayson` 2026-10-28.
-- First real level median 4.7 s (goal 3 s not met; model reply ~3 s). Server on 8795 may still be running (`kill $(cat /tmp/lb_server_8795.pid)`).
-- Owed: run the client with real prompts and look; `--demo` time-lapse video and five-prop acceptance run (plan Task 8); whole-branch review and merge decision (into `grayson`). Lighting pass done (sky, key+fill, SSAO, filmic; seamless resting bricks). Render timings are in `live/README.md`. Windowless renders are done on Stealth (Xvfb + lavapipe, `live/tools/gallery_check_stealth.sh`, `stealth_render.sh`); Legion renders still pop a window.
+- First real level median 4.7 s (goal 3 s not met; model reply ~3 s). Server is stopped; start with `python3 live/server/main.py` (tailnet IP, port 8795).
+- **Materials pass (kiln#1, #2; merged 2026-10-28):** material tag per palette key (`materials.py`, `grid.materials` in stage events), brick shader with loom textures, seam AO, rim, fresnel. Real prompts verified after the `mat:` palette fix: 5/5 clean, 4 stages each. 54 server tests. Both baselines refreshed (`gallery_stealth.png`, Legion `gallery.png`, kiln#4); `gallery_check.sh` passes at SSIM 1.000. New client synced to the Legion by hand (`live-client\`).
+- **Insides prototype (kiln#5):** `damage()` burn/break, air key for hollow props, barrel demo; prompt, protocol and client NOT changed. Prompt variant on branch `lb-prompt-insides` (not merged): hollow insides most runs, worse mushrooms. Fast image-to-3D comparison (TripoSR 2.3 s/prop, lumpy; Stable Fast 3D not run): `handoff-log/2026-10-28-fast-3d-comparison.md`.
+- Owed: Grayson to try the client live with the new shader (not yet seen on screen); `--demo` time-lapse and five-prop acceptance run (plan Task 8); whole-branch review; decide `lb-prompt-insides`. Windowless renders on Stealth (`gallery_check_stealth.sh`); Legion renders pop a window.
 
 ## ▶️ Next concrete step
 **Image to blockout round 12:** r11 done (crate_r11a, canvas flap removed, won 6-5; the boulder right-lobe widening lost 5.5-6 and crevices tied, so boulder_r10a stays). Next: raise the boulder's upper-left mass (the judges' real gap), crate rope handles, then Grayson's own references or a new object class. Swamp residuals (paused): hut glow, log underside V12-13, mangrove canopy, knees mat (never enlarge).
