@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 import _path  # noqa: F401
 from kiln_runner import build_glb
-from ladder import LEVELS, LadderError, eval_master, eval_materials, eval_palette, level_cells, level_script, parse_reply, solidify
+from ladder import LEVELS, LadderError, eval_master, eval_materials, eval_palette, kiln_pal, level_cells, level_script, parse_reply, solidify
 
 PAL = 'pal({s:"#aa5522",p:"#222222",g:"#88ccff",h:"#444444"})'
 SPHERE = 'function f(u,v,w){return Math.hypot(u-.5,v-.5,w-.5)<.5?"s":null}'
@@ -89,6 +89,16 @@ class MaterialTests(unittest.TestCase):
         pal = 'pal({s:"#aa5522",t:{color:"#112233"},u:7})'
         self.assertEqual(set(eval_materials(pal)), set(eval_palette(pal)))
         self.assertEqual(eval_materials('pal('), {})
+
+
+    def test_kiln_pal_drops_mat_keeps_the_rest(self):
+        pal = 'pal({a:{color:"#808080",mat:"metal",metal:.9,rough:.3},b:"#112233",c:{color:"#ffd28a",emit:"#ffd28a",glow:3}})'
+        out = kiln_pal(pal)
+        self.assertNotIn("mat", out.replace("metal", ""))
+        self.assertEqual(eval_palette(out), eval_palette(pal))
+        self.assertIn('"metal":0.9', out)
+        self.assertEqual(kiln_pal('pal({a:"#112233"})'), 'pal({a:"#112233"})')
+        self.assertEqual(kiln_pal("pal({a:{mat:"), "pal({a:{mat:")
 
 
 HOLLOW_BOX = ('function f(u,v,w){if(u<.1||u>.9||v<.1||v>.9||w<.1||w>.9)return null;'

@@ -6,7 +6,7 @@ import time
 from typing import Awaitable, Callable
 
 from kiln_runner import build_glb
-from ladder import (LEVELS, LadderError, eval_master, eval_materials, eval_palette, level_cells, level_script, master_runs,
+from ladder import (LEVELS, LadderError, eval_master, eval_materials, eval_palette, kiln_pal, level_cells, level_script, master_runs,
                     parse_reply, solidify)
 from pool import PoolUnavailable
 
@@ -85,11 +85,12 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
             started.append((n, t))
 
         runs = await asyncio.to_thread(master_runs, master)
+        kiln_src = await asyncio.to_thread(kiln_pal, pal_src)  # kiln rejects the live-only `mat` tag
         for n in LEVELS:
             cells = await asyncio.to_thread(level_cells, master, n, runs)
             grids[n] = {"n": n, "cells": "".join(cells.reshape(-1)), "palette": palette,
                          "materials": materials}
-            start(n, level_script("prop", pal_src, cells, n, size_m))
+            start(n, level_script("prop", kiln_src, cells, n, size_m))
         first_error = None
         for n, task in started:  # emit in level order as each build lands
             r = await task

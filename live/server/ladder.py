@@ -49,6 +49,21 @@ process.stdin.on('data', d => input += d).on('end', () => {
 """
 
 
+_CLEAN_JS = r"""
+const vm = require('vm');
+let input = '';
+process.stdin.on('data', d => input += d).on('end', () => {
+  const { pal_src, timeout } = JSON.parse(input);
+  const ctx = vm.createContext({}, { codeGeneration: { strings: false, wasm: false } });
+  try {
+    const o = vm.runInContext('var __P=null;function pal(o){__P=o}\n' + pal_src + '\n;__P', ctx, { timeout });
+    for (const v of Object.values(o)) if (v && typeof v === 'object') { delete v.mat; delete v.material; }
+    process.stdout.write(JSON.stringify(o));
+  } catch (e) { process.exit(2); }
+});
+"""
+
+
 class LadderError(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(f"{code}: {message}")
@@ -121,6 +136,18 @@ def _palette_raw(pal_src: str, timeout: float) -> dict:
         if len(k) == 1 and isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color):
             out[k] = (color.lower(), v)
     return out
+
+
+def kiln_pal(pal_src: str, timeout: float = 3.0) -> str:
+    """pal_src without the `mat`/`material` tags (live-only fields kiln's pal() rejects); unchanged if it cannot be read."""
+    if "mat" not in pal_src:
+        return pal_src
+    try:
+        r = subprocess.run(["node", "-e", _CLEAN_JS], input=json.dumps({"pal_src": pal_src, "timeout": int(timeout * 1000)}),
+                           capture_output=True, text=True, timeout=timeout + 3)
+    except subprocess.TimeoutExpired:
+        return pal_src
+    return f"pal({r.stdout})" if r.returncode == 0 and r.stdout.startswith("{") else pal_src
 
 
 def eval_palette(pal_src: str, timeout: float = 3.0) -> dict[str, str]:
