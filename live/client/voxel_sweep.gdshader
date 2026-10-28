@@ -46,10 +46,11 @@ void vertex() {
 			off = dir * t * 7.0;
 		}
 	}
+	float g = (style == 3 || style == 4) ? clamp(t * 1.6, 0.0, 1.0) : near;
 	lp = VERTEX;
-	VERTEX = VERTEX * s + off;
+	VERTEX = VERTEX * s * (g > 0.001 ? 0.94 : 1.0) + off;   // resting bricks are seamless; a moving brick opens a small gap
 	vcol = COLOR;
-	glow = (style == 3 || style == 4) ? clamp(t * 1.6, 0.0, 1.0) : near;
+	glow = g;
 }
 
 void fragment() {

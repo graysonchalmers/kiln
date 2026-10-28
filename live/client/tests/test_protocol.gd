@@ -55,12 +55,14 @@ func _init() -> void:
 	check(path == "user://lock_test/vend_s2.glb", "lock path %s" % path)
 	check(FileAccess.get_file_as_bytes(path).size() == 27816, "locked file size")
 
-	# voxel bricks: only cells that touch air or the grid edge are drawn
+	# voxel bricks: the skin is drawn two bricks deep, so the seams between surface bricks show a brick behind, not the empty inside
 	check(VoxelView.surface_indices("s", 1).size() == 1, "a single voxel is one brick")
-	check(VoxelView.surface_indices("s".repeat(27), 3).size() == 26, "a 3x3x3 block has 26 surface bricks (centre hidden)")
+	check(VoxelView.surface_indices("s".repeat(27), 3).size() == 27, "a 3x3x3 block: the skin is 2 deep, so even the centre is drawn")
 	check(VoxelView.surface_indices(".".repeat(8), 2).size() == 0, "empty grid draws nothing")
-	var ring := ("sss" + "sss" + "sss") + ("sss" + "s.s" + "sss") + ("sss" + "sss" + "sss")  # hollow centre
-	check(VoxelView.surface_indices(ring, 3).size() == 26, "an enclosed void leaves the 26 outer bricks")
+	check(VoxelView.surface_indices("s".repeat(125), 5).size() == 125 - 1, "a 5x5x5 block: only the very centre brick is skipped")
+	check(VoxelView.surface_indices("s".repeat(343), 7).size() == 343 - 27, "a 7x7x7 block: the inner 3x3x3 is skipped")
+	var one := ".".repeat(13) + "s" + ".".repeat(13)  # a lone voxel in the middle of a 3x3x3 grid
+	check(VoxelView.surface_indices(one, 3).size() == 1, "a lone voxel is one brick")
 	var inst: MultiMeshInstance3D = VoxelView.build({"n": 2, "cells": "ss.s....", "palette": {"s": "#ff0000"}}, Vector3(0, 0, 0), Vector3(2, 2, 2), null)
 	check(inst.multimesh.instance_count == 3, "3 filled cells -> 3 instances")
 	check(VoxelView.cell_center(0, 2, Vector3.ZERO, Vector3(2, 2, 2)).is_equal_approx(Vector3(0.5, 0.5, 0.5)), "cell 0 centre")

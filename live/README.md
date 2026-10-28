@@ -82,6 +82,25 @@ live/tools/stealth_render.sh out.avi --write-movie @OUT@ --fixed-fps 30 --quit-a
 `stealth_render.sh <out> <godot args>` syncs the client, runs Godot under Xvfb (`@OUT@` becomes the output path on Stealth)
 and copies the file back. Checked 2026-10-28: gallery SSIM 1.000 on a repeat render, a 5 s implode clip renders correctly.
 
+## Render timings (measured 2026-10-28)
+
+Wall time from the Envy, including syncing the client, regenerating prop grids, rendering and fetching the result.
+
+| Job | Legion (real GPU, a window flashes) | Stealth (software Vulkan, windowless, nice 19) |
+|---|---|---|
+| 13-prop gallery check | 33-36 s | 48 s; 55-65 s with SSAO lighting; 98 s the very first run |
+| One style clip, 6 s / 180 frames (5 s / 150 on Stealth) | 16 s wall (9 s recording, 66% of real time) | 61 s wall (30 s recording, 16% of real time) |
+| All six style clips (estimate, not run) | about 2 min plus ffmpeg | about 6-7 min |
+
+Stealth is about 3x slower than the Legion GPU and does not interrupt anyone; use it for regression checks and batches, the Legion
+for a quick look. Per-run numbers are appended to `~/.local/state/eta/actuals.jsonl`. Server side, the first real level takes a median 4.7 s.
+
+## Lighting
+
+Procedural sky with sky-sourced ambient light, a warm shadowed key light plus a cool unshadowed fill, filmic tonemap, SSAO, light
+distance fog, and a bloom threshold of 1.0 so only the glowing bricks bloom. Resting bricks are seamless; a brick opens a 6% gap only
+while it moves, and the skin is drawn two bricks deep so seams never show the empty inside.
+
 ## How it works
 
 `pool.py` keeps 2 warm isolated Haiku processes (`--setting-sources "" --strict-mcp-config --disable-slash-commands

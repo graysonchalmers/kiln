@@ -193,29 +193,56 @@ func _parse_server() -> void:
 
 func _build_room() -> void:
 	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.12, 0.14, 0.2)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.6, 0.65, 0.8)
-	env.ambient_light_energy = 0.7
-	env.glow_enabled = true
-	env.glow_intensity = 0.9
-	env.glow_bloom = 0.15
-	env.glow_hdr_threshold = 0.8
+	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = Color(0.09, 0.19, 0.42)
+	sky_mat.sky_horizon_color = Color(0.58, 0.68, 0.82)
+	sky_mat.ground_horizon_color = Color(0.36, 0.42, 0.52)
+	sky_mat.ground_bottom_color = Color(0.16, 0.18, 0.24)
+	var sky := Sky.new()
+	sky.sky_material = sky_mat
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY  # soft light from the sky dome instead of a flat colour
+	env.ambient_light_energy = 0.62
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_white = 4.5
+	env.ssao_enabled = true  # contact shadows between bricks and under props
+	env.ssao_radius = 0.35
+	env.ssao_intensity = 2.2
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 1.12
+	env.adjustment_contrast = 1.06
+	env.fog_enabled = true  # a touch of depth: the far floor fades into the sky
+	env.fog_light_color = Color(0.40, 0.48, 0.62)
+	env.fog_density = 0.016
+	env.glow_enabled = true  # only really bright things bloom: the glowing bricks, not the lit surfaces
+	env.glow_intensity = 0.8
+	env.glow_bloom = 0.1
+	env.glow_hdr_threshold = 1.0
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55, 35, 0)
+	var sun := DirectionalLight3D.new()  # warm key light, soft shadows
+	sun.rotation_degrees = Vector3(-48, 40, 0)
+	sun.light_color = Color(1.0, 0.93, 0.8)
+	sun.light_energy = 1.8
 	sun.shadow_enabled = true
+	sun.shadow_blur = 1.4
+	sun.shadow_normal_bias = 1.5
 	add_child(sun)
+	var fill := DirectionalLight3D.new()  # cool fill from the other side, no shadow, keeps the dark faces readable
+	fill.rotation_degrees = Vector3(-30, -140, 0)
+	fill.light_color = Color(0.55, 0.65, 0.92)
+	fill.light_energy = 0.3
+	add_child(fill)
 
 	var floor_mi := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
 	pm.size = Vector2(20, 20)
 	floor_mi.mesh = pm
-	floor_mi.material_override = _flat(Color(0.35, 0.38, 0.45))
+	floor_mi.material_override = _flat(Color(0.27, 0.30, 0.37))
 	add_child(floor_mi)
 
 	var wall_col := _flat(Color(0.7, 0.55, 0.45))

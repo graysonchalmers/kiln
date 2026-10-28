@@ -1,13 +1,15 @@
 extends RefCounted
 ## Turns a voxel grid ({"n", "cells", "palette"}) into one MultiMesh of bricks, so each brick animates on its own.
 
-const BRICK := 0.96  # a hair under the cell size so the rows read as separate bricks
+const BRICK := 1.0  # resting bricks fill their cell (seamless); the shader opens a small gap while a brick is moving
 const FALLBACK := Color(0.6, 0.6, 0.6)
 
 
-## Flat indices ((y*n+z)*n+x) of filled cells that touch air or the grid edge; hidden interior bricks are skipped.
+## Flat indices ((y*n+z)*n+x) of the bricks worth drawing: filled cells that touch air or the grid edge (the surface) plus the
+## filled cells just behind them, so the seams between surface bricks show a brick, not the empty inside. Deeper bricks are skipped.
 static func surface_indices(cells: String, n: int) -> PackedInt32Array:
-	var out := PackedInt32Array()
+	var surf := PackedByteArray()
+	surf.resize(n * n * n)
 	for y in n:
 		for z in n:
 			for x in n:
@@ -18,6 +20,17 @@ static func surface_indices(cells: String, n: int) -> PackedInt32Array:
 						or cells[i - 1] == "." or cells[i + 1] == "." \
 						or cells[i - n] == "." or cells[i + n] == "." \
 						or cells[i - n * n] == "." or cells[i + n * n] == ".":
+					surf[i] = 1
+	var out := PackedInt32Array()
+	for y in n:
+		for z in n:
+			for x in n:
+				var i := (y * n + z) * n + x
+				if cells[i] == ".":
+					continue
+				if surf[i] == 1 or (x > 0 and surf[i - 1] == 1) or (x < n - 1 and surf[i + 1] == 1) \
+						or (z > 0 and surf[i - n] == 1) or (z < n - 1 and surf[i + n] == 1) \
+						or (y > 0 and surf[i - n * n] == 1) or (y < n - 1 and surf[i + n * n] == 1):
 					out.append(i)
 	return out
 
