@@ -30,7 +30,12 @@ async def amain(args) -> None:
     server = Server(pool, pathlib.Path(tempfile.mkdtemp(prefix="liveblockout-")))
     await server.start(args.host, args.port)
     print(f"PORT={server.port} HOST={args.host}", flush=True)
-    await asyncio.Event().wait()
+    seen = 0
+    while True:  # log each spawn-to-ready time so respawn cost is visible
+        await asyncio.sleep(2)
+        for secs in pool.respawn_seconds[seen:]:
+            print(f"respawn_ready_s={secs:.1f}", flush=True)
+        seen = len(pool.respawn_seconds)
 
 
 if __name__ == "__main__":

@@ -37,6 +37,14 @@ class PoolTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await self.pool.wait_ready(2, 2))
         self.assertEqual(len(self.pool.respawn_seconds), 3)
 
+    async def test_cancelled_release_still_respawns(self):
+        lease = await self.pool.acquire()
+        task = asyncio.create_task(lease.release(kill=True))
+        await asyncio.sleep(0)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        self.assertTrue(await self.pool.wait_ready(2, 5))
+
     async def test_third_acquire_waits_then_completes(self):
         async def one():
             lease = await self.pool.acquire()

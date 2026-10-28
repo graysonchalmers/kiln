@@ -160,8 +160,8 @@ class Pool:
                 proc.kill() if kill else proc.terminate()
             except ProcessLookupError:
                 pass
+        self._refill()  # first: a cancelled caller must not skip the replacement
         await proc.wait()
-        self._refill()
 
     async def close(self) -> None:
         self._closed = True
