@@ -30,7 +30,7 @@ sparks, scatter, implode (the reverse-particle one), dissolve.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s live/server/tests          # 49 tests, no network (SKIP_KILN=1 skips the slow kiln builds)
+python3 -m unittest discover -s live/server/tests          # 52 tests, no network (SKIP_KILN=1 skips the slow kiln builds)
 LIVE_CLAUDE=1 python3 -m unittest test_pool.LivePoolTests   # run from live/server/tests; uses the real claude
 ```
 
@@ -100,6 +100,16 @@ for a quick look. Per-run numbers are appended to `~/.local/state/eta/actuals.js
 Procedural sky with sky-sourced ambient light, a warm shadowed key light plus a cool unshadowed fill, filmic tonemap, SSAO, light
 distance fog, and a bloom threshold of 1.0 so only the glowing bricks bloom. Resting bricks are seamless; a brick opens a 6% gap only
 while it moves, and the skin is drawn two bricks deep so seams never show the empty inside.
+
+## Materials
+
+Each palette key gets a tag (stone, wood, metal, cloth, glass, emissive, default): the model's optional `mat:"..."` in `pal`, else
+inferred from `emit`/`metal`/`rough`, else from the colour (`server/materials.py`). The stage grid carries `materials: {key: tag}`
+next to `palette` (older clients ignore it; older servers give all-default bricks). `voxel_sweep.gdshader` maps a tag (passed per brick
+as MultiMesh custom data) to roughness, metallic, grain, rim and seam AO, adds per-brick colour jitter, darkens and bevels the seams
+between bricks, and multiplies the palette colour by loom textures for stone, wood, metal and cloth (`client/materials/*.png`, 256 px,
+albedo + normal; rebuild with loom from `brick_mats.tx.js`). Projection is per brick face (boxes are axis aligned, so triplanar reduces to
+the dominant axis) with a random offset per brick. Glass gets fresnel glint, emissive self-light below the bloom threshold.
 
 ## How it works
 

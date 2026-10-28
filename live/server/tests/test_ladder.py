@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 import _path  # noqa: F401
 from kiln_runner import build_glb
-from ladder import LEVELS, LadderError, eval_master, eval_palette, level_cells, level_script, parse_reply, solidify
+from ladder import LEVELS, LadderError, eval_master, eval_materials, eval_palette, level_cells, level_script, parse_reply, solidify
 
 PAL = 'pal({s:"#aa5522",p:"#222222",g:"#88ccff",h:"#444444"})'
 SPHERE = 'function f(u,v,w){return Math.hypot(u-.5,v-.5,w-.5)<.5?"s":null}'
@@ -72,6 +72,23 @@ class PaletteTests(unittest.TestCase):
     def test_bad_or_hostile_pal_gives_empty_palette(self):
         for pal in ('pal(', 'pal(require("fs"))', 'pal({s:"red",t:7,u:{rough:.2}})', 'while(true){}'):
             self.assertEqual(eval_palette(pal, timeout=2.0), {}, pal)
+
+
+class MaterialTests(unittest.TestCase):
+    def test_explicit_tag_wins(self):
+        pal = 'pal({a:{color:"#808080",mat:"cloth"},b:{color:"#808080",mat:"bogus"}})'
+        self.assertEqual(eval_materials(pal), {"a": "cloth", "b": "stone"})
+
+    def test_inferred_from_numbers_then_colour(self):
+        pal = ('pal({e:{color:"#ffe9a8",emit:"#ffd28a",glow:3},m:{color:"#aa5522",metal:.9},g:{color:"#8fd3ff",rough:.1},'
+               'w:"#9c6a4d",s:"#a0a0a0",k:"#222222",r:"#c02020"})')
+        self.assertEqual(eval_materials(pal), {"e": "emissive", "m": "metal", "g": "glass", "w": "wood", "s": "stone",
+                                               "k": "metal", "r": "default"})
+
+    def test_same_keys_as_palette_and_bad_pal_is_empty(self):
+        pal = 'pal({s:"#aa5522",t:{color:"#112233"},u:7})'
+        self.assertEqual(set(eval_materials(pal)), set(eval_palette(pal)))
+        self.assertEqual(eval_materials('pal('), {})
 
 
 HOLLOW_BOX = ('function f(u,v,w){if(u<.1||u>.9||v<.1||v>.9||w<.1||w>.9)return null;'

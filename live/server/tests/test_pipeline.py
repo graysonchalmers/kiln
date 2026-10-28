@@ -90,6 +90,7 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(e["grid"]["n"], e["level"])
             self.assertEqual(len(e["grid"]["cells"]), e["level"] ** 3)
             self.assertEqual(e["grid"]["palette"], {"s": "#aa5522"})
+            self.assertEqual(e["grid"]["materials"], {"s": "wood"})  # tag per palette key, next to the palette
         for e in stages:  # timing breakdown: the function arrives before any level can land
             self.assertGreaterEqual(e["t_function"], 0)
             self.assertLessEqual(e["t_function"], e["t_ready"])

@@ -11,6 +11,8 @@ import subprocess
 
 import numpy as np
 
+from materials import infer_tag
+
 LEVELS = (4, 8, 16, 32)  # the client draws the solid block itself, the instant Enter is pressed
 MASTER_N = 64
 FILL_FRACTION = 0.5   # a cell is solid when at least this share of its master voxels are occupied
@@ -106,8 +108,7 @@ def eval_master(pal_src: str, f_src: str, n: int = MASTER_N, timeout: float = 6.
     return vol
 
 
-def eval_palette(pal_src: str, timeout: float = 3.0) -> dict[str, str]:
-    """{key: '#rrggbb'} from pal({...}) (string or {color: ...} values); {} if it cannot be read."""
+def _palette_raw(pal_src: str, timeout: float) -> dict:
     try:
         r = subprocess.run(["node", "-e", _PALETTE_JS], input=json.dumps({"pal_src": pal_src, "timeout": int(timeout * 1000)}),
                            capture_output=True, text=True, timeout=timeout + 3)
@@ -118,8 +119,18 @@ def eval_palette(pal_src: str, timeout: float = 3.0) -> dict[str, str]:
     for k, v in (data.items() if isinstance(data, dict) else ()):
         color = v.get("color") if isinstance(v, dict) else v
         if len(k) == 1 and isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color):
-            out[k] = color.lower()
+            out[k] = (color.lower(), v)
     return out
+
+
+def eval_palette(pal_src: str, timeout: float = 3.0) -> dict[str, str]:
+    """{key: '#rrggbb'} from pal({...}) (string or {color: ...} values); {} if it cannot be read."""
+    return {k: c for k, (c, _) in _palette_raw(pal_src, timeout).items()}
+
+
+def eval_materials(pal_src: str, timeout: float = 3.0) -> dict[str, str]:
+    """{key: material tag} for the same keys eval_palette returns (see materials.py)."""
+    return {k: infer_tag(c, v) for k, (c, v) in _palette_raw(pal_src, timeout).items()}
 
 
 def solidify(master: np.ndarray) -> np.ndarray:

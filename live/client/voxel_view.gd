@@ -3,6 +3,11 @@ extends RefCounted
 
 const BRICK := 1.0  # resting bricks fill their cell (seamless); the shader opens a small gap while a brick is moving
 const FALLBACK := Color(0.6, 0.6, 0.6)
+const TAGS := ["default", "stone", "wood", "metal", "cloth", "glass", "emissive"]  # index = the tag number the shader reads
+const TEXTURED := ["stone", "wood", "metal", "cloth"]  # layers of the loom texture arrays (live/client/materials)
+
+static var _albedo: Texture2DArray
+static var _normal: Texture2DArray
 
 
 ## Flat indices ((y*n+z)*n+x) of the bricks worth drawing: filled cells that touch air or the grid edge (the surface) plus the
@@ -47,6 +52,32 @@ static func brick_color(palette: Dictionary, key: String) -> Color:
 	return Color.from_string(hex, FALLBACK) if hex != "" else FALLBACK
 
 
+static func tag_index(grid: Dictionary, key: String) -> int:
+	var mats = grid.get("materials", {})  # older servers send no materials: every brick is "default"
+	return maxi(0, TAGS.find(mats.get(key, "default"))) if typeof(mats) == TYPE_DICTIONARY else 0
+
+
+static func _layers(suffix: String) -> Texture2DArray:
+	var imgs: Array[Image] = []
+	for t in TEXTURED:
+		var img := Image.load_from_file("res://materials/%s_%s.png" % [t, suffix])  # raw PNG: no editor import step needed
+		img.convert(Image.FORMAT_RGBA8)
+		img.generate_mipmaps()
+		imgs.append(img)
+	var arr := Texture2DArray.new()
+	arr.create_from_images(imgs)
+	return arr
+
+
+## Gives a brick material the loom texture arrays (built once, shared).
+static func apply_textures(mat: ShaderMaterial) -> void:
+	if _albedo == null:
+		_albedo = _layers("albedo")
+		_normal = _layers("normal")
+	mat.set_shader_parameter("tex_albedo", _albedo)
+	mat.set_shader_parameter("tex_normal", _normal)
+
+
 ## One MultiMeshInstance3D of bricks filling the box [box_min, box_min + box_size]; each brick's origin is its own centre.
 static func build(grid: Dictionary, box_min: Vector3, box_size: Vector3, mat: Material) -> MultiMeshInstance3D:
 	var n: int = grid["n"]
@@ -56,6 +87,7 @@ static func build(grid: Dictionary, box_min: Vector3, box_size: Vector3, mat: Ma
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
+	mm.use_custom_data = true  # x = material tag index / 8
 	var box := BoxMesh.new()
 	box.size = Vector3.ONE
 	mm.mesh = box
@@ -65,6 +97,9 @@ static func build(grid: Dictionary, box_min: Vector3, box_size: Vector3, mat: Ma
 	for k in idx.size():
 		mm.set_instance_transform(k, Transform3D(basis, cell_center(idx[k], n, box_min, box_size)))
 		mm.set_instance_color(k, brick_color(palette, cells[idx[k]]))
+		mm.set_instance_custom_data(k, Color(tag_index(grid, cells[idx[k]]) / 8.0, 0.0, 0.0, 0.0))
+	if mat is ShaderMaterial:
+		apply_textures(mat)
 	var inst := MultiMeshInstance3D.new()
 	inst.multimesh = mm
 	inst.material_override = mat
