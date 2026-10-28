@@ -158,6 +158,7 @@
 
 - [ ] **Step 1: Implement `--measure` mode** in the client: runs the 5 props twice with a fixed 1 m x 2 m x 0.8 m box, writes timings.
 - [ ] **Step 2: Run it on the Legion**; expected median send-to-first-stage at or under 3.0 s, all 5 props produce at least 2 stages, one stage locks to a file.
+- [ ] **Step 2b: Demo video (Grayson asked, 2026-10-28).** Add `--demo` to the client: it scripts the whole interaction (camera flies in, a wireframe box is dragged on the floor, the prompt types itself into the field, stages stream in with the reveal, the strip scrubs back and locks one). Record with Godot's Movie Maker (`godot --path <client> --write-movie demo.avi --fixed-fps 30 -- --demo --port=<n>`) on the Legion in the logged-in desktop session (a scheduled task set to run only when Grayson is logged on; if that cannot start a window, hand him the one command). Convert to MP4 with ffmpeg, send with `SendUserFile`, and copy to `C:\Users\Grayson\Downloads\envy\` via `_agent-commons/tools/to-legion`. Run it for at least the vending machine and one more prop.
 - [ ] **Step 3: Record the results** (numbers, respawn times, failures) in `live/README.md`; if the median misses 3.0 s, state the measured value and the likely cause.
 - [ ] **Step 4: Commit** `docs(live): run steps and milestone-1 results`.
 
