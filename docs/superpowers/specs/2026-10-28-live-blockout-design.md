@@ -18,8 +18,8 @@ second, and a spike showed a small LLM can write those scripts fast enough.
 
 - First visible voxels about 3 s after submitting a prompt (measured median 3.0 s in a spike; 5 of 10
   runs under 3 s, 10 of 10 under 5 s).
-- 3 to 4 refinement stages arriving about 1.2 s apart after stage 1, ending within roughly a minute of
-  the prompt (a longer tail is fine as long as stages keep landing).
+- Five levels (block, 4, 8, 16, 32 cells) arriving within a few seconds of each other once the model's
+  function is complete.
 - The asset always fits the drawn box (bounds and base on the box floor).
 - Scrub back and forth through the stages; lock a stage as the final asset (a GLB saved to disk).
 - The build looks good while it happens: voxels reveal bottom-up with an edge band inside the wireframe.
@@ -56,26 +56,41 @@ second, and a spike showed a small LLM can write those scripts fast enough.
 - Godot shell (box drawing, prompt, runtime GLB load, reveal shader, stub server) is written but has never
   been run. Treat the GDScript as unverified.
 
-## Stage design (revised 2026-10-28 after Grayson's first run)
+## Stage design: a resolution ladder (revised 2026-10-28, Grayson's idea)
 
-Grayson saw almost no difference between stage 1 and stage 2: both were blocky voxel shapes at finer
-grids. Stages must each be a visible step:
-1. **Blob:** a soft, rounded mass of the right proportions and colour (rounded primitives plus kiln's
-   `settings({ smooth, bevel })` shading), one or two colours, a few lines so it appears fast.
-2. **Construction:** the real parts and shapes (voxels and/or boxes and cylinders), bevels, several
-   materials, using the fork's material looks.
-3. **Detail and wear:** rust, bands, handles, windows, trim.
-Kiln has no metaball/SDF tool, so "blobby" means rounded primitives, not a smooth-voxel mesher. Stage
-quality is checked on the five props by looking at the renders, not by counting triangles.
+Grayson's first run showed almost no difference between stage 1 and 2: the model wrote three blocky
+scripts at finer grids. His fix, adopted: start with a solid block filling the box and "dial in" by
+halving the cell size, like a 1 m block, then a 0.5 m block, and so on.
+
+- The model writes ONE reply: `pal({...})` plus a pure function `f(u, v, w)` over the unit cube (u across,
+  v up, w front/back) that returns a one-character palette key or null. No staged scripts.
+- The server samples `f` once on a 64 x 64 x 64 master volume inside a node `vm` sandbox (10 s cap, no
+  `require`, no code-from-strings), then builds levels by pooling that one volume: **block, 4, 8, 16, 32
+  cells per side** (the 2-cell level duplicated the block and was dropped). The block is a box in the
+  prop's most common material; the others are voxel grids scaled to the box so the mesh fits it exactly.
+- One pooling rule for every level, so a level never lacks something a finer level has. A cell is solid
+  when at least half its master voxels are occupied, or when it holds a part thinner than 1.5 cells
+  (measured per material, so poles, hoops and inset windows count). A thin minority material covering 2% of a
+  cell wins the cell's key. (The first spike switched rules between levels, which made features vanish; the
+  pooled master fixes that.)
+- Each level is built with kiln as soon as the previous finishes emitting, in parallel (3 at a time), and
+  sent in level order. The client still shows an instant placeholder is NOT implemented yet: the block
+  level is built by the server once `f` arrives. Showing a client-side block the moment Enter is pressed is
+  a follow-up.
+- Voxel levels cannot be smoothed: kiln's `smooth`/`bevel` do nothing to axis-aligned voxel faces. A
+  smooth final level would need a different mesher (marching cubes) and is out of scope.
+- If `f` is missing, throws, times out or is empty, the server retries once on the same process with the
+  error text; a level that fails to build is skipped and the rest continue.
+
+Kiln has no metaball/SDF tool, so the coarse levels are blocky voxel blobs, not smooth ones.
 
 ## Shape of the system (decided in conversation, unless marked as my call)
 
 1. Godot client (Legion): first-person fly camera, box mode, wireframe box, prompt field. On submit it
    sends `{prompt, size:[x,y,z]}` to the generation server and receives GLBs, one per stage.
 2. Generation server (Envy): keeps a pool of 2 warm isolated Haiku processes (my call: pool size 2,
-   replaced after each use). Streams the model output, splits at `//---STAGE---`, runs `kiln build
-   --no-preview` on each complete stage as it arrives, sends each GLB to the client, retries once (or
-   falls back to the previous good stage) when kiln errors.
+   replaced after each use). Reads the reply until `f` is complete, samples it into the master volume,
+   builds the ladder levels with kiln and sends each GLB to the client, retrying once on a bad reply.
 3. Client reveal: each arriving stage replaces the previous mesh, fitted to the box, with the bottom-up
    reveal. The wireframe stays. A stage strip lets him scrub and lock.
 4. Transport: WebSocket on a port chosen by the OS (port 0, per repo rules), not a fixed port. (my call)
@@ -104,7 +119,7 @@ quality is checked on the five props by looking at the renders, not by counting 
 
 - Godot, not Unity.
 - Prompt-to-script by Haiku through a warm process pool, not the local model and not TRELLIS.
-- Stage 2 and later are kiln LLM-written stages (see Stage design), not image-to-3D.
+- Stages are a resolution ladder of one model-written shape function (see Stage design), not image-to-3D.
 - It lives in `Tool-Blockout3D` for now (it is a client and server around kiln); a separate repo is a
   later decision.
 - Voice is a later step, using the existing Hey Server wake word and transcript, not a new recognizer.

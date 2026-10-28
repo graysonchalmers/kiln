@@ -1,5 +1,7 @@
 # Live Blockout Implementation Plan
 
+> **Revised 2026-10-28:** Tasks 1 (stage splitter) and 4 (pipeline) were superseded by the resolution ladder (`live/server/ladder.py`, new `pipeline.py`); the splitter was deleted. Task 6b below records the ladder. The spec has the full design.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Draw a box in a Godot level, send a prompt to the Envy, and watch kiln voxel stages stream into the box, scrub them, and lock one as a GLB.
@@ -128,20 +130,20 @@
 - [ ] **Step 2: Run** the server on port 0 and the script with `LIVE_CLAUDE=1`; expect median first-stage at or under 3.0 s and 10 of 10 under 5 s, as in the spikes. Report respawn times from `Pool.respawn_seconds`. If it misses, record the numbers in the plan's commit message rather than tuning blindly.
 - [ ] **Step 3: Commit** `feat(live): server timing script`.
 
-### Task 6b: Blob-first stage prompt (added 2026-10-28)
+### Task 6b: Resolution ladder (replaces the blob-first plan, 2026-10-28)
 
 **Files:**
-- Modify: `docs/superpowers/specs/2026-10-28-live-blockout-stage-prompt.txt`
-- Create: `live/tools/judge_stages.md` (how stages were judged, the 5 props, the result sheets' paths)
+- Create: `live/server/ladder.py`, `live/server/tests/test_ladder.py`
+- Modify: `live/server/pipeline.py` (ladder flow), `live/server/tests/test_pipeline.py`, `docs/superpowers/specs/2026-10-28-live-blockout-stage-prompt.txt` (now the f-only prompt)
+- Delete: `live/server/stages.py`, `live/server/tests/test_stages.py`
 
 **Interfaces:**
-- Consumes: `Pool` (Task 3) via the server; kiln `settings()`, `rock()`, `sphere()`, `voxfn` (see `reference.md`).
-- Produces: a stage prompt where stage 1 is a soft blobby mass, stage 2 real construction, stage 3 detail, still separated by `//---STAGE---`.
+- Produces: `LEVELS = (0, 4, 8, 16, 32)`; `parse_reply(text) -> (pal_src, f_src)`; `eval_master(pal_src, f_src, n=64, timeout=6.0) -> ndarray (y, z, x)` of key chars ('.' empty); `master_runs(master)`; `level_cells(master, n, runs=None)`; `block_script(...)`, `level_script(...)`; `LadderError(code, message)` with codes `bad_reply`, `eval_error`, `empty`.
+- Pipeline events: `stage {index, level, tris, t_ready}` + GLB, `done {stages}`, `error {code, message}` (`bad_reply`, `eval_error`, `empty`, `build_failed`, plus the earlier codes).
 
-- [ ] **Step 1: Spike result:** take the best prompt from the S3 spike, install it as the stage prompt.
-- [ ] **Step 2: Run the real server timing** (`live/tools/measure_server.py`) with the new prompt; expected median first stage at or under 3.0 s (stage 1 is shorter, so not slower).
-- [ ] **Step 3: Look at the five props' stage-by-stage renders** (kiln previews) and record in `judge_stages.md` whether each stage is a visible step up and which stages got worse; a stage that looks worse than the previous one is flagged in the doc, not hidden.
-- [ ] **Step 4: Commit** `feat(live): blob-first stage prompt`.
+- [x] Tests written first (RED), then code: sampling consistency, thin pole, window and hoop keys, sandbox timeout and `require` blocked, block and levels build in kiln and fit the box.
+- [x] Measured with the real server on the warm pool: see `live/README.md` once Task 8 writes the results.
+- [ ] Look at the five props' levels in the Godot client (Grayson) and tune `FILL_FRACTION`, `THIN_CELLS`, `FEATURE_SHARE` if a level looks wrong.
 
 ---
 
