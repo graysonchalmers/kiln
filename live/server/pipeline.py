@@ -1,4 +1,4 @@
-"""One generate request: stream the model, build each stage with kiln, emit GLBs as they land."""
+"""One generate request: the model writes a shape function, the server builds a block then 4/8/16/32-cell levels."""
 import asyncio
 import math
 import pathlib
@@ -6,11 +6,13 @@ import time
 from typing import Awaitable, Callable
 
 from kiln_runner import build_glb
+from ladder import (LEVELS, LadderError, block_script, eval_master, level_cells, level_script, master_runs,
+                    parse_reply)
 from pool import PoolUnavailable
-from stages import StageSplitter
 
 MAX_PROMPT = 500
 MAX_DIM_M = 20.0
+BUILD_PARALLEL = 3
 Emit = Callable[[dict, "bytes | None"], Awaitable[None]]
 
 
@@ -20,6 +22,21 @@ def _bad_size(size) -> bool:
     except (TypeError, ValueError):
         return True
     return len(vals) != 3 or any(not math.isfinite(v) or v <= 0 or v > MAX_DIM_M for v in vals)
+
+
+async def _read_function(text_stream) -> tuple[str, str]:
+    """Read the reply only until pal(...) and function f are complete, then stop (the rest is not needed)."""
+    text = ""
+    try:
+        async for delta in text_stream:
+            text += delta
+            try:
+                return parse_reply(text)
+            except LadderError:
+                continue
+    finally:
+        await text_stream.aclose()
+    return parse_reply(text)  # raises bad_reply
 
 
 async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Path, build=build_glb) -> None:
@@ -39,56 +56,69 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
 
     t0 = time.time()
     workdir = pathlib.Path(workdir)
-    queue: asyncio.Queue = asyncio.Queue()
-    state = {"emitted": 0, "scripts": 0, "last_error": None, "builds": 0}
+    emitted = 0
+    attempt = 0
+    sem = asyncio.Semaphore(BUILD_PARALLEL)
+    tasks: list[asyncio.Task] = []
 
-    async def build_one(script: str):
-        state["builds"] += 1
-        d = workdir / f"b{state['builds']}"
+    async def build_level(script: str, d: pathlib.Path):
         d.mkdir(parents=True, exist_ok=True)
-        r = await asyncio.to_thread(build, script, d)
-        if r.ok:
-            await emit({"type": "stage", "index": state["emitted"], "tris": r.tris,
-                        "t_ready": round(time.time() - t0, 3)}, r.glb)
-            state["emitted"] += 1
-        else:
-            state["last_error"] = r.error
-        return r.ok
+        async with sem:
+            return await asyncio.to_thread(build, script, d)
 
-    async def builder():
-        while (script := await queue.get()) is not None:
-            await build_one(script)
+    async def make_levels(pal_src: str, f_src: str) -> str | None:
+        """Build and emit every level; returns an error message if nothing could be emitted."""
+        nonlocal emitted, attempt
+        attempt += 1
+        master = await asyncio.to_thread(eval_master, pal_src, f_src)
+        runs = await asyncio.to_thread(master_runs, master)
+        scripts = []
+        for n in LEVELS:
+            if n == 0:
+                scripts.append((n, block_script("prop", pal_src, master, size_m)))
+            else:
+                cells = await asyncio.to_thread(level_cells, master, n, runs)
+                scripts.append((n, level_script("prop", pal_src, cells, n, size_m)))
+        tasks.extend(asyncio.create_task(build_level(s, workdir / f"a{attempt}_l{n}")) for n, s in scripts)
+        first_error = None
+        for (n, _), task in zip(scripts, tasks[-len(scripts):]):  # emit in level order as each build lands
+            r = await task
+            if r.ok:
+                await emit({"type": "stage", "index": emitted, "level": n, "tris": r.tris,
+                            "t_ready": round(time.time() - t0, 3)}, r.glb)
+                emitted += 1
+            else:
+                first_error = first_error or r.error
+        return None if emitted else (first_error or "no level could be built")
 
-    btask = asyncio.create_task(builder())
-    splitter = StageSplitter()
     try:
-        async for delta in lease.generate(prompt, size_m):
-            for s in splitter.feed(delta):
-                state["scripts"] += 1
-                queue.put_nowait(s)
-        for s in splitter.finish():
-            state["scripts"] += 1
-            queue.put_nowait(s)
-        queue.put_nowait(None)
-        await btask
-        if state["scripts"] == 0:
-            await emit({"type": "error", "code": "no_stages", "message": "the generator returned no script"}, None)
-            return
-        if state["emitted"] == 0:
+        error: LadderError | str | None = None
+        try:
+            pal_src, f_src = await _read_function(lease.generate(prompt, size_m))
+            error = await make_levels(pal_src, f_src)
+        except LadderError as e:
+            error = e
+        if error is not None:  # nothing was emitted: one retry on the same process with the error text
+            msg = error.message if isinstance(error, LadderError) else error
             retry = ""
             async for d in lease.followup(
-                    f"That script failed to build: {state['last_error']}\nReply with only one corrected, complete script."):
+                    f"That failed: {msg}\nReply with only a corrected pal({{...}}) and function f(u,v,w){{...}}."):
                 retry += d
-            fixed = StageSplitter()
-            scripts = fixed.feed(retry + "\n//---STAGE---\n")
-            if not (scripts and await build_one(scripts[0])):
-                await emit({"type": "error", "code": "build_failed", "message": str(state["last_error"])}, None)
+            try:
+                error = await make_levels(*parse_reply(retry))
+            except LadderError as e:
+                error = e
+            if error is not None:
+                code = error.code if isinstance(error, LadderError) else "build_failed"
+                await emit({"type": "error", "code": code,
+                            "message": error.message if isinstance(error, LadderError) else error}, None)
                 return
-        await emit({"type": "done", "stages": state["emitted"]}, None)
+        await emit({"type": "done", "stages": emitted}, None)
     except PoolUnavailable as e:
         await emit({"type": "error", "code": "generator_unavailable", "message": e.reason}, None)
     finally:
-        if not btask.done():
-            btask.cancel()
-        await asyncio.gather(btask, return_exceptions=True)
+        for t in tasks:
+            if not t.done():
+                t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
         await lease.release(kill=True)

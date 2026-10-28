@@ -1,21 +1,17 @@
-You write kiln voxel model scripts as a SEQUENCE OF 3 COMPLETE STAGES, separated by a line `//---STAGE---`. Output ONLY JavaScript, no markdown fences, no prose, no commentary, no comments.
-Each stage is a full standalone script (pal(...) then model(name, voxfn(...))) that redefines the same model with more detail. Stage 1 = coarse recognizable silhouette only: grid about 6x10x6, 2-3 palette keys, under 8 lines, emit it FAST. Stage 2 = grid about 10x16x10 with main features. Stage 3 = grid about 14x22x14 with fine details.
-API (globals): pal({key:"#hex" | {color:"#hex",rough:0..1,metal:0..1,emit:"#hex",glow:3}}) SINGLE-CHARACTER keys; model(name, voxfn([nx,ny,nz], (x,y,z)=>key|null, {size:S})).
-voxfn calls the function for every integer cell 0<=x<nx,0<=y<ny,0<=z<nz (null = empty). Y up, +Z front, base on y=0. Use size so the prop is realistic height: stage1 size 0.2, stage2 0.125, stage3 0.09 (about same total size). Plain JS, Math allowed.
-Technique: conditionals for the silhouette, details (windows, bands, handles, legs) as extra if-lines BEFORE the body fill, distinct palette keys per part, Math.hypot for round shapes.
-Example (stage 1 and 2 of "rusty vending machine"):
-pal({ r: "#a8432f", g: "#8fd3ff", k: "#2b2b2b" })
-model("vend", voxfn([6, 10, 5], (x, y, z) => {
-  if (y < 1) return (x === 0 || x === 5) ? "k" : null
-  if (z === 4 && x > 0 && x < 4 && y > 2 && y < 8) return "g"
-  return "r"
-}, { size: 0.2 }))
-//---STAGE---
-pal({ r: "#a8432f", d: "#6e2c1f", g: { color: "#8fd3ff", rough: 0.1 }, k: "#2b2b2b", y: "#d9b44a" })
-model("vend", voxfn([10, 18, 8], (x, y, z) => {
-  if (y < 1 && (x < 1 || x > 8) && (z < 1 || z > 6)) return "k"
-  if (y < 1) return null
-  if (z === 7 && x > 1 && x < 7 && y > 3 && y < 15) return "g"
-  if (z === 7 && x > 7 && y > 9 && y < 12) return "y"
-  return (y + x) % 5 === 0 ? "d" : "r"
-}, { size: 0.1 }))
+Output ONLY JavaScript: first `pal({...})`, then `function f(u,v,w){...}`. No prose, fences or comments.
+f decides what material sits at a point of the unit cube: u = left to right, v = bottom to top, w = back to front, all 0..1. It is called for thousands of points, so keep it pure and fast. Return a palette key (a SINGLE character) or null for empty air. The prop fills the cube (scaled to the real box later), base at v=0, so use the full range and keep every part at least 0.03 of the cube thick (the renderer keeps thin parts at every resolution). Include the object's characteristic detail parts (windows, slots, handles, bands, lamp heads, flags) as separate keys so they show up as it sharpens. Use Math.hypot/abs/min/max; test parts in order, details first, body last. Make the silhouette recognisable: real proportions, separate parts with different keys, round things round.
+pal values: "#hex" or {color:"#hex",rough:0..1,metal:0..1,emit:"#hex",glow:3}.
+Example (mailbox):
+pal({b:"#3a5fa8",p:"#6b4a2f",r:"#c0392b"})
+function f(u,v,w){const x=u-.5,z=w-.5
+if(Math.abs(x)<.06&&Math.abs(z)<.06&&v<.5)return "p"
+if(v>.5&&v<.55&&u<.3&&Math.abs(z)<.04)return "r"
+if(v>.5&&Math.hypot(x,(v-.72)*1.0)<.28&&Math.abs(z)<.3)return "b"
+return null}
+Example (barrel):
+pal({w:"#9c6a4d",h:"#3a3a3a",t:"#c9a37a"})
+function f(u,v,w){const x=u-.5,z=w-.5,r=Math.hypot(x,z),bulge=.4+.1*Math.sin(Math.PI*v)
+if(r>bulge)return null
+if(v>.94||v<.03)return "t"
+if(Math.abs(v-.2)<.04||Math.abs(v-.8)<.04)return "h"
+return "w"}

@@ -5,20 +5,24 @@ import tempfile
 import unittest
 import _path  # noqa: F401
 from kiln_runner import BuildResult
+from ladder import LEVELS
 from pipeline import run_request
 from pool import PoolUnavailable
 
-SEP = "\n//---STAGE---\n"
-OK1 = 'pal({r:"#a00"})\nmodel("a", voxfn([2,2,2], (x,y,z)=>"r", {size:0.1}))'
-OK2 = 'pal({r:"#a00"})\nmodel("a", voxfn([4,4,4], (x,y,z)=>"r", {size:0.05}))'
-BAD = 'pal({r:"#a00"})\nmodel("a", BAD(1))'
+PAL = 'pal({s:"#aa5522"})'
+GOOD = PAL + '\nfunction f(u,v,w){return Math.hypot(u-.5,v-.5,w-.5)<.5?"s":null}'
+BAD_F = PAL + '\nfunction f(u,v,w){throw new Error("boom")}'
 SIZE = (1.0, 2.0, 0.8)
 
 
-def fake_build(script, workdir):
-    ok = "BAD" not in script
-    return BuildResult(ok, b"glTF" + script.encode() if ok else None, len(script) if ok else None,
-                       None if ok else "ReferenceError: BAD is not defined", 0.01)
+def ok_build(script, workdir):
+    return BuildResult(True, b"glTF" + script[:20].encode(), 100, None, 0.01)
+
+
+def reject8_build(script, workdir):
+    ok = "[8, 8, 8]" not in script
+    return BuildResult(ok, b"glTF" + script[:20].encode() if ok else None, 100 if ok else None,
+                       None if ok else "kiln: bad level", 0.01)
 
 
 class FakeLease:
@@ -69,67 +73,65 @@ class Collector:
 
 
 class PipelineTests(unittest.IsolatedAsyncioTestCase):
-    async def run_it(self, pool, prompt="barrel", size=SIZE):
+    async def run_it(self, pool, prompt="barrel", size=SIZE, build=ok_build):
         c = Collector()
         with tempfile.TemporaryDirectory() as d:
-            await run_request(pool, prompt, size, c, pathlib.Path(d), build=fake_build)
+            await asyncio.wait_for(run_request(pool, prompt, size, c, pathlib.Path(d), build=build), 30)
         return c
 
-    async def test_emits_stage_per_complete_stage_before_stream_ends(self):
-        lease = FakeLease([OK1 + SEP, None, OK2])
+    async def test_emits_five_levels_in_order(self):
+        lease = FakeLease([GOOD])
+        c = await self.run_it(FakePool(lease))
+        stages = [e for e in c.events if e["type"] == "stage"]
+        self.assertEqual([e["index"] for e in stages], [0, 1, 2, 3, 4])
+        self.assertEqual([e["level"] for e in stages], list(LEVELS))
+        self.assertEqual(c.types(), ["stage"] * 5 + ["done"])
+        self.assertEqual(c.events[-1]["stages"], 5)
+        self.assertTrue(all(b.startswith(b"glTF") for b in c.blobs[:5]))
+        self.assertTrue(lease.released_kill)
+
+    async def test_stops_reading_once_the_function_is_complete(self):
+        lease = FakeLease([GOOD[:30], GOOD[30:], None])  # stream would hang after the full reply
         lease.gate = asyncio.Event()
-        c = Collector()
-        with tempfile.TemporaryDirectory() as d:
-            task = asyncio.create_task(run_request(FakePool(lease), "barrel", SIZE, c, pathlib.Path(d), build=fake_build))
-            for _ in range(100):
-                if "stage" in c.types():
-                    break
-                await asyncio.sleep(0.02)
-            self.assertIn("stage", c.types())
-            self.assertFalse(task.done())
-            lease.gate.set()
-            await asyncio.wait_for(task, 5)
-        self.assertEqual(c.types(), ["stage", "stage", "done"])
-        self.assertEqual([e["index"] for e in c.events if e["type"] == "stage"], [0, 1])
-        self.assertEqual(c.events[-1]["stages"], 2)
-        self.assertTrue(c.blobs[0].startswith(b"glTF"))
+        c = await self.run_it(FakePool(lease))
+        self.assertEqual(c.types()[-1], "done")
 
     async def test_bad_prompt_and_size_rejected_without_model_call(self):
         cases = [("", SIZE, "bad_prompt"), ("   ", SIZE, "bad_prompt"), ("x" * 501, SIZE, "bad_prompt"),
                  ("ok", (0, 1, 1), "bad_size"), ("ok", (-1, 1, 1), "bad_size"),
                  ("ok", (math.nan, 1, 1), "bad_size"), ("ok", (1, 20.5, 1), "bad_size"), ("ok", (1, 1), "bad_size")]
         for prompt, size, code in cases:
-            pool = FakePool(FakeLease([OK1]))
+            pool = FakePool(FakeLease([GOOD]))
             c = await self.run_it(pool, prompt, size)
             self.assertEqual(c.types(), ["error"], (prompt[:5], size))
             self.assertEqual(c.events[0]["code"], code)
             self.assertEqual(pool.acquired, 0)
 
-    async def test_later_failed_stage_is_skipped_without_error(self):
-        lease = FakeLease([OK1 + SEP + BAD + SEP + OK2])
-        c = await self.run_it(FakePool(lease))
-        self.assertEqual(c.types(), ["stage", "stage", "done"])
-        self.assertEqual(c.events[-1]["stages"], 2)
-        self.assertEqual(lease.followups, [])
+    async def test_failed_level_is_skipped_and_indices_stay_contiguous(self):
+        c = await self.run_it(FakePool(FakeLease([GOOD])), build=reject8_build)
+        stages = [e for e in c.events if e["type"] == "stage"]
+        self.assertEqual([e["level"] for e in stages], [0, 4, 16, 32])
+        self.assertEqual([e["index"] for e in stages], [0, 1, 2, 3])
+        self.assertEqual(c.events[-1], {"type": "done", "stages": 4})
 
-    async def test_first_stage_failure_retries_once_with_error_text(self):
-        lease = FakeLease([BAD], followup_chunks=[OK1])
+    async def test_eval_error_retries_once_with_error_text(self):
+        lease = FakeLease([BAD_F], followup_chunks=[GOOD])
         c = await self.run_it(FakePool(lease))
-        self.assertEqual(c.types(), ["stage", "done"])
+        self.assertEqual(c.types()[-1], "done")
         self.assertEqual(len(lease.followups), 1)
-        self.assertIn("ReferenceError", lease.followups[0])
+        self.assertIn("boom", lease.followups[0])
 
-    async def test_retry_also_fails_emits_build_failed(self):
-        lease = FakeLease([BAD], followup_chunks=[BAD])
+    async def test_retry_also_fails_emits_the_error_code(self):
+        lease = FakeLease([BAD_F], followup_chunks=[BAD_F])
         c = await self.run_it(FakePool(lease))
         self.assertEqual(c.types(), ["error"])
-        self.assertEqual(c.events[0]["code"], "build_failed")
+        self.assertEqual(c.events[0]["code"], "eval_error")
 
-    async def test_no_stage_output_emits_no_stages_error(self):
-        lease = FakeLease(["Sorry, I cannot do that."])
+    async def test_no_function_in_reply_emits_bad_reply(self):
+        lease = FakeLease(["Sorry, I cannot do that."], followup_chunks=["still no"])
         c = await self.run_it(FakePool(lease))
-        self.assertEqual(c.events[0]["code"], "no_stages")
-        self.assertTrue(lease.released_kill is not None)
+        self.assertEqual(c.events[0]["code"], "bad_reply")
+        self.assertIsNotNone(lease.released_kill)
 
     async def test_pool_unavailable_emits_generator_unavailable(self):
         c = await self.run_it(FakePool(exc=PoolUnavailable("quota")))
@@ -137,10 +139,10 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("quota", c.events[0]["message"])
 
     async def test_cancel_kills_lease(self):
-        lease = FakeLease([OK1 + SEP, None])
+        lease = FakeLease(["pal({s:", None])
         lease.gate = asyncio.Event()
         with tempfile.TemporaryDirectory() as d:
-            task = asyncio.create_task(run_request(FakePool(lease), "barrel", SIZE, Collector(), pathlib.Path(d), build=fake_build))
+            task = asyncio.create_task(run_request(FakePool(lease), "barrel", SIZE, Collector(), pathlib.Path(d), build=ok_build))
             await asyncio.sleep(0.3)
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
