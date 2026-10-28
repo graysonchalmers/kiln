@@ -66,6 +66,22 @@ materials present, triangle counts); regenerate the golden numbers only for a ch
 `python3 live/tools/update_golden.py`. `live/tools/gallery_check.sh` renders all 13 side by side on the Legion and compares
 with `live/client/tests/baselines/gallery.png` by SSIM (`--update` to accept a new look).
 
+## Windowless renders on Stealth (no popups, nothing on the Legion)
+
+Godot's own `--headless` draws nothing, so renders use Xvfb with software Vulkan (lavapipe) on **Stealth**, at nice 19, with
+no GPU lease taken. One-time setup, already done: the official Godot 4.7.2 Linux build at `~/live-blockout-render/godot` on
+Stealth (SHA512 checked against the release's `SHA512-SUMS.txt`). Software and GPU renders differ in the last pixels, so
+Stealth has its own baseline.
+
+```bash
+live/tools/gallery_check_stealth.sh              # ~50 s: render the 13-prop gallery and compare with baselines/gallery_stealth.png
+live/tools/gallery_check_stealth.sh --update     # accept a new look
+live/tools/stealth_render.sh out.avi --write-movie @OUT@ --fixed-fps 30 --quit-after 150 -- --smoke --style=implode   # ~1 min
+```
+
+`stealth_render.sh <out> <godot args>` syncs the client, runs Godot under Xvfb (`@OUT@` becomes the output path on Stealth)
+and copies the file back. Checked 2026-10-28: gallery SSIM 1.000 on a repeat render, a 5 s implode clip renders correctly.
+
 ## How it works
 
 `pool.py` keeps 2 warm isolated Haiku processes (`--setting-sources "" --strict-mcp-config --disable-slash-commands
@@ -93,4 +109,4 @@ surface bricks only) and queues levels (`stage_pacer.gd`, 0.9 s each); the GLB i
 - The model's function varies run to run (vending machine especially); no retry on a poor-looking result, only on a failed one.
 - Hedging two requests to cut the 7-10 s model stalls is untested.
 - Task 8 still to do: scripted `--demo` time-lapse video, five-prop acceptance run at the client.
-- Renders pop a Godot window on the Legion; a windowless route (Godot Linux build under Xvfb with software Vulkan on the Envy) is untried.
+- Legion renders pop a Godot window; use the Stealth route below for windowless renders.
