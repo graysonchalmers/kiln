@@ -1,6 +1,6 @@
 # 🧭 Session Handoff — Tool-Blockout3D (text / image → 3D blockout generator)
 
-_Last updated: 2026-10-25 late evening CT (Envy): img2blockout rounds 8-11 (boulder form + mottled stone, crate olive + stencils + flap removed)._
+_Last updated: 2026-10-28 06:13 CDT (Envy): Live Blockout (`live/`) built on branch `live-blockout-build`; story in `handoff-log/2026-10-28-live-blockout.md`._
 
 ## 🎯 Current state
 Text / image → 3D blockout generator on a fork of `uilianks/kiln` (MIT, low-poly assets as code → GLB). Origin = `graysonchalmers/kiln`, work on branch **`grayson`**; `main` mirrors upstream, no upstream PR planned.
@@ -15,6 +15,11 @@ Text / image → 3D blockout generator on a fork of `uilianks/kiln` (MIT, low-po
 **Image to blockout r8-r11 (2026-10-25), merged to `grayson` 37a5d11.** r8: boulder crag chunks + crate dark-band olive won. r9: rust/grey chunks + stencil marks won. r10: mottled stone won; lower crate tied (kept champion). r11: crate canvas flap removed won; boulder wide right lobe lost, crevices tied. Per-round tables + lessons in `docs/IMAGE-TO-BLOCKOUT.md`. Proofs (gitignored, worktree `img2blockout-r8-9d2386`): `.proof/2026-10-25-img2blockout/r8..r11/`, copies in Legion Downloads\envy\. Swamp rounds paused at r5. Target-look Inbox row still open.
 
 **Showcase (2026-10-25):** README has the swamp teaser (`docs/media/swamp_teaser.mp4`, 26.7 s, reel + chirp; sources in reel fork `grayson` `showcase/swamp/`, 5861d0f) and the loom before/after sheet. Sibling tools forked to graysonchalmers (`loom pxl vex chirp reel`, branch `grayson`), clones in `~/Projects-local/z-Git/uilianks/`.
+
+## 🎬 Live Blockout (`live/`, branch `live-blockout-build`, pushed, not merged)
+Draw a box in a Godot level, type a prompt, watch a voxel asset dial in. Haiku writes one shape function `f(u,v,w)`; the Envy server (`live/server`, port 8795, tailnet IP) samples it once (64^3), fills sealed voids, pools 4/8/16/32-cell levels and sends grid + GLB; the Godot client on the Legion (`live/client`) draws bricks with six transition styles (default implode; settings panel `O`, saved). Run docs, tests, measured numbers: `live/README.md`. Design/plan: `docs/superpowers/{specs,plans}/2026-10-28-live-blockout*`. Gates: 49 server tests (`python3 -m unittest discover -s live/server/tests`, `SKIP_KILN=1` for the fast set), Godot tests over `ssh legion`, visual baseline `live/tools/gallery_check.sh` (SSIM 1.000 on the 13-prop gallery).
+- First real level median 4.7 s (goal 3 s not met; model reply ~3 s). Server on 8795 may still be running (`kill $(cat /tmp/lb_server_8795.pid)`).
+- Owed: run the client with real prompts and look; `--demo` time-lapse video and five-prop acceptance run (plan Task 8); whole-branch review and merge decision (into `grayson`); headless renders (needs a Godot Linux binary on the Envy: Grayson's go-ahead).
 
 ## ▶️ Next concrete step
 **Image to blockout round 12:** r11 done (crate_r11a, canvas flap removed, won 6-5; the boulder right-lobe widening lost 5.5-6 and crevices tied, so boulder_r10a stays). Next: raise the boulder's upper-left mass (the judges' real gap), crate rope handles, then Grayson's own references or a new object class. Swamp residuals (paused): hut glow, log underside V12-13, mangrove canopy, knees mat (never enlarge).

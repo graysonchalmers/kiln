@@ -30,7 +30,7 @@ sparks, scatter, implode (the reverse-particle one), dissolve.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s live/server/tests          # 37 tests, no network
+python3 -m unittest discover -s live/server/tests          # 49 tests, no network (SKIP_KILN=1 skips the slow kiln builds)
 LIVE_CLAUDE=1 python3 -m unittest test_pool.LivePoolTests   # run from live/server/tests; uses the real claude
 ```
 
@@ -50,6 +50,21 @@ ssh legion 'powershell -NoProfile -File C:\Users\Grayson\claude-tmp\live-client\
 ```
 
 Output: `C:\Users\Grayson\claude-tmp\smoke\smoke.avi` plus `smoke.avi.png` (a frame sheet). Logic only, no window: `tests/run_smoke.ps1 -Headless`.
+
+## Settings
+
+`O` opens a small settings panel: transition style (flip, plane, sparks, scatter, implode, dissolve; **implode** by default).
+It is saved to `user://settings.cfg` (Godot's per-user folder) and loads next time. `--style=<name|number>` or `VS_STYLE`
+overrides it for one run; `T` cycles styles.
+
+## Regression set
+
+Thirteen props in `live/server/props.py` (barrel, mailbox, lamp, chest, vending, sphere, block, hollow_box, cup, arch,
+mushroom, table, stairs; some exist to test the pipeline: a sealed shell must be filled solid, an open cup must stay open,
+thin lamp and table legs must survive). `tests/test_props.py` checks each against `tests/golden_props.json` (fill per level,
+materials present, triangle counts); regenerate the golden numbers only for a change you meant to make:
+`python3 live/tools/update_golden.py`. `live/tools/gallery_check.sh` renders all 13 side by side on the Legion and compares
+with `live/client/tests/baselines/gallery.png` by SSIM (`--update` to accept a new look).
 
 ## How it works
 
@@ -78,3 +93,4 @@ surface bricks only) and queues levels (`stage_pacer.gd`, 0.9 s each); the GLB i
 - The model's function varies run to run (vending machine especially); no retry on a poor-looking result, only on a failed one.
 - Hedging two requests to cut the 7-10 s model stalls is untested.
 - Task 8 still to do: scripted `--demo` time-lapse video, five-prop acceptance run at the client.
+- Renders pop a Godot window on the Legion; a windowless route (Godot Linux build under Xvfb with software Vulkan on the Envy) is untried.

@@ -60,6 +60,9 @@ var settings = Settings.new()
 var settings_panel: PanelContainer
 var style_opt: OptionButton
 var settings_open := false
+var shot_path := ""
+var room_walls: Array = []
+var shot_frames := 0
 var clock := 0.0
 var smoke := false
 var smoke_pending := false
@@ -93,6 +96,12 @@ func _ready() -> void:
 	settings.load_from()
 	style = Styles.index_of(settings.transition_style)
 	_parse_style()  # --style / VS_STYLE override the saved setting for this run
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--shot="):
+			shot_path = a.substr(7)
+	if OS.get_cmdline_user_args().has("--gallery"):
+		_start_gallery()
+		return
 	if OS.get_cmdline_user_args().has("--smoke"):
 		_start_smoke()
 		return
@@ -119,6 +128,40 @@ func _start_smoke() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_show_placeholder()
 	_set_status("smoke test: block, then 4, 8, 16, 32 cells")
+
+
+## Every test prop side by side at 32 cells, for a visual regression shot. Needs tests/props/ (make_prop_fixtures.py).
+func _start_gallery() -> void:
+	var man = JSON.parse_string(FileAccess.get_file_as_string("res://tests/props/props.json"))
+	var cols := 5
+	var spacing := 2.4
+	for w in room_walls:
+		w.visible = false  # keep the gallery shot free of the room's wall blocks
+	for i in man.size():
+		var e: Dictionary = man[i]
+		var sz := Vector3(e["size"][0], e["size"][1], e["size"][2])
+		sz *= 1.5 / maxf(sz.x, maxf(sz.y, sz.z))
+		var grid = JSON.parse_string(FileAccess.get_file_as_string("res://tests/props/%s_32.json" % e["name"]))
+		var center := Vector3((i % cols - (cols - 1) * 0.5) * spacing, 0.0, 1.2 - (i / cols) * spacing)
+		var mat := ShaderMaterial.new()
+		mat.shader = sweep_shader
+		mat.set_shader_parameter("mode", 1.0)
+		mat.set_shader_parameter("line_y", 1.0e6)
+		add_child(VoxelView.build(grid, Vector3(center.x - sz.x * 0.5, 0.0, center.z - sz.z * 0.5), sz, mat))
+		var lab := Label3D.new()
+		lab.text = e["name"]
+		lab.pixel_size = 0.006
+		lab.font_size = 48
+		lab.rotation_degrees = Vector3(-90, 0, 0)
+		lab.position = Vector3(center.x, 0.02, center.z + spacing * 0.42)
+		add_child(lab)
+	pitch = -0.9
+	cam.position = Vector3(0.0, 5.5, 3.0)
+	cam.rotation = Vector3(pitch, 0.0, 0.0)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_set_status("gallery: %d props at 32 cells" % man.size())
+	if OS.get_cmdline_user_args().has("--open-settings"):
+		_toggle_settings()
 
 
 func _parse_style() -> void:
@@ -192,6 +235,7 @@ func _build_room() -> void:
 		mi.material_override = wall_col
 		mi.position = w[0]
 		add_child(mi)
+		room_walls.append(mi)
 
 	cam = Camera3D.new()
 	cam.position = Vector3(0, 1.7, 6)
@@ -706,6 +750,11 @@ func _update_transition(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	clock += delta
+	if shot_path != "":
+		shot_frames += 1
+		if shot_frames == 12:  # let the first frames render, then save one and leave
+			get_viewport().get_texture().get_image().save_png(shot_path)
+			get_tree().quit()
 	_update_transition(delta)
 	if smoke_pending and clock >= 0.5:
 		smoke_pending = false
