@@ -109,14 +109,16 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
             error = await make_levels(pal_src, f_src)
         except LadderError as e:
             error = e
-        if error is not None:  # nothing was emitted: one retry on the same process with the error text
+        if error is not None:  # nothing was emitted: one retry
             msg = error.message if isinstance(error, LadderError) else error
-            retry = ""
-            async for d in lease.followup(
-                    f"That failed: {msg}\nReply with only a corrected pal({{...}}) and function f(u,v,w){{...}}."):
-                retry += d
+            # Reading the first reply stops early and kills its process, so the retry runs on a fresh one with the
+            # error in the request (a follow-up on the dead process raised ConnectionResetError and hid the real error).
+            await lease.release(kill=True)
+            lease = await pool.acquire()
+            note = (f"A previous attempt failed: {msg}\n"
+                    "Reply with only a corrected pal({...}) and function f(u,v,w){...}.")
             try:
-                error = await make_levels(*parse_reply(retry))
+                error = await make_levels(*await _read_function(lease.generate(prompt, size_m, note=note)))
             except LadderError as e:
                 error = e
             if error is not None:
