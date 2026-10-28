@@ -26,38 +26,39 @@ def reject8_build(script, workdir):
 
 
 class FakeLease:
-    def __init__(self, chunks, followup_chunks=()):
-        self.chunks, self.followup_chunks = chunks, followup_chunks
+    def __init__(self, chunks):
+        self.chunks = chunks
         self.released_kill = None
-        self.followups = []
+        self.notes = []
         self.gate = None
 
-    async def generate(self, prompt, size):
+    async def generate(self, prompt, size, note=""):
         self.prompt, self.size = prompt, size
+        self.notes.append(note)
         for c in self.chunks:
             if c is None:
                 await self.gate.wait()
             else:
                 yield c
 
-    async def followup(self, text):
-        self.followups.append(text)
-        for c in self.followup_chunks:
-            yield c
+    async def followup(self, text):  # the real process is dead after the first reply is read early: never usable
+        raise ConnectionResetError("Connection lost")
+        yield
 
     async def release(self, kill=False):
         self.released_kill = kill
 
 
 class FakePool:
-    def __init__(self, lease=None, exc=None):
-        self.lease, self.exc, self.acquired = lease, exc, 0
+    """acquire() hands out the leases in order (the last one repeats); `exc` is raised from the exc_at-th acquire on."""
+    def __init__(self, *leases, exc=None, exc_at=1):
+        self.leases, self.exc, self.exc_at, self.acquired = leases, exc, exc_at, 0
 
     async def acquire(self):
         self.acquired += 1
-        if self.exc:
+        if self.exc and self.acquired >= self.exc_at:
             raise self.exc
-        return self.lease
+        return self.leases[min(self.acquired, len(self.leases)) - 1]
 
 
 class Collector:
@@ -135,29 +136,49 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([e["index"] for e in stages], [0, 1, 2])
         self.assertEqual(c.events[-1], {"type": "done", "stages": 3})
 
-    async def test_eval_error_retries_once_with_error_text(self):
-        lease = FakeLease([BAD_F], followup_chunks=[GOOD])
-        c = await self.run_it(FakePool(lease))
+    async def test_eval_error_retries_once_on_a_fresh_lease_with_the_error_text(self):
+        first, second = FakeLease([BAD_F]), FakeLease([GOOD])
+        pool = FakePool(first, second)
+        c = await self.run_it(pool)
         self.assertEqual(c.types()[-1], "done")
-        self.assertEqual(len(lease.followups), 1)
-        self.assertIn("boom", lease.followups[0])
+        self.assertEqual(pool.acquired, 2)
+        self.assertTrue(first.released_kill)                      # its process is dead after the early read
+        self.assertEqual(second.prompt, "barrel")                # the retry carries the original request
+        self.assertIn("boom", second.notes[0])                   # and says what failed
 
-    async def test_retry_also_fails_emits_the_error_code(self):
-        lease = FakeLease([BAD_F], followup_chunks=[BAD_F])
-        c = await self.run_it(FakePool(lease))
+    async def test_retry_also_fails_emits_the_real_error_code_and_message(self):
+        c = await self.run_it(FakePool(FakeLease([BAD_F]), FakeLease([BAD_F])))
         self.assertEqual(c.types(), ["error"])
         self.assertEqual(c.events[0]["code"], "eval_error")
+        self.assertIn("boom", c.events[0]["message"])            # not "ConnectionResetError: Connection lost"
 
     async def test_no_function_in_reply_emits_bad_reply(self):
-        lease = FakeLease(["Sorry, I cannot do that."], followup_chunks=["still no"])
-        c = await self.run_it(FakePool(lease))
+        first = FakeLease(["Sorry, I cannot do that."])
+        c = await self.run_it(FakePool(first, FakeLease(["still no"])))
         self.assertEqual(c.events[0]["code"], "bad_reply")
-        self.assertIsNotNone(lease.released_kill)
+        self.assertIsNotNone(first.released_kill)
+
+    async def test_retry_with_the_real_pool_and_a_process_that_dies_when_its_reply_is_cut_short(self):
+        import sys
+        from pool import Pool
+        fake = [sys.executable, str(pathlib.Path(__file__).parent / "fake_claude_retry.py")]
+        pool = Pool(size=2, system_prompt_path=__file__, command=fake)
+        await pool.start()
+        try:
+            c = await self.run_it(pool)
+        finally:
+            await pool.close()
+        self.assertEqual(c.types()[-1], "done", c.events[-1])
+        self.assertEqual(sum(1 for e in c.events if e["type"] == "stage"), 4)
 
     async def test_pool_unavailable_emits_generator_unavailable(self):
         c = await self.run_it(FakePool(exc=PoolUnavailable("quota")))
         self.assertEqual(c.events[0]["code"], "generator_unavailable")
         self.assertIn("quota", c.events[0]["message"])
+
+    async def test_pool_unavailable_for_the_retry_emits_generator_unavailable(self):
+        c = await self.run_it(FakePool(FakeLease([BAD_F]), exc=PoolUnavailable("quota"), exc_at=2))
+        self.assertEqual(c.events[0]["code"], "generator_unavailable")
 
     async def test_cancel_kills_lease(self):
         lease = FakeLease(["pal({s:", None])
