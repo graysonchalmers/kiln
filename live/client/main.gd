@@ -59,6 +59,8 @@ var burn_t := 0.0
 var demo_out := ""  # --demo-burn=<prompt> --demo-out=<dir>: scripted run, screenshots at each burn step
 var demo_prompt := ""
 var demo_state := ""
+var demo_last_state := ""
+var demo_keys := false  # --demo-keys: the same run but driven by key events (X, C, [, ]) through the input system
 var demo_step := 0
 var demo_f := 0
 var demo_got_damage := false
@@ -126,6 +128,9 @@ func _ready() -> void:
 			demo_out = a.substr(11)
 		if a.begins_with("--demo-burn="):
 			demo_prompt = a.substr(12)
+		if a.begins_with("--demo-keys="):
+			demo_prompt = a.substr(12)
+			demo_keys = true
 	if demo_prompt != "":
 		_start_demo_burn()
 		return
@@ -175,9 +180,117 @@ func _start_demo_burn() -> void:
 	_set_status("demo: %s" % demo_prompt)
 
 
+## A real key press (down and up) through the input system, so the same _unhandled_input that handles the keyboard runs.
+func _press_key(code: Key) -> void:
+	var down := InputEventKey.new()
+	down.keycode = code
+	down.physical_keycode = code
+	down.pressed = true
+	Input.parse_input_event(down)
+	var up := InputEventKey.new()
+	up.keycode = code
+	up.physical_keycode = code
+	up.pressed = false
+	Input.parse_input_event(up)
+
+
+## --demo-keys: X once, then C (continuous burn: load, play to the end, play back), pause, [ twice, ] once; a screenshot of
+## the whole window (status line included) at each point. Steps wait for events, not timers.
+func _keys_tick() -> void:
+	demo_f += 1
+	if demo_f % 120 == 1:
+		_demo_log("tick f=%d fps=%d" % [demo_f, Engine.get_frames_per_second()])
+	if demo_state != demo_last_state:
+		demo_last_state = demo_state
+		_demo_log("state %s strip=%d gen_done=%s" % [demo_state, strip.count(), gen_done])
+	if clock > 120.0:  # safety: leave (and flush the log) instead of hanging
+		_demo_log("giving up in state %s strip=%d status: %s" % [demo_state, strip.count(), status.text if status != null else "?"])
+		get_tree().quit()
+	match demo_state:
+		"start":
+			if clock >= 1.0:
+				_send_request(demo_prompt)
+				demo_state = "gen"
+		"gen":
+			if gen_done and strip.count() > 0 and reveal_t < 0.0 and pacer.drained():
+				demo_f = 0
+				demo_state = "settle0"
+		"settle0":
+			if demo_f >= 20:
+				_demo_shot("k00_intact")
+				demo_got_damage = false
+				_press_key(KEY_X)
+				demo_state = "x_wait"
+		"x_wait":
+			if demo_got_damage and reveal_t < 0.0:
+				demo_f = 0
+				demo_state = "x_settle"
+		"x_settle":
+			if demo_f >= 25:
+				_demo_shot("k01_X_25")
+				_press_key(KEY_C)
+				demo_state = "c_load"
+		"c_load":
+			if burn_frames.size() >= BURN_FRAMES:
+				demo_state = "c_play"
+		"c_play":
+			for k in [6, 12, 18]:
+				if burn_idx >= k and not demo_shots.has(k):
+					demo_shots[k] = true
+					_demo_shot("k02_C_playing_%03d" % roundi(100.0 * k / float(BURN_FRAMES - 1)))
+			if burn_idx >= BURN_FRAMES - 1 and burn_dir == 0:
+				_demo_shot("k03_C_end_100")
+				_press_key(KEY_C)  # reverse
+				demo_state = "c_back"
+		"c_back":
+			if burn_idx <= 12 and burn_dir == -1:
+				_demo_shot("k04_C_reverse_%03d" % roundi(100.0 * burn_idx / float(BURN_FRAMES - 1)))
+				_press_key(KEY_C)  # pause
+				demo_f = 0
+				demo_state = "paused"
+		"paused":
+			if demo_f >= 6:
+				var at := burn_idx
+				_demo_shot("k05_C_paused_%03d" % roundi(100.0 * at / float(BURN_FRAMES - 1)))
+				_press_key(KEY_BRACKETLEFT)
+				_press_key(KEY_BRACKETLEFT)
+				demo_f = 0
+				demo_state = "left"
+		"left":
+			if demo_f >= 6:
+				_demo_shot("k06_bracket_left_x2_%03d" % roundi(100.0 * burn_idx / float(BURN_FRAMES - 1)))
+				_press_key(KEY_BRACKETRIGHT)
+				demo_f = 0
+				demo_state = "right"
+		"right":
+			if demo_f >= 6:
+				_demo_shot("k07_bracket_right_%03d" % roundi(100.0 * burn_idx / float(BURN_FRAMES - 1)))
+				demo_f = 0
+				demo_state = "end"
+		"end":
+			if demo_f >= 20:
+				print("demo done")
+				get_tree().quit()
+	if demo_f > 6000:  # safety
+		get_tree().quit()
+
+
+## Append a line to <demo-out>/demo.log and flush at once (stdout is buffered when redirected and lost if the process is killed).
+func _demo_log(text: String) -> void:
+	print(text)
+	if demo_out == "":
+		return
+	var f := FileAccess.open(demo_out + "/demo.log", FileAccess.READ_WRITE if FileAccess.file_exists(demo_out + "/demo.log") else FileAccess.WRITE)
+	if f == null:
+		return
+	f.seek_end()
+	f.store_line("%.2f %s" % [clock, text])
+	f.flush()
+
+
 func _demo_shot(name: String) -> void:
 	get_viewport().get_texture().get_image().save_png("%s/%s.png" % [demo_out, name])
-	print("shot ", name, " at clock ", snappedf(clock, 0.01))
+	_demo_log("shot " + name)
 
 
 ## Called every frame while the scripted run is going.
@@ -1004,7 +1117,10 @@ func _process(delta: float) -> void:
 	_update_transition(delta)
 	_burn_tick(delta)
 	if demo_state != "":
-		_demo_tick()
+		if demo_keys:
+			_keys_tick()
+		else:
+			_demo_tick()
 	if smoke_pending and clock >= 0.5:
 		smoke_pending = false
 		for n in [4, 8, 16, 32]:

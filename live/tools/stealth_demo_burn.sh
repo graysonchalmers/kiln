@@ -17,6 +17,6 @@ ssh stealth "test -x ~/$R/godot && rm -rf ~/$R/client_demo ~/$R/demo_out ~/$R/bu
 HOMEDIR="$(ssh stealth 'echo $HOME')"
 ssh stealth "cd ~/$R && VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json nice -n 19 timeout ${TIMEOUT:-900} \
   xvfb-run -a -s '-screen 0 1280x720x24' ./godot --path ./client_demo --rendering-driver vulkan --audio-driver Dummy --resolution 1280x720 \
-  --write-movie $HOMEDIR/$R/burn.avi --fixed-fps 30 -- --demo-burn='$PROMPT' --demo-out=$HOMEDIR/$R/demo_out --server=ws://$IP:$PORT --style=implode" 2>&1 | grep -E "shot |demo done|ERROR|SCRIPT" || true
+  --write-movie $HOMEDIR/$R/burn.avi --fixed-fps 30 -- --demo-${DEMO:-burn}='$PROMPT' --demo-out=$HOMEDIR/$R/demo_out --server=ws://$IP:$PORT --style=implode" 2>&1 | grep -E "shot |demo done|ERROR|SCRIPT" || true
 scp -q "stealth:$R/demo_out/*.png" "$OUT/" && scp -q "stealth:$R/burn.avi" "$OUT/burn.avi"
 ls "$OUT" | head -40
