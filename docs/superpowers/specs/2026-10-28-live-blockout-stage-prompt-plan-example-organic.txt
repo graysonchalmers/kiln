@@ -1,0 +1,11 @@
+(duck)
+pal({y:"#f5d44a",o:{color:"#f08a24",mat:"structural"},k:"#1a1a1a"})
+body | ellipsoid | .5,.27,.46 | .62,.46,.76 | y | - | - | smooth
+neck | capsule | .5,.55,.68 | .22,.42,.22 | y | body | - | smooth
+head | ellipsoid | .5,.74,.72 | .4,.34,.4 | y | neck | - | smooth
+tail | ellipsoid | .5,.34,.08 | .22,.2,.3 | y | body | - | smooth
+wing | ellipsoid | .2,.32,.46 | .1,.28,.5 | y | body | x
+beak | ellipsoid | .5,.72,.93 | .2,.08,.18 | o | head
+eye | ellipsoid | .4,.8,.88 | .07,.07,.05 | k | head | x
+foot | box | .36,.03,.6 | .12,.06,.16 | o | body | x
+end

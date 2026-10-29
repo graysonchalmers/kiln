@@ -1,0 +1,7 @@
+(mailbox)
+pal({b:"#3a5fa8",p:"#6b4a2f",r:"#c0392b",d:"#2a2a2a"})
+post | box | .5,.27,.5 | .12,.54,.12 | p | ground
+box | cylinder-z | .5,.68,.5 | .46,.46,.84 | b | post
+mouth | cylinder-z | .5,.68,.93 | .36,.36,.06 | d | box
+flag | box | .74,.76,.4 | .04,.3,.07 | r | box
+end

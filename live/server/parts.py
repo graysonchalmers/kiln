@@ -15,7 +15,7 @@ import numpy as np
 
 from ladder import MASTER_N, LadderError
 
-MIN_THICK = 0.05      # a part thinner than this (in any direction) is thickened to it: about 3 master voxels, 1.6 cells at 32
+MIN_THICK = 0.07      # a part thinner than this (in any direction) is thickened to it: 4.5 master voxels, 1.1 cells at 16, so the thin check never flags a compiled part
 MAX_PARTS = 48
 SMOOTH_K = 0.07       # blend radius of the smooth union, in box units
 SHAPES = ("box", "cylinder", "cone", "ellipsoid", "capsule", "torus")
@@ -38,7 +38,7 @@ def parse_parts(text: str) -> list[dict]:
     parts, names = [], set()
     for i, raw in enumerate(text.splitlines(), 1):
         line = raw.strip()
-        if not line or line.lower() == "end" or line.startswith(("pal(", "#", "//", "```", "parts")):
+        if not line or line.lower() == "end" or line.startswith(("pal(", "(", "#", "//", "```", "parts")):
             continue
         f = [s.strip() for s in line.split("|")]
         if len(f) < 5:
@@ -136,8 +136,8 @@ def _snap(part: dict, parent: np.ndarray | None) -> tuple[tuple, str]:
     if part["attach"] == "ground":
         sl, m = _mask(part, c)
         ys = np.nonzero(m.any(axis=(1, 2)))[0]
-        if ys.size:  # shift down so the lowest voxel row is row 0
-            c[1] -= ys.min() / MASTER_N
+        if ys.size:  # shift down so the lowest voxel row is row 0 (the mask is a crop: add its first row)
+            c[1] -= (sl[0].start + ys.min()) / MASTER_N
         return tuple(c), "ground"
     if parent is None or not parent.any():
         return tuple(c), "no-parent"
@@ -216,3 +216,25 @@ def compile_parts(parts: list[dict]) -> tuple[np.ndarray, dict]:
             if d.size:
                 vol[sl][d < 0] = p["key"]
     return vol, report
+
+
+PARTS_TAG = "//PARTS\n"  # marks a part list where the pipeline otherwise carries the source of f
+
+
+def parse_plan_reply(text: str, final: bool = False) -> tuple[str, str] | None:
+    """(pal_src, PARTS_TAG + part lines) once the reply holds a complete pal(...) and a part list ended by `end` (or, with final=True,
+    whatever lines there are); None while it is incomplete or is a function f reply."""
+    from ladder import _match
+    text = "\n".join(l for l in text.splitlines() if not l.strip().startswith("```"))
+    p = text.find("pal(")
+    if p < 0 or "function f" in text:
+        return None
+    pe = _match(text, p + 3, "(", ")")
+    if pe < 0:
+        return None
+    rest = text[pe:]
+    lines = [l for l in rest.splitlines() if l.strip()]
+    ended = any(l.strip().lower() == "end" for l in lines)
+    if not lines or not (ended or final):
+        return None
+    return text[p:pe], PARTS_TAG + "\n".join(lines)

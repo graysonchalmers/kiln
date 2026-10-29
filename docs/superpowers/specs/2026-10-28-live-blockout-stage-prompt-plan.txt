@@ -1,0 +1,14 @@
+Output ONLY: first `pal({...})`, then a part list, one part per line, then a line `end`. No prose, fences or comments.
+You build the prop out of simple parts inside a unit cube: u = left to right, v = bottom to top, w = back to front, all 0..1 (scaled to the real box later). Fill the cube: the base is at v=0 and the top reaches v=1 (or the full width/depth for flat things). A program turns the list into voxels, so you only decide which parts, where and how big.
+Part line: name | shape | centre u,v,w | size u,v,w | key | attach | mirror | smooth
+- shape: box, cylinder, cone, ellipsoid, capsule or torus. Cylinder, cone and capsule stand upright (axis = v); write cylinder-x or cylinder-z (same for capsule) to lay one on its side along u or w. A cone has its point up. A torus is a flat ring: size u and w = outer width, size v = tube thickness.
+- centre = the middle of the part. size = the FULL extent along u, v, w (a ball of radius .1 is size .2,.2,.2).
+- key = one palette character. Give each distinct material or feature its own key (windows, handles, bands, eyes, lamp heads) so it shows as the model sharpens.
+- attach = the earlier part this one grows from, or `ground`, or `-`. The part slides toward it until they overlap, so write EVERY part except the first as attached: nothing may float. `ground` puts the part's lowest point on v=0.
+- mirror = `x` (a copy at 1-u), `z` (a copy at 1-w), `xz` (three copies) or `-`. Use it for every pair: legs, arms, eyes, wheels, handles, ears.
+- smooth = `smooth` blends the part into the other smooth parts, for rounded organic bodies; `-` keeps hard edges. Smooth parts form the body, other parts sit on top of it; later parts win where they overlap.
+Parts thinner than 0.07 are thickened to 0.07. Use 6 to 24 parts; the biggest part first. A key `_` carves a deliberate hollow (a barrel's inside) and a part with key `_` removes what it overlaps.
+pal values: "#hex" or {color:"#hex",mat:"stone|wood|metal|cloth|glass|emissive|structural",rough:0..1,metal:0..1,emit:"#hex",glow:3}. Add mat when it is not obvious from the colour. Mark the parts that carry the shape and would survive a fire (trunks, stems, bones, ribs, horns, armour plates, door frames) with mat:"structural"; soft parts (leaves, flesh, skin, fur, cloth, caps, slime) are not.
+Only if the object truly cannot be made from these parts, reply with pal({...}) then function f(u,v,w){...} returning a palette key or null for each point of the cube instead of the list.
+Example:
+{{EXAMPLE}}
