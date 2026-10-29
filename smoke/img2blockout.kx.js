@@ -429,4 +429,22 @@ model("crate_r11b", crate_v2().slice(0, -2), stencilTri(), lidText(),
   box(0.02, 0.69 * CH, CD + 0.06 * CL, { mat: "cr2W2", pos: [-CL / 2 - 0.012, 0.16 * CH, 0] }),
   extrude([0, 0.844 * CH, 0.14 * CL, 0.844 * CH, 0, 0.6 * CH], 0.012, { mat: "cr2W2", pos: [-CL / 2, 0, CD / 2 + 0.001] }))
 
-pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_r10a", "barrel_r7", "crate_r11a"])
+// r12 blind A/B vs kept (one fresh sonnet judge per pair): boulder r12a 4.5-4 (marginal win), r12b 6-5; crate r12a 6-5, r12b lost 5-7 (big loop). Kept: boulder_r12b, crate_r12a.
+// ---------- round 12 (2026-10-29, night shift): boulder upper-left mass (r11 judges' real gap), crate rope handles
+// boulder r12a: r10a + a tall hull over the upper left (two blobs stacked on the left body, peak ~0.95H at fx -0.25); r12b: taller and
+// further left, plus a small shoulder chunk. Both reuse the mottle material so the colour stays identical to the champion.
+const ulMass = (k = 1) => hull({ mat: "bstM", cap: "bstM", capAngle: 35, jitter: 0.02, seed: 7 }, bm(-0.28, 0.6, 0.42 * k, 0.5, 18, 0.62),
+  bm(-0.2, 0.74, 0.36 * k, 0.4 * k, 8, 0.55))
+const boulder_r12a = () => [boulder_v2("bstM", "bstM"), ulMass(1), CHUNKS.map((a) => chunk(...a, "bstM", "bstM"))]
+model("boulder_r12a", boulder_r12a())
+model("boulder_r12b", boulder_v2("bstM", "bstM"), hull({ mat: "bstM", cap: "bstM", capAngle: 35, jitter: 0.02, seed: 8 },
+  bm(-0.34, 0.62, 0.4, 0.52, 22, 0.62), bm(-0.27, 0.82, 0.34, 0.5, 14, 0.55), bm(-0.12, 0.7, 0.3, 0.36, 4, 0.5)),
+  CHUNKS.map((a) => chunk(...a, "bstM", "bstM")))
+// crate r12a: crate_r11a + rope grab handles (open tube loops standing off both end faces, mid-height); r12b: thicker rope, bigger loop
+pal({ rope: "#8a7a55" })
+const ropeLoop = (sx, r, w, d) => tube([sx * (CL / 2 + 0.002), 0.5 * CH, -w, sx * (CL / 2 + d), 0.5 * CH, -w * 0.6, sx * (CL / 2 + d * 1.15), 0.5 * CH, 0,
+  sx * (CL / 2 + d), 0.5 * CH, w * 0.6, sx * (CL / 2 + 0.002), 0.5 * CH, w], r, { mat: "rope", sides: 6 })
+model("crate_r12a", crate_v2().slice(0, -2), stencilTri(), lidText(), ropeLoop(-1, 0.012, 0.12, 0.05), ropeLoop(1, 0.012, 0.12, 0.05))
+model("crate_r12b", crate_v2().slice(0, -2), stencilTri(), lidText(), ropeLoop(-1, 0.02, 0.15, 0.08), ropeLoop(1, 0.02, 0.15, 0.08))
+
+pack("img2blockout_best", ["broadleaf_v2", "pine_v1", "maple_v5", "boulder_r12b", "barrel_r7", "crate_r12a"])

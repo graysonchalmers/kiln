@@ -24,7 +24,7 @@ Draw a box in a Godot level, type a prompt, watch a voxel asset dial in. Haiku w
 - Owed: Grayson to try the client live with the new shader (not yet seen on screen); `--demo` time-lapse and five-prop acceptance run (plan Task 8); whole-branch review; decide `lb-prompt-insides`. Windowless renders on Stealth (`gallery_check_stealth.sh`); Legion renders pop a window.
 
 ## ▶️ Next concrete step
-**Image to blockout round 12:** r11 done (crate_r11a, canvas flap removed, won 6-5; the boulder right-lobe widening lost 5.5-6 and crevices tied, so boulder_r10a stays). Next: raise the boulder's upper-left mass (the judges' real gap), crate rope handles, then Grayson's own references or a new object class. Swamp residuals (paused): hut glow, log underside V12-13, mangrove canopy, knees mat (never enlarge).
+**Image to blockout round 13:** r12 done (night shift 2026-10-29): boulder_r12b (taller upper-left hull) won 6-5, crate_r12a (thin rope end loops) won 6-5 narrowly; thick loops lost. Next: boulder surface fracture/overhang on the upper right, crate \"12\" in the triangle and lid lettering, then Grayson's own references or a new object class. Swamp residuals (paused): hut glow, log underside V12-13, mangrove canopy, knees mat (never enlarge).
 - Alt: **image → blockout**: reference image → image-decomp → recipe picks/proportions → kiln scene → grade against the image with the same loop.
 - Alt: package the loop as a Workflow script (needs Grayson's "use a workflow").
 
