@@ -60,6 +60,7 @@ var demo_out := ""  # --demo-burn=<prompt> --demo-out=<dir>: scripted run, scree
 var demo_prompt := ""
 var demo_state := ""
 var demo_last_state := ""
+var demo_turn := false  # --demo-turn="prompt@w,h,d": a turntable of the prop, then its burn, from a camera that orbits the box
 var demo_keys := false  # --demo-keys: the same run but driven by key events (X, C, [, ]) through the input system
 var demo_step := 0
 var demo_f := 0
@@ -131,8 +132,13 @@ func _ready() -> void:
 		if a.begins_with("--demo-keys="):
 			demo_prompt = a.substr(12)
 			demo_keys = true
+		if a.begins_with("--demo-turn="):
+			demo_prompt = a.substr(12)
+			demo_turn = true
 	if demo_prompt != "":
 		_start_demo_burn()
+		if demo_turn:
+			_setup_turn_box()
 		return
 	_set_status("B: draw a box | Tab: mouse | <-/->: stages | L: lock | T: style (%s) | O: settings | %s" % [Styles.NAMES[style], server_url])
 
@@ -286,6 +292,95 @@ func _demo_log(text: String) -> void:
 	f.seek_end()
 	f.store_line("%.2f %s" % [clock, text])
 	f.flush()
+
+
+## --demo-turn="a wooden barrel@0.75,0.95,0.75": the box is w x h x d metres (footprint centred), the prompt is what is before the @.
+func _setup_turn_box() -> void:
+	var parts := demo_prompt.rsplit("@", true, 1)
+	if parts.size() == 2:
+		var dims := parts[1].split(",")
+		if dims.size() == 3:
+			demo_prompt = parts[0]
+			var w := float(dims[0])
+			var h := float(dims[1])
+			var d := float(dims[2])
+			p0 = Vector3(-w * 0.5, 0.0, -d * 0.5)
+			p1 = Vector3(w * 0.5, 0.0, d * 0.5)
+			box_h = h
+			_redraw_wire()
+			var b := _box_bounds()
+			req_min = b[0]
+			req_size = b[1]
+	for w in room_walls:
+		w.visible = false  # a clean backdrop: just the floor and the sky
+	wire.visible = false
+	_orbit(0.0)
+
+
+## The camera on a circle around the box centre, looking at it.
+func _orbit(angle: float) -> void:
+	var c := req_min + req_size * 0.5
+	var r := maxf(req_size.y * 0.95, maxf(req_size.x, req_size.z) * 1.4 + 0.1)  # the prop fills most of the frame
+	cam.position = c + Vector3(sin(angle) * r, req_size.y * 0.2 + 0.05, cos(angle) * r)
+	cam.look_at(c, Vector3.UP)
+
+
+const TURN_FRAMES := 240  # one full turn at 30 frames a second: 8 seconds
+
+
+## --demo-turn: generate, one full turn around the intact prop (a still every 45 degrees), then the burn (C) with the camera
+## still going round: stills at 0, 50 and 100 percent. Steps wait for events, not timers.
+func _turn_tick() -> void:
+	demo_f += 1
+	if demo_state != demo_last_state:
+		demo_last_state = demo_state
+		_demo_log("state %s strip=%d gen_done=%s" % [demo_state, strip.count(), gen_done])
+	if clock > 150.0:
+		_demo_log("giving up in state %s strip=%d" % [demo_state, strip.count()])
+		get_tree().quit()
+	match demo_state:
+		"start":
+			_orbit(0.0)
+			if clock >= 1.0:
+				_send_request(demo_prompt)
+				demo_state = "gen"
+		"gen":
+			_orbit(0.0)
+			if gen_done and strip.count() > 0 and reveal_t < 0.0 and pacer.drained():
+				demo_f = 0
+				demo_state = "settle"
+		"settle":
+			_orbit(0.0)
+			if demo_f >= 25:
+				demo_f = 0
+				demo_state = "orbit"
+		"orbit":
+			var f := demo_f - 1  # frame 0 is the starting angle
+			_orbit(TAU * f / float(TURN_FRAMES))
+			if f % 30 == 0 and f < TURN_FRAMES:
+				_demo_shot("t_%03d" % roundi(360.0 * f / float(TURN_FRAMES)))
+			if f >= TURN_FRAMES:
+				demo_f = 0
+				_press_key(KEY_C)
+				demo_state = "burn_load"
+		"burn_load":
+			_orbit(TAU * 0.0 + demo_f * 0.01)
+			if burn_frames.size() >= BURN_FRAMES:
+				demo_state = "burn"
+		"burn":
+			_orbit(demo_f * 0.012)
+			for k in [0, 12, 23]:
+				if burn_idx >= k and not demo_shots.has(k):
+					demo_shots[k] = true
+					_demo_shot("b_%03d" % roundi(100.0 * k / float(BURN_FRAMES - 1)))
+			if burn_idx >= BURN_FRAMES - 1 and burn_dir == 0:
+				demo_f = 0
+				demo_state = "hold"
+		"hold":
+			_orbit(demo_f * 0.012)
+			if demo_f >= 45:
+				_demo_log("demo done")
+				get_tree().quit()
 
 
 func _demo_shot(name: String) -> void:
@@ -1117,7 +1212,9 @@ func _process(delta: float) -> void:
 	_update_transition(delta)
 	_burn_tick(delta)
 	if demo_state != "":
-		if demo_keys:
+		if demo_turn:
+			_turn_tick()
+		elif demo_keys:
 			_keys_tick()
 		else:
 			_demo_tick()
