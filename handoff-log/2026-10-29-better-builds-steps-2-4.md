@@ -45,3 +45,11 @@ What was learned along the way:
 Flags: `--validate` (repair + checks + ONE typed retry keeping the better attempt; reports `checks` in `done`), `--ascii`, `--plan` (part list; prompt and the
 two examples in `docs/superpowers/specs/*-stage-prompt-plan*.txt`), `--observe` (report only). Tools: `live/tools/run_arm.sh`, `eval_stats.py`, `blind_pairs.py`.
 Not touched: the Legion; nested `claude -p` (only the server's isolated Haiku pool ran).
+
+## Paired retry test (2026-10-29, on grayson after PR 17; `live/tools/paired_retry.py`, `blind_triplets.py`)
+48 first attempts (12 props x 4 runs, router default, repair on); the 7 with a retry trigger (all 7 were `ground`, 0 floating after repair) were retried from
+the SAME first attempt twice: typed (`--validate`) and typed + silhouettes (`--validate --ascii`). Blind triplets shuffled, ranks written before the mapping was read.
+- Retry vs first attempt: typed won 7 of 7, ascii won 7 of 7 (zero losses, zero ties). This is the paired design the 24-pair sheet could not be.
+- ascii vs typed: 1 win, 2 losses, 4 ties: no visible difference. Validator codes left in the delivered volume: first 17, typed 6, ascii 1 (a thin key).
+  Triggers fully resolved: 7/7 both ways. ASCII costs about 0.4 s median and some tokens; keep it flag-only and off by default until it shows a gain.
+- Only 7 of 48 first attempts needed a retry (15%), all for no ground contact: the cost is a round trip on about one request in seven.
