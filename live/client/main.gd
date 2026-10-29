@@ -48,6 +48,7 @@ var cur_view: MultiMeshInstance3D = null
 var cur_mat: ShaderMaterial = null
 var old_view: MultiMeshInstance3D = null
 var old_mat: ShaderMaterial = null
+var dmg_step := 0  # 0 = intact, 1..4 = burnt 25..100 percent (X)
 var cur_slug := "asset"
 var req_min := Vector3.ZERO
 var req_size := Vector3.ONE
@@ -90,6 +91,7 @@ func _ready() -> void:
 	add_child(net)
 	net.stage_received.connect(_on_stage)
 	net.finished.connect(_on_finished)
+	net.damaged_received.connect(_on_damaged)
 	net.failed.connect(_on_failed)
 	net.status.connect(_set_status)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -408,6 +410,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_scrub(1)
 			KEY_L:
 				_lock_stage()
+			KEY_X:
+				_damage_next()
 			KEY_ENTER, KEY_KP_ENTER:
 				if has_box:
 					_open_prompt()
@@ -624,6 +628,29 @@ func _scrub(d: int) -> void:
 	_show_stage(strip.step(d), false)
 
 
+## X: burn the shown level a bit more (25%, 50%, 75%, 100%, then back to intact). The server does the burning and lets
+## unsupported parts fall; the same seed each press keeps the steps one story. Scrubbing or a new request resets it.
+func _damage_next() -> void:
+	if strip.count() == 0 or strip.selected < 0:
+		return
+	var grid: Dictionary = strip.stages[strip.selected]["grid"]
+	if grid.is_empty():
+		return
+	dmg_step = (dmg_step + 1) % 5
+	if dmg_step == 0:
+		_show_stage(strip.selected, true)
+		return
+	net.damage(grid, req_size, dmg_step * 0.25, 1, "burn")
+	_set_status("burning to %d%% ..." % (dmg_step * 25))
+
+
+func _on_damaged(grid: Dictionary, amount: float) -> void:
+	if grid.is_empty():
+		return
+	_show_grid(grid, true)
+	_set_status("burnt %d%% | X = more | <-/-> back to the intact level" % roundi(amount * 100.0))
+
+
 func _lock_stage() -> void:
 	var p: String = strip.lock(cur_slug)
 	_set_status("locked: " + ProjectSettings.globalize_path(p) if p != "" else "nothing to lock yet")
@@ -632,11 +659,20 @@ func _lock_stage() -> void:
 # ---------------------------------------------------------------- asset + reveal
 
 func _show_stage(i: int, animate: bool) -> void:
-	_end_transition()
 	var grid: Dictionary = strip.stages[i]["grid"]
 	if grid.is_empty():
+		_end_transition()
 		_set_status("level %d has no voxel grid" % (i + 1))
 		return
+	dmg_step = 0
+	_show_grid(grid, animate)
+	_update_pips()
+	_set_status("level %d/%d (%d cells a side) | <-/-> scrub | L lock | X burn" % [i + 1, strip.count(), int(grid["n"])])
+
+
+## Show a voxel grid in the box; with animate the old one shrinks away under the sweep line as this one assembles.
+func _show_grid(grid: Dictionary, animate: bool) -> void:
+	_end_transition()
 	var mat := ShaderMaterial.new()
 	mat.shader = sweep_shader
 	mat.set_shader_parameter("mode", 1.0)
@@ -667,8 +703,6 @@ func _show_stage(i: int, animate: bool) -> void:
 	else:
 		cur_mat.set_shader_parameter("line_y", 1.0e6)  # fully passed: every brick at full size
 		_clear_placeholder()
-	_update_pips()
-	_set_status("level %d/%d (%d cells a side) | <-/-> scrub | L lock" % [i + 1, strip.count(), int(grid["n"])])
 
 
 func _drop_current() -> void:

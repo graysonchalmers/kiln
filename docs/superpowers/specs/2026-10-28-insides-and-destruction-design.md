@@ -17,12 +17,12 @@ versions look right. Proof of the idea: `live/tools/insides_demo.py` (intact, cu
 3. **`damage(cells, materials, amount, seed, mode)` (built, `live/server/damage.py`).** Skin breaks and chars first from the top
    (`burn`) or raggedly (`break`); structural parts mostly hold, so hoops and frames survive and the inside stays visible. New
    keys: `~` charred (dark, tag charred), `^` ember (emissive). Deterministic per seed; amount 0 is a no-op.
-4. **Not built yet:**
+4. **Built since (2026-10-28):** the shader entries for `structural` and `charred`; a stateless `damage` request in the protocol (see live/README.md); X key in the client; parts that lose their support fall (`settle`).
+5. **Not built yet:**
    - stage prompt: teach the model `_` and `mat:"structural"` (changes every request, so it needs a real-model eval first, 5+ props, best of 2);
-   - protocol: a `damage` request (amount, seed, mode) answered with the damaged grid, or the client calls the same rule in GDScript;
-   - client: shader entries for `structural` (matte, slightly darker wood) and `charred` (rough, dark, faint ember glow); a scrub for damage amount;
+   - client: a continuous damage scrub (X steps 25% at a time today);
    - bricks inside a hollow prop need the skin-depth rule checked (inner walls count as surface, so they draw);
-   - physics-ish step: members whose support is gone drop (the batten in the demo floats).
+   - falling is rigid and straight down, one piece at a time; no tumbling, no breaking on impact.
 
 ## Decisions for Grayson
 - Is the model or the engine in charge of structure? Today the model writes `_` and `structural`; an engine fallback (auto-hollow thick shells, auto-structure for metal) is possible but guesses.

@@ -33,6 +33,19 @@ class WsServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await asyncio.wait_for(c.recv(), 5))["type"], "done")
         c.close()
 
+    async def test_damage_request_gets_one_damaged_event_and_the_connection_stays_usable(self):
+        c = await WsClient.connect(await self.start(ok_run))
+        grid = {"n": 4, "cells": "s" * 64, "palette": {"s": "#aa5522"}, "materials": {"s": "wood"}}
+        await c.send_json({"type": "damage", "grid": grid, "amount": 0.5, "seed": 1})
+        ev = await asyncio.wait_for(c.recv(), 5)
+        self.assertEqual(ev["type"], "damaged")
+        self.assertEqual(len(ev["grid"]["cells"]), 64)
+        await c.send_json({"type": "damage", "grid": {"n": 4}})
+        self.assertEqual((await asyncio.wait_for(c.recv(), 5))["code"], "bad_grid")
+        await c.send_json({"type": "generate", "prompt": "barrel", "size": [1, 2, 1]})
+        self.assertEqual((await asyncio.wait_for(c.recv(), 5))["type"], "stage")
+        c.close()
+
     async def test_disconnect_cancels_request(self):
         cancelled = asyncio.Event()
 
