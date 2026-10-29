@@ -12,6 +12,7 @@ import numpy as np
 import config
 from damage import damage
 from repair import bridge_floating
+from silhouette import silhouettes
 from validate import score, validate
 from kiln_runner import build_glb
 from ladder import (LEVELS, LadderError, eval_master, eval_materials, eval_palette, kiln_pal, level_cells, level_script, master_runs,
@@ -190,7 +191,8 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
 def retry_note(problems: list[dict], master) -> str:
     """The retry message: the problems, one sentence each, then what to send back."""
     lines = "\n".join(f"- {p['text']}" for p in problems)
-    return (f"A previous attempt built a shape with these problems:\n{lines}\n"
+    look = ("\nThis is how that shape looks (one letter per palette key, . = empty air):\n\n" + silhouettes(master) + "\n\n") if config.ASCII else "\n"
+    return (f"A previous attempt built a shape with these problems:\n{lines}{look}"
             "Fix exactly these and keep everything else. Reply with only a corrected pal({...}) and function f(u,v,w){...}.")
 
 

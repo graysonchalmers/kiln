@@ -65,6 +65,7 @@ if __name__ == "__main__":
     ap.add_argument("--prompt", type=pathlib.Path, default=config.PROMPT_PATH)
     ap.add_argument("--repair", action="store_true", help="pull parts that float beside the body back to it (server/repair.py)")
     ap.add_argument("--validate", action="store_true", help="check the sampled shape and retry once with the problems named (implies --repair)")
+    ap.add_argument("--ascii", action="store_true", help="with --validate: the retry message also carries 24x24 text silhouettes of the shape")
     ap.add_argument("--observe", action="store_true", help="report the validator results in `done` without acting on them (eval baseline)")
     ap.add_argument("--organic-prompt", type=pathlib.Path, default=None, help="a second prompt for organic things (plants, creatures, characters); needs the router")
     a = ap.parse_args()
@@ -72,6 +73,7 @@ if __name__ == "__main__":
     config.REPAIR = a.repair
     config.VALIDATE = a.validate
     config.OBSERVE = a.observe or a.validate
+    config.ASCII = a.ascii
     try:
         asyncio.run(amain(a))
     except KeyboardInterrupt:

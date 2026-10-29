@@ -97,6 +97,17 @@ class ValidatePipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("floating", checks["first"])
         self.assertNotIn("floating", checks["final"])
 
+    async def test_ascii_adds_three_silhouettes_to_the_retry(self):
+        config.ASCII = True
+        first, second = FakeLease([self.TWO]), FakeLease([GOOD])
+        await self.run_it(FakePool(first, second))
+        for title in ("FRONT", "SIDE", "TOP"):
+            self.assertIn(title, second.notes[0])
+        plain = FakeLease([GOOD])
+        config.ASCII = False
+        await self.run_it(FakePool(FakeLease([self.TWO]), plain))
+        self.assertNotIn("FRONT", plain.notes[0])
+
     async def test_a_worse_retry_is_not_delivered(self):
         three = self.TWO.replace("return null", 'if(Math.abs(x)<.1&&Math.abs(z)<.1&&v>.9)return "t"\nreturn null')  # two floating pieces
         c = await self.run_it(FakePool(FakeLease([self.TWO]), FakeLease([three])))
