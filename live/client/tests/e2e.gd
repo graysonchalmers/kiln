@@ -38,7 +38,10 @@ func _init() -> void:
 				quit(0)
 			return
 		var changed: bool = grid.get("cells", "") != last_grid.get("cells", "")
-		var charred: bool = str(grid.get("cells", "")).contains("~") and grid.get("materials", {}).get("~", "") == "charred"
+		var charred := false  # a palette key tagged charred that really appears in the cells
+		for k in grid.get("materials", {}):
+			if grid["materials"][k] == "charred" and str(grid.get("cells", "")).contains(k):
+				charred = true
 		print("damaged amount=%.2f n=%s changed=%s charred=%s" % [amount, grid.get("n", "none"), changed, charred])
 		if not (changed and charred and grid.get("n", 0) == last_grid.get("n", -1)):
 			quit(4)

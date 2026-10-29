@@ -97,8 +97,10 @@ class DamageProtocolTests(unittest.IsolatedAsyncioTestCase):
         g = ev["grid"]
         self.assertEqual((g["n"], len(g["cells"])), (8, 512))
         self.assertLess(sum(ch != "." for ch in g["cells"]), 8 * 4 * 4 * 8 * 1 + 1)
-        self.assertEqual(g["materials"]["~"], "charred")
-        self.assertIn("~", g["palette"])
+        char = [k for k, t in g["materials"].items() if t == "charred"]
+        self.assertEqual(len(char), 1)
+        self.assertIn(char[0], g["palette"])
+        self.assertIn(char[0], set(g["cells"]))
         self.assertEqual(g["materials"]["s"], "wood")         # the request's tags are kept
 
     async def test_amounts_stream_one_event_each_in_order_and_cells_only_get_fewer(self):
@@ -118,6 +120,15 @@ class DamageProtocolTests(unittest.IsolatedAsyncioTestCase):
             c = await self.ask({"type": "damage", "grid": _dgrid(), **req})
             self.assertEqual((c.types(), c.events[0]["code"]), (["error"], "bad_amount"), req)
 
+    async def test_work_budget_caps_big_grids_times_many_amounts(self):
+        c = await self.ask({"type": "damage", "grid": _dgrid(64), "amounts": [0.1, 0.2, 0.3, 0.4]})
+        self.assertEqual((c.types(), c.events[0]["code"]), (["error"], "too_big"))
+        self.assertIn("allows 3 amounts", c.events[0]["message"])
+        c = await self.ask({"type": "damage", "grid": _dgrid(64), "amounts": [0.1, 0.2, 0.3]})
+        self.assertEqual(c.types(), ["damaged"] * 3)
+        c = await self.ask({"type": "damage", "grid": _dgrid(32), "amounts": [k / 23 for k in range(24)]})   # the client's burn
+        self.assertEqual(len(c.events), 24)
+
     async def test_n_may_arrive_as_a_whole_number_float(self):
         c = await self.ask({"type": "damage", "grid": {**_dgrid(), "n": 8.0}, "amount": 0.3})
         self.assertEqual((c.types(), c.events[0]["grid"]["n"]), (["damaged"], 8))
@@ -133,6 +144,7 @@ class DamageProtocolTests(unittest.IsolatedAsyncioTestCase):
         bad = {"n": 4, "cells": "ss"}
         for req, code in (({"grid": bad}, "bad_grid"), ({"grid": None}, "bad_grid"),
                           ({"grid": _dgrid(), "amount": 2}, "bad_amount"), ({"grid": _dgrid(), "amount": "x"}, "bad_amount"),
+                          ({"grid": _dgrid(), "amount": 10 ** 400}, "bad_amount"), ({"grid": _dgrid(), "amount": float("nan")}, "bad_amount"),
                           ({"grid": _dgrid(), "mode": "melt"}, "bad_mode"), ({"grid": _dgrid(), "size": [1, 1]}, "bad_size"),
                           ({"grid": {**_dgrid(), "n": 65}}, "bad_grid")):
             c = await self.ask({"type": "damage", **req})
@@ -215,7 +227,9 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         stages = [e for e in c.events if e["type"] == "stage"]
         self.assertEqual([e["level"] for e in stages], [4, 16, 32])
         self.assertEqual([e["index"] for e in stages], [0, 1, 2])
-        self.assertEqual(c.events[-1], {"type": "done", "stages": 3})
+        self.assertEqual(c.events[-1]["stages"], 3)
+        self.assertEqual([x["level"] for x in c.events[-1]["skipped"]], [8])   # the failed level is reported, not silently dropped
+        self.assertIn("bad level", c.events[-1]["skipped"][0]["error"])
 
     async def test_eval_error_retries_once_on_a_fresh_lease_with_the_error_text(self):
         first, second = FakeLease([BAD_F]), FakeLease([GOOD])

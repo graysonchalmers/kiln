@@ -62,8 +62,8 @@ class Server:
                     req = json.loads(data.decode()) if op == ws_proto.TEXT else None
                     if not isinstance(req, dict) or req.get("type") not in ("generate", "damage"):
                         raise ValueError("expected a generate or damage message")
-                except (ValueError, UnicodeDecodeError) as e:
-                    await send_event({"type": "error", "code": "bad_request", "message": str(e)})
+                except (ValueError, UnicodeDecodeError, RecursionError) as e:  # RecursionError: JSON nested thousands deep
+                    await send_event({"type": "error", "code": "bad_request", "message": str(e)[:200]})
                     continue
                 if job and not job.done():
                     await send_event({"type": "error", "code": "busy", "message": "a request is already running"})

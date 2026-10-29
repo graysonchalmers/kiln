@@ -46,6 +46,15 @@ class WsServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await asyncio.wait_for(c.recv(), 5))["type"], "stage")
         c.close()
 
+    async def test_json_nested_thousands_deep_is_a_bad_request_not_a_dead_connection(self):
+        c = await WsClient.connect(await self.start(ok_run))
+        await c.send_text("[" * 100000)
+        ev = await asyncio.wait_for(c.recv(), 5)
+        self.assertEqual((ev["type"], ev["code"]), ("error", "bad_request"))
+        await c.send_json({"type": "generate", "prompt": "barrel", "size": [1, 2, 1]})
+        self.assertEqual((await asyncio.wait_for(c.recv(), 5))["type"], "stage")
+        c.close()
+
     async def test_disconnect_cancels_request(self):
         cancelled = asyncio.Event()
 
