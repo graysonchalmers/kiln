@@ -9,6 +9,7 @@ import tempfile
 
 import config
 from pool import Pool
+from prompt_router import Router
 from ws_server import Server
 
 
@@ -27,7 +28,26 @@ def default_host() -> str:
 async def amain(args) -> None:
     pool = Pool(size=2, system_prompt_path=str(args.prompt))
     await pool.start()
-    server = Server(pool, pathlib.Path(tempfile.mkdtemp(prefix="liveblockout-")))
+    pools = {"manmade": pool}
+    if args.organic_prompt:  # two tuned prompts: man-made things and organic things, picked per request by prompt_router
+        pools["organic"] = Pool(size=1, system_prompt_path=str(args.organic_prompt))
+        await pools["organic"].start()
+    router = None
+    if len(pools) > 1:
+        asker = Pool(size=1, system_prompt_path=str(config.ROUTER_PROMPT_PATH))  # one warm process that answers "organic" or "manmade"
+        await asker.start()
+
+        async def ask(prompt: str) -> str:
+            lease = await asker.acquire()
+            out = ""
+            try:
+                async for d in lease.followup(prompt):
+                    out += d
+            finally:
+                await lease.release(kill=True)
+            return out
+        router = Router(pools, ask=ask)
+    server = Server(pool, pathlib.Path(tempfile.mkdtemp(prefix="liveblockout-")), pool_for=router.pool_for if router else None)
     await server.start(args.host, args.port)
     print(f"PORT={server.port} HOST={args.host}", flush=True)
     seen = 0
@@ -43,6 +63,7 @@ if __name__ == "__main__":
     ap.add_argument("--port", type=int, default=config.PORT)
     ap.add_argument("--host", default=None)
     ap.add_argument("--prompt", type=pathlib.Path, default=config.PROMPT_PATH)
+    ap.add_argument("--organic-prompt", type=pathlib.Path, default=None, help="a second prompt for organic things (plants, creatures, characters); needs the router")
     a = ap.parse_args()
     a.host = a.host or default_host()
     try:

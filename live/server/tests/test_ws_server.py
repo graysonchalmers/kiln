@@ -55,6 +55,27 @@ class WsServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await asyncio.wait_for(c.recv(), 5))["type"], "stage")
         c.close()
 
+    async def test_pool_for_picks_the_pool_per_prompt_sync_or_async(self):
+        seen = []
+
+        async def run(pool, prompt, size, emit, workdir):
+            seen.append((prompt, pool))
+            await emit({"type": "done", "stages": 0}, None)
+        self.tmp = tempfile.TemporaryDirectory()
+        tmp = self.tmp
+        for pool_for in (lambda p: "ORG" if "frog" in p else "MAN", None):
+            async def apool_for(p):
+                return "ORG" if "frog" in p else "MAN"
+            self.server = Server(pool="DEFAULT", workroot=pathlib.Path(tmp.name), run=run, pool_for=pool_for or apool_for)
+            await self.server.start("127.0.0.1", 0)
+            c = await WsClient.connect(self.server.port)
+            for prompt in ("a frog", "a barrel"):
+                await c.send_json({"type": "generate", "prompt": prompt, "size": [1, 1, 1]})
+                await asyncio.wait_for(c.recv(), 5)
+            c.close()
+            await self.server.close()
+        self.assertEqual(seen, [("a frog", "ORG"), ("a barrel", "MAN")] * 2)
+
     async def test_disconnect_cancels_request(self):
         cancelled = asyncio.Event()
 

@@ -1,5 +1,6 @@
 """WebSocket front for run_request and run_damage. One request at a time per connection."""
 import asyncio
+import inspect
 import json
 import pathlib
 import tempfile
@@ -9,8 +10,9 @@ from pipeline import run_damage, run_request
 
 
 class Server:
-    def __init__(self, pool, workroot: pathlib.Path, run=run_request, run_damage=run_damage):
+    def __init__(self, pool, workroot: pathlib.Path, run=run_request, run_damage=run_damage, pool_for=None):
         self.pool, self.workroot, self.run, self.run_damage = pool, pathlib.Path(workroot), run, run_damage
+        self.pool_for = pool_for  # optional: prompt -> pool (the router); without it every request uses `pool`
         self._srv = None
         self.port = None
         self._conns: set[asyncio.Task] = set()
@@ -45,7 +47,12 @@ class Server:
                     if req.get("type") == "damage":
                         await self.run_damage(req, send_event, pathlib.Path(d))
                     else:
-                        await self.run(self.pool, req.get("prompt"), req.get("size"), send_event, pathlib.Path(d))
+                        pool = self.pool
+                        if self.pool_for:
+                            pool = self.pool_for(req.get("prompt"))
+                            if inspect.isawaitable(pool):
+                                pool = await pool
+                        await self.run(pool, req.get("prompt"), req.get("size"), send_event, pathlib.Path(d))
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:  # never kill the connection on a pipeline bug
