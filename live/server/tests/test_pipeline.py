@@ -101,6 +101,23 @@ class DamageProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("~", g["palette"])
         self.assertEqual(g["materials"]["s"], "wood")         # the request's tags are kept
 
+    async def test_amounts_stream_one_event_each_in_order_and_cells_only_get_fewer(self):
+        c = await self.ask({"type": "damage", "grid": _dgrid(16), "amounts": [0.0, 0.25, 0.5, 0.75, 1.0], "seed": 4})
+        self.assertEqual(c.types(), ["damaged"] * 5)
+        self.assertEqual([(e["index"], e["count"], e["amount"]) for e in c.events], [(i, 5, a) for i, a in enumerate([0.0, 0.25, 0.5, 0.75, 1.0])])
+        left = [sum(ch != "." for ch in e["grid"]["cells"]) for e in c.events]
+        self.assertEqual(left, sorted(left, reverse=True), "a burn only takes cells away")
+        self.assertLess(left[-1], left[0])
+
+    async def test_single_amount_events_carry_index_zero_of_one(self):
+        c = await self.ask({"type": "damage", "grid": _dgrid(), "amount": 0.3})
+        self.assertEqual((c.events[0]["index"], c.events[0]["count"]), (0, 1))
+
+    async def test_amounts_limits_and_glb_only_for_one(self):
+        for req in ({"amounts": []}, {"amounts": [0.1] * 65}, {"amounts": "x"}, {"amounts": [0.1, 2]}, {"amounts": [0.1, 0.2], "glb": True}):
+            c = await self.ask({"type": "damage", "grid": _dgrid(), **req})
+            self.assertEqual((c.types(), c.events[0]["code"]), (["error"], "bad_amount"), req)
+
     async def test_n_may_arrive_as_a_whole_number_float(self):
         c = await self.ask({"type": "damage", "grid": {**_dgrid(), "n": 8.0}, "amount": 0.3})
         self.assertEqual((c.types(), c.events[0]["grid"]["n"]), (["damaged"], 8))

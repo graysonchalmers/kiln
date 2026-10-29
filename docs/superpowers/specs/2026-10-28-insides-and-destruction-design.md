@@ -27,3 +27,10 @@ versions look right. Proof of the idea: `live/tools/insides_demo.py` (intact, cu
 ## Decisions for Grayson
 - Is the model or the engine in charge of structure? Today the model writes `_` and `structural`; an engine fallback (auto-hollow thick shells, auto-structure for metal) is possible but guesses.
 - Burn only, or also break, shatter and rot? The code has `break`; the look is untuned.
+
+## Physics hand-off (later, not built)
+This is the blockout part: the result is voxels, and `settle()` only drops pieces straight down. A physics engine would do it properly
+(tumbling, impact, breaking). The seam for that already exists: `damage.py` finds the rigid pieces (`_components`: face-connected
+groups of cells), so a future `chunks:true` option on the `damage` request can return them as `[{cells:[flat indices], keys, count,
+y_min}]` next to the grid, and the engine takes each one as a rigid body (voxel shape, mass from cell count and material tag) while the
+client keeps drawing bricks. Until then the pieces just fall the short way and stay voxels.

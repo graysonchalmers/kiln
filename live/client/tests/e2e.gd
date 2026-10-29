@@ -6,6 +6,8 @@ var t0 := 0.0
 var stages := 0
 var ok := false
 var last_grid := {}
+var burn_started := false
+var burn_got := 0
 var net
 
 
@@ -27,12 +29,22 @@ func _init() -> void:
 		if not ok:
 			quit(1)
 			return
-		net.damage(last_grid, Vector3(1.0, 2.0, 0.8), 0.6, 1, "burn"))  # then the damage round trip
+		net.damage(last_grid, Vector3(1.0, 2.0, 0.8), 0.6, 1, "burn"))  # then the damage round trip, then a 5-frame burn
 	net.damaged_received.connect(func(grid, amount):
+		if burn_started:  # frames of the 5-frame burn: amounts 0, .25, .5, .75, 1; only ever fewer cells
+			burn_got += 1
+			print("burn frame %d amount=%.2f" % [burn_got, amount])
+			if burn_got == 5:
+				quit(0)
+			return
 		var changed: bool = grid.get("cells", "") != last_grid.get("cells", "")
 		var charred: bool = str(grid.get("cells", "")).contains("~") and grid.get("materials", {}).get("~", "") == "charred"
 		print("damaged amount=%.2f n=%s changed=%s charred=%s" % [amount, grid.get("n", "none"), changed, charred])
-		quit(0 if changed and charred and grid.get("n", 0) == last_grid.get("n", -1) else 4))
+		if not (changed and charred and grid.get("n", 0) == last_grid.get("n", -1)):
+			quit(4)
+			return
+		burn_started = true
+		net.damage_burn(last_grid, Vector3(1.0, 2.0, 0.8), [0.0, 0.25, 0.5, 0.75, 1.0], 1, "burn"))
 	net.failed.connect(func(c, m):
 		printerr("FAILED ", c, " ", m)
 		quit(2))
