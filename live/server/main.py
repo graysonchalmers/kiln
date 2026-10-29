@@ -64,11 +64,17 @@ if __name__ == "__main__":
     ap.add_argument("--host", default=None)
     ap.add_argument("--prompt", type=pathlib.Path, default=config.PROMPT_PATH)
     ap.add_argument("--no-repair", action="store_true", help="do not pull parts that float beside the body back to it (server/repair.py)")
+    ap.add_argument("--validate", action="store_true", help="check the sampled shape and retry once with the problems named")
+    ap.add_argument("--ascii", action="store_true", help="with --validate: the retry message also carries 24x24 text silhouettes of the shape")
+    ap.add_argument("--observe", action="store_true", help="report the validator results in `done` without acting on them (eval baseline)")
     ap.add_argument("--organic-prompt", type=pathlib.Path, default=config.ORGANIC_PROMPT_PATH, help="the prompt for organic things (plants, creatures, characters), picked by the router")
     ap.add_argument("--single-prompt", action="store_true", help="no router and no organic prompt: every request uses --prompt (the baseline for evals)")
     a = ap.parse_args()
     a.host = a.host or default_host()
     config.REPAIR = not a.no_repair
+    config.VALIDATE = a.validate
+    config.OBSERVE = a.observe or a.validate
+    config.ASCII = a.ascii
     if a.single_prompt:
         a.organic_prompt = None
     try:

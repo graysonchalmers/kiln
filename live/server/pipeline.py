@@ -12,6 +12,8 @@ import numpy as np
 import config
 from damage import damage
 from repair import bridge_floating
+from silhouette import silhouettes
+from validate import score, validate
 from kiln_runner import build_glb
 from ladder import (LEVELS, LadderError, eval_master, eval_materials, eval_palette, kiln_pal, level_cells, level_script, master_runs,
                     parse_reply, solidify)
@@ -79,23 +81,31 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
         async with sem:
             return await asyncio.to_thread(build, script, d)
 
-    async def make_levels(pal_src: str, f_src: str) -> str | None:
-        """Build and emit every level; returns an error message if nothing could be emitted."""
-        nonlocal emitted, attempt, t_function
-        skipped.clear()
-        t_function = round(time.time() - t0, 3)  # the model's function is complete: levels can start
+    async def prepare(pal_src: str, f_src: str) -> dict:
+        """Sample f into the master volume and run the repair and the checks; nothing is built or sent yet."""
+        nonlocal attempt, t_function
         attempt += 1
+        t_function = round(time.time() - t0, 3)  # the model's function is complete: levels can start
         master = await asyncio.to_thread(eval_master, pal_src, f_src)
         master = await asyncio.to_thread(solidify, master)  # no sealed voids: every shape is built solid
-        if config.REPAIR:  # parts floating beside the body slide back to it (sizes scaled from the 32-cell values: x8 volume at 64)
+        if config.REPAIR or config.VALIDATE:  # parts floating beside the body slide back to it (sizes scaled from the 32-cell values: x8 volume at 64)
             master, _ = await asyncio.to_thread(bridge_floating, master, 96, 0.3, 24)
         palette = await asyncio.to_thread(eval_palette, pal_src)
         materials = await asyncio.to_thread(eval_materials, pal_src)
+        problems = await asyncio.to_thread(validate, master, set(palette) or None) if (config.VALIDATE or config.OBSERVE) else []
+        return {"pal_src": pal_src, "master": master, "palette": palette, "materials": materials, "problems": problems,
+                "attempt": attempt, "t_function": t_function}
+
+    async def emit_levels(prep: dict) -> str | None:
+        """Build and emit every level of a prepared shape; returns an error message if nothing could be emitted."""
+        nonlocal emitted
+        skipped.clear()
+        master, palette, materials, pal_src = prep["master"], prep["palette"], prep["materials"], prep["pal_src"]
         grids: dict[int, dict] = {}
         started: list[tuple[int, asyncio.Task]] = []
 
         def start(n: int, script: str) -> None:  # builds begin as soon as each script exists
-            t = asyncio.create_task(build_level(script, workdir / f"a{attempt}_l{n}"))
+            t = asyncio.create_task(build_level(script, workdir / f"a{prep['attempt']}_l{n}"))
             tasks.append(t)
             started.append((n, t))
 
@@ -111,38 +121,62 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
             r = await task
             if r.ok:
                 await emit({"type": "stage", "index": emitted, "level": n, "tris": r.tris, "grid": grids[n],
-                            "t_function": t_function, "t_ready": round(time.time() - t0, 3)}, r.glb)
+                            "t_function": prep["t_function"], "t_ready": round(time.time() - t0, 3)}, r.glb)
                 emitted += 1
             else:
                 first_error = first_error or r.error
                 skipped.append({"level": n, "error": (r.error or "")[-160:]})
         return None if emitted else (first_error or "no level could be built")
 
+    def triggers(prep: dict) -> list[dict]:
+        return [p for p in prep["problems"] if p["code"] in config.TRIGGER_CODES]
+
     try:
         error: LadderError | str | None = None
+        first: dict | None = None
+        final: dict | None = None
+        retried = False
         try:
-            pal_src, f_src = await _read_function(lease.generate(prompt, size_m))
-            error = await make_levels(pal_src, f_src)
+            first = final = await prepare(*await _read_function(lease.generate(prompt, size_m)))
         except LadderError as e:
             error = e
-        if error is not None:  # nothing was emitted: one retry
+        if first is not None and config.VALIDATE and triggers(first):  # ONE retry that names what is wrong; keep the better attempt
+            retried = True
+            note = retry_note(first["problems"], first["master"])
+            await lease.release(kill=True)
+            lease = await pool.acquire()
+            try:
+                second = await prepare(*await _read_function(lease.generate(prompt, size_m, note=note)))
+                if score(second["problems"]) < score(first["problems"]):
+                    final = second
+            except LadderError:
+                pass
+        if final is not None:
+            error = await emit_levels(final)
+        if error is not None and not retried:  # nothing was emitted: one retry
             msg = error.message if isinstance(error, LadderError) else error
             # Reading the first reply stops early and kills its process, so the retry runs on a fresh one with the
             # error in the request (a follow-up on the dead process raised ConnectionResetError and hid the real error).
             await lease.release(kill=True)
             lease = await pool.acquire()
-            note = (f"A previous attempt failed: {msg}\n"
-                    "Reply with only a corrected pal({...}) and function f(u,v,w){...}.")
+            note = f"A previous attempt failed: {msg}\n{_reply_hint()}"
+            retried = True
             try:
-                error = await make_levels(*await _read_function(lease.generate(prompt, size_m, note=note)))
+                final = await prepare(*await _read_function(lease.generate(prompt, size_m, note=note)))
+                error = await emit_levels(final)
             except LadderError as e:
                 error = e
-            if error is not None:
-                code = error.code if isinstance(error, LadderError) else "build_failed"
-                await emit({"type": "error", "code": code,
-                            "message": error.message if isinstance(error, LadderError) else error}, None)
-                return
-        await emit({"type": "done", "stages": emitted, **({"skipped": skipped} if skipped else {})}, None)
+        if error is not None:
+            code = error.code if isinstance(error, LadderError) else "build_failed"
+            await emit({"type": "error", "code": code,
+                        "message": error.message if isinstance(error, LadderError) else error}, None)
+            return
+        done = {"type": "done", "stages": emitted, **({"skipped": skipped} if skipped else {})}
+        if config.VALIDATE or config.OBSERVE:  # same report in every arm of an eval
+            done["checks"] = {"attempts": attempt, "retried": retried, "picked": final["attempt"],
+                              "first": [p["code"] for p in first["problems"]] if first else None,
+                              "final": [p["code"] for p in final["problems"]]}
+        await emit(done, None)
     except PoolUnavailable as e:
         await emit({"type": "error", "code": "generator_unavailable", "message": e.reason}, None)
     finally:
@@ -151,6 +185,18 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
                 t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         await lease.release(kill=True)
+
+
+def _reply_hint() -> str:
+    return "Reply with only a corrected pal({...}) and function f(u,v,w){...}."
+
+
+def retry_note(problems: list[dict], master) -> str:
+    """The retry message: the problems, one sentence each, then what to send back."""
+    lines = "\n".join(f"- {p['text']}" for p in problems)
+    look = ("\nThis is how that shape looks (one letter per palette key, . = empty air):\n\n" + silhouettes(master) + "\n\n") if config.ASCII else "\n"
+    return (f"A previous attempt built a shape with these problems:\n{lines}{look}"
+            f"Fix exactly these and keep everything else. {_reply_hint()}")
 
 
 def _parse_damage(req: dict):
