@@ -53,3 +53,18 @@ the SAME first attempt twice: typed (`--validate`) and typed + silhouettes (`--v
 - ascii vs typed: 1 win, 2 losses, 4 ties: no visible difference. Validator codes left in the delivered volume: first 17, typed 6, ascii 1 (a thin key).
   Triggers fully resolved: 7/7 both ways. ASCII costs about 0.4 s median and some tokens; keep it flag-only and off by default until it shows a gain.
 - Only 7 of 48 first attempts needed a retry (15%), all for no ground contact: the cost is a round trip on about one request in seven.
+
+## Step 4 round 2 (branch `lb-validate`; reworked prompt, new examples, no router; criteria addendum committed first)
+Prompt: compact, hollow `_` carve rule, 8 to 16 parts; examples replaced by a stone well and a snowman, both in one prompt; `--plan` no longer calls the router.
+C2 = `--validate --ascii --single-prompt` vs D2 = `--validate --ascii --plan`, 12 props x 2, run back to back (Envy load about 4 from another session).
+| | C2 | D2 |
+|---|---|---|
+| failed / floating runs / trigger runs | 0 / 0 / 0 | 0 / 0 / 0 |
+| palette keys visible at 32 cells | .951 | .952 |
+| latency median / p90 (s) | 15.7 / 25.6 | 6.0 / 9.0 |
+| retries | 7 (first attempts: 5 no ground) | 4 (first attempts: 0 ground, 1 floating) |
+| blind (24 pairs, picks before mapping) | 8 wins | 7 wins, 9 ties |
+Verdict: latency passes by a wide margin (partly load drift: C2 ran slower than the 8.1 s C of round 1, but D2 at 6.0 s is faster than any earlier arm) and every
+mechanical measure passes; the blind bar still fails (D2 11.5 of 24, needs 14). D2 wins buckets, crates, potion, slime; C2 wins cactus, chest, lantern, mushroom.
+Part lists nearly never forget ground contact (0 of 21 vs 5 of 24). Stays on `lb-validate`; next lever is per-category examples again (chest, lantern) or merging
+D2 as an opt-in flag since it is now the fastest arm.
