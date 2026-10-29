@@ -37,7 +37,7 @@ voxels) flagged 52 of 57 grids from the earlier eval (91%), so every retry would
 - Unchanged gates for every step: unit tests green; Stealth gallery SSIM stays 1.000 (`gallery_check_stealth.sh`, and `SET=burnt`).
 
 ## Trigger set, frozen after arm A's observation run and BEFORE arm B ran (2026-10-28)
-Arm A (24 plain requests, observe only) fired: floating 8, thin 11, key_missing 8, ground 3, short 1 runs of 24 first attempts, and 17 of 24 runs
+Arm A (24 plain requests, observe only) fired: floating 8, thin 14, key_missing 8, ground 3, short 1 runs of 24 first attempts, and 17 of 24 runs
 had at least one trigger problem under the first trigger list. Over a third of runs means a retry on most requests, so by the rule above:
 - **Retry triggers: floating, short, ground.** (A's floating figure is the raw count before repair; after repair only pieces farther than 30% of the box
   remain, so the retry fires on far fewer.) `thin` (11/24) and `key_missing` (8/24) are advisory: named in the retry message when one of the three
