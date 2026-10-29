@@ -57,12 +57,11 @@ Output: `C:\Users\Grayson\claude-tmp\smoke\smoke.avi` plus `smoke.avi.png` (a fr
 It is saved to `user://settings.cfg` (Godot's per-user folder) and loads next time. `--style=<name|number>` or `VS_STYLE`
 overrides it for one run; `T` cycles styles.
 
-## Better builds (flags, all off by default; eval in `handoff-log/2026-10-29-better-builds-steps-2-4.md`)
+## Better builds (flags, off by default; eval in `handoff-log/2026-10-29-better-builds-steps-2-4.md`)
 
-`--repair` slides floating parts to the body. `--validate` adds checks on the sampled shape (floating, short, no ground, thin, unused palette key) and
+Repair (floating parts slide to the body) is on by default, `--no-repair` turns it off. `--validate` adds checks on the sampled shape (floating, short, no ground, thin, unused palette key) and
 ONE retry that names the problems (the better attempt is delivered); `--ascii` puts 24x24 front/side/top silhouettes of the model's own shape in that
-retry; `--plan` has the model write a part list that `server/parts.py` compiles (box, cylinder, cone, ellipsoid, capsule, torus; attach, mirror, smooth),
-with `function f` as the escape hatch. `--observe` only reports the checks in `done`. Eval: `tools/run_arm.sh`, `eval_stats.py`, `blind_pairs.py`.
+retry. `--plan` (branch `lb-validate` only) has the model write a part list that `server/parts.py` compiles. `--observe` only reports the checks in `done`. Eval: `tools/run_arm.sh`, `eval_stats.py`, `blind_pairs.py`.
 
 ## Regression set
 
