@@ -1,16 +1,18 @@
-"""WebSocket front for run_request. One generate at a time per connection."""
+"""WebSocket front for run_request and run_damage. One request at a time per connection."""
 import asyncio
+import inspect
 import json
 import pathlib
 import tempfile
 
 import ws_proto
-from pipeline import run_request
+from pipeline import run_damage, run_request
 
 
 class Server:
-    def __init__(self, pool, workroot: pathlib.Path, run=run_request):
-        self.pool, self.workroot, self.run = pool, pathlib.Path(workroot), run
+    def __init__(self, pool, workroot: pathlib.Path, run=run_request, run_damage=run_damage, pool_for=None):
+        self.pool, self.workroot, self.run, self.run_damage = pool, pathlib.Path(workroot), run, run_damage
+        self.pool_for = pool_for  # optional: prompt -> pool (the router); without it every request uses `pool`
         self._srv = None
         self.port = None
         self._conns: set[asyncio.Task] = set()
@@ -42,7 +44,15 @@ class Server:
         async def run_job(req: dict) -> None:
             with tempfile.TemporaryDirectory(dir=self.workroot) as d:
                 try:
-                    await self.run(self.pool, req.get("prompt"), req.get("size"), send_event, pathlib.Path(d))
+                    if req.get("type") == "damage":
+                        await self.run_damage(req, send_event, pathlib.Path(d))
+                    else:
+                        pool = self.pool
+                        if self.pool_for:
+                            pool = self.pool_for(req.get("prompt"))
+                            if inspect.isawaitable(pool):
+                                pool = await pool
+                        await self.run(pool, req.get("prompt"), req.get("size"), send_event, pathlib.Path(d))
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:  # never kill the connection on a pipeline bug
@@ -57,10 +67,10 @@ class Server:
                     break
                 try:
                     req = json.loads(data.decode()) if op == ws_proto.TEXT else None
-                    if not isinstance(req, dict) or req.get("type") != "generate":
-                        raise ValueError("expected a generate message")
-                except (ValueError, UnicodeDecodeError) as e:
-                    await send_event({"type": "error", "code": "bad_request", "message": str(e)})
+                    if not isinstance(req, dict) or req.get("type") not in ("generate", "damage"):
+                        raise ValueError("expected a generate or damage message")
+                except (ValueError, UnicodeDecodeError, RecursionError) as e:  # RecursionError: JSON nested thousands deep
+                    await send_event({"type": "error", "code": "bad_request", "message": str(e)[:200]})
                     continue
                 if job and not job.done():
                     await send_event({"type": "error", "code": "busy", "message": "a request is already running"})

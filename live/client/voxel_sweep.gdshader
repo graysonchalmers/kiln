@@ -14,12 +14,15 @@ uniform sampler2DArray tex_albedo : source_color, filter_linear_mipmap, repeat_e
 uniform sampler2DArray tex_normal : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform float tile_m = 0.45;       // metres of brick face per texture tile
 
-// Per material tag (0 default, 1 stone, 2 wood, 3 metal, 4 cloth, 5 glass, 6 emissive); see voxel_view.gd TAGS.
-const float T_ROUGH[7]  = float[7](0.80, 0.90, 0.68, 0.34, 0.95, 0.10, 0.55);
-const float T_METAL[7]  = float[7](0.00, 0.00, 0.00, 0.85, 0.00, 0.00, 0.00);
-const float T_GRAIN[7]  = float[7](0.00, 0.50, 0.45, 0.30, 0.45, 0.00, 0.00);  // strength of the loom albedo/normal detail
-const float T_RIM[7]    = float[7](0.10, 0.08, 0.12, 0.45, 0.20, 0.70, 0.10);   // fresnel / rim light
-const float T_AO[7]     = float[7](0.32, 0.38, 0.30, 0.28, 0.30, 0.18, 0.15);   // darkening in the seams between bricks
+// Per material tag (0 default, 1 stone, 2 wood, 3 metal, 4 cloth, 5 glass, 6 emissive, 7 structural, 8 charred); see voxel_view.gd TAGS.
+const float T_ROUGH[9]  = float[9](0.80, 0.90, 0.68, 0.34, 0.95, 0.10, 0.55, 0.55, 0.97);
+const float T_METAL[9]  = float[9](0.00, 0.00, 0.00, 0.85, 0.00, 0.00, 0.00, 0.20, 0.00);
+const float T_GRAIN[9]  = float[9](0.00, 0.50, 0.45, 0.30, 0.45, 0.00, 0.00, 0.40, 0.85);  // strength of the loom albedo/normal detail
+const float T_RIM[9]    = float[9](0.10, 0.08, 0.12, 0.45, 0.20, 0.70, 0.10, 0.20, 0.03);   // fresnel / rim light
+const float T_AO[9]     = float[9](0.32, 0.38, 0.30, 0.28, 0.30, 0.18, 0.15, 0.42, 0.45);   // darkening in the seams between bricks
+const float T_TINT[9]   = float[9](1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 0.80, 0.55);   // albedo multiplier: structure reads darker and denser, char nearly black
+const int   T_LAYER[9]  = int[9](-1, 0, 1, 2, 3, -1, -1, 1, 0);                              // loom layer: stone, wood, metal, cloth (structural uses wood, charred uses stone)
+const float T_EMBER[9]  = float[9](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.16);          // charred: a faint ember glow in the dark cracks, kept under the bloom threshold
 
 varying vec4 vcol;
 varying float glow;
@@ -85,14 +88,17 @@ void fragment() {
 	uv = uv / tile_m + vec2(jit * 7.0, fract(jit * 13.0) * 5.0);
 	float grain = T_GRAIN[t];
 	vec3 nl = ln;
+	vec3 ember = vec3(0.0);
+	base *= T_TINT[t];
 	if (grain > 0.0) {
-		float layer = float(t - 1);                          // stone, wood, metal, cloth are layers 0..3
+		float layer = float(T_LAYER[t]);
 		vec3 tex = texture(tex_albedo, vec3(uv, layer)).rgb;
 		vec3 nm = texture(tex_normal, vec3(uv, layer)).xyz * 2.0 - 1.0;
 		base *= mix(vec3(1.0), tex * 1.7, grain);
 		vec3 tu = axis.x > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
 		vec3 tv = axis.y > 0.5 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
 		nl = normalize(ln + (tu * nm.x + tv * nm.y) * grain * 1.4);
+		ember = vec3(1.0, 0.32, 0.06) * T_EMBER[t] * smoothstep(0.30, 0.10, tex.r) * (0.5 + jit);  // glow where the texture is darkest
 	}
 
 	// Seams: near a face edge the brick darkens (contact AO) and its normal tips outward (a bevel that catches the light).
@@ -116,5 +122,5 @@ void fragment() {
 
 	float qq = q.x + q.y + q.z - max(q.x, max(q.y, q.z)) - min(q.x, min(q.y, q.z));
 	float rim = smoothstep(0.78, 1.0, qq);
-	EMISSION = glass_glint + self_lit + edge_color.rgb * glow * (0.7 + 3.3 * rim);
+	EMISSION = glass_glint + self_lit + ember + edge_color.rgb * glow * (0.7 + 3.3 * rim);
 }

@@ -25,10 +25,12 @@ class Lease:
         self.pool, self.proc, self.models, self.cost = pool, proc, set(), 0.0
         self._released = False
 
-    async def generate(self, prompt: str, size_m: tuple[float, float, float]) -> AsyncIterator[str]:
+    async def generate(self, prompt: str, size_m: tuple[float, float, float], note: str = "") -> AsyncIterator[str]:
+        """`note` is extra text after the request, used by the retry to say what failed last time."""
         x, y, z = size_m
         async for d in self._stream(
-                f"Box: {x:.2f} x {y:.2f} x {z:.2f} metres (width x height x depth); the prop must fill it.\nBuild: {prompt}"):
+                f"Box: {x:.2f} x {y:.2f} x {z:.2f} metres (width x height x depth); the prop must fill it.\nBuild: {prompt}"
+                + (f"\n{note}" if note else "")):
             yield d
 
     async def followup(self, text: str) -> AsyncIterator[str]:

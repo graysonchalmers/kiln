@@ -33,6 +33,49 @@ class WsServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await asyncio.wait_for(c.recv(), 5))["type"], "done")
         c.close()
 
+    async def test_damage_request_gets_one_damaged_event_and_the_connection_stays_usable(self):
+        c = await WsClient.connect(await self.start(ok_run))
+        grid = {"n": 4, "cells": "s" * 64, "palette": {"s": "#aa5522"}, "materials": {"s": "wood"}}
+        await c.send_json({"type": "damage", "grid": grid, "amount": 0.5, "seed": 1})
+        ev = await asyncio.wait_for(c.recv(), 5)
+        self.assertEqual(ev["type"], "damaged")
+        self.assertEqual(len(ev["grid"]["cells"]), 64)
+        await c.send_json({"type": "damage", "grid": {"n": 4}})
+        self.assertEqual((await asyncio.wait_for(c.recv(), 5))["code"], "bad_grid")
+        await c.send_json({"type": "generate", "prompt": "barrel", "size": [1, 2, 1]})
+        self.assertEqual((await asyncio.wait_for(c.recv(), 5))["type"], "stage")
+        c.close()
+
+    async def test_json_nested_thousands_deep_is_a_bad_request_not_a_dead_connection(self):
+        c = await WsClient.connect(await self.start(ok_run))
+        await c.send_text("[" * 100000)
+        ev = await asyncio.wait_for(c.recv(), 5)
+        self.assertEqual((ev["type"], ev["code"]), ("error", "bad_request"))
+        await c.send_json({"type": "generate", "prompt": "barrel", "size": [1, 2, 1]})
+        self.assertEqual((await asyncio.wait_for(c.recv(), 5))["type"], "stage")
+        c.close()
+
+    async def test_pool_for_picks_the_pool_per_prompt_sync_or_async(self):
+        seen = []
+
+        async def run(pool, prompt, size, emit, workdir):
+            seen.append((prompt, pool))
+            await emit({"type": "done", "stages": 0}, None)
+        self.tmp = tempfile.TemporaryDirectory()
+        tmp = self.tmp
+        for pool_for in (lambda p: "ORG" if "frog" in p else "MAN", None):
+            async def apool_for(p):
+                return "ORG" if "frog" in p else "MAN"
+            self.server = Server(pool="DEFAULT", workroot=pathlib.Path(tmp.name), run=run, pool_for=pool_for or apool_for)
+            await self.server.start("127.0.0.1", 0)
+            c = await WsClient.connect(self.server.port)
+            for prompt in ("a frog", "a barrel"):
+                await c.send_json({"type": "generate", "prompt": prompt, "size": [1, 1, 1]})
+                await asyncio.wait_for(c.recv(), 5)
+            c.close()
+            await self.server.close()
+        self.assertEqual(seen, [("a frog", "ORG"), ("a barrel", "MAN")] * 2)
+
     async def test_disconnect_cancels_request(self):
         cancelled = asyncio.Event()
 

@@ -2,6 +2,7 @@ extends Node
 ## WebSocket client for the Live Blockout server. Text events describe a stage; the next binary frame is its GLB.
 
 signal stage_received(index: int, glb: PackedByteArray, tris: int, grid: Dictionary)
+signal damaged_received(grid: Dictionary, amount: float)
 signal finished(stages: int)
 signal failed(code: String, message: String)
 signal status(text: String)
@@ -10,11 +11,42 @@ var url := "ws://envy:8795"
 var _ws: WebSocketPeer = null
 var _request := ""
 var _pending_stage: Dictionary = {}
+var last_skipped: Array = []  # levels the server could not build in the last request: [{level, error}]
 
 
 func generate(prompt: String, size: Vector3) -> void:
 	_close()
+	last_skipped = []
 	_request = JSON.stringify({"type": "generate", "prompt": prompt, "size": [size.x, size.y, size.z]})
+	_pending_stage = {}
+	_ws = WebSocketPeer.new()
+	_ws.inbound_buffer_size = 1 << 24
+	_ws.max_queued_packets = 256
+	var err := _ws.connect_to_url(url)
+	if err != OK:
+		_ws = null
+		failed.emit("connect", "could not start connecting to %s (error %d)" % [url, err])
+		return
+	status.emit("connecting to %s ..." % url)
+
+
+## Ask the server to burn or break a grid you hold (stateless: the grid travels with the request). The reply is one
+## `damaged` event: parts that lose their support have already fallen. mode is "burn" or "break".
+func damage(grid: Dictionary, size: Vector3, amount: float, seed_value: int = 1, mode: String = "burn") -> void:
+	_damage_request(grid, size, {"amount": amount}, seed_value, mode)
+
+
+## The same for a whole burn: one `damaged` event per amount (0..1), streamed in order as the server finishes each.
+func damage_burn(grid: Dictionary, size: Vector3, amounts: Array, seed_value: int = 1, mode: String = "burn") -> void:
+	_damage_request(grid, size, {"amounts": amounts}, seed_value, mode)
+
+
+func _damage_request(grid: Dictionary, size: Vector3, which: Dictionary, seed_value: int, mode: String) -> void:
+	_close()
+	var g := {"n": int(grid.get("n", 0)), "cells": grid.get("cells", ""), "palette": grid.get("palette", {}), "materials": grid.get("materials", {})}
+	var req := {"type": "damage", "grid": g, "size": [size.x, size.y, size.z], "seed": seed_value, "mode": mode}
+	req.merge(which)
+	_request = JSON.stringify(req)
 	_pending_stage = {}
 	_ws = WebSocketPeer.new()
 	_ws.inbound_buffer_size = 1 << 24
@@ -37,12 +69,18 @@ func ingest(is_text: bool, data: PackedByteArray) -> void:
 		match ev.get("type", ""):
 			"stage":
 				_pending_stage = ev
+			"damaged":
+				var dg = ev.get("grid", {})
+				if int(ev.get("index", 0)) + 1 >= int(ev.get("count", 1)):
+					_close()  # the last event ends the reply (no `done`); closed first so a handler may start the next request
+				damaged_received.emit(dg if typeof(dg) == TYPE_DICTIONARY else {}, float(ev.get("amount", 0.0)))
 			"done":
+				last_skipped = ev.get("skipped", []) if typeof(ev.get("skipped", [])) == TYPE_ARRAY else []
+				_close()  # closed before the signal: a handler may start the next request on a new connection
 				finished.emit(int(ev.get("stages", 0)))
-				_close()
 			"error":
-				failed.emit(str(ev.get("code", "error")), str(ev.get("message", "")))
 				_close()
+				failed.emit(str(ev.get("code", "error")), str(ev.get("message", "")))
 	elif not _pending_stage.is_empty():
 		var st := _pending_stage
 		_pending_stage = {}

@@ -48,6 +48,24 @@ var cur_view: MultiMeshInstance3D = null
 var cur_mat: ShaderMaterial = null
 var old_view: MultiMeshInstance3D = null
 var old_mat: ShaderMaterial = null
+var dmg_step := 0  # 0 = intact, 1..4 = burnt 25..100 percent (X)
+const BURN_FRAMES := 24   # keyframes of a continuous burn, 0..100 percent (C plays, [ and ] scrub)
+const BURN_FPS := 12.0
+var burn_frames: Array = []
+var burn_loading := false
+var burn_idx := 0
+var burn_dir := 0  # 1 = burning, -1 = un-burning, 0 = paused
+var burn_t := 0.0
+var demo_out := ""  # --demo-burn=<prompt> --demo-out=<dir>: scripted run, screenshots at each burn step
+var demo_prompt := ""
+var demo_state := ""
+var demo_last_state := ""
+var demo_turn := false  # --demo-turn="prompt@w,h,d": a turntable of the prop, then its burn, from a camera that orbits the box
+var demo_keys := false  # --demo-keys: the same run but driven by key events (X, C, [, ]) through the input system
+var demo_step := 0
+var demo_f := 0
+var demo_got_damage := false
+var demo_shots := {}
 var cur_slug := "asset"
 var req_min := Vector3.ZERO
 var req_size := Vector3.ONE
@@ -90,6 +108,7 @@ func _ready() -> void:
 	add_child(net)
 	net.stage_received.connect(_on_stage)
 	net.finished.connect(_on_finished)
+	net.damaged_received.connect(_on_damaged)
 	net.failed.connect(_on_failed)
 	net.status.connect(_set_status)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -104,6 +123,22 @@ func _ready() -> void:
 		return
 	if OS.get_cmdline_user_args().has("--smoke"):
 		_start_smoke()
+		return
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--demo-out="):
+			demo_out = a.substr(11)
+		if a.begins_with("--demo-burn="):
+			demo_prompt = a.substr(12)
+		if a.begins_with("--demo-keys="):
+			demo_prompt = a.substr(12)
+			demo_keys = true
+		if a.begins_with("--demo-turn="):
+			demo_prompt = a.substr(12)
+			demo_turn = true
+	if demo_prompt != "":
+		_start_demo_burn()
+		if demo_turn:
+			_setup_turn_box()
 		return
 	_set_status("B: draw a box | Tab: mouse | <-/->: stages | L: lock | T: style (%s) | O: settings | %s" % [Styles.NAMES[style], server_url])
 
@@ -130,8 +165,290 @@ func _start_smoke() -> void:
 	_set_status("smoke test: block, then 4, 8, 16, 32 cells")
 
 
+## Scripted run against a real server (needs --server=ws://host:port --demo-burn="wooden barrel" --demo-out=<dir>): generates the prop,
+## presses X four times and then C, and saves a screenshot at each step and during each sweep. Steps wait for events, not timers.
+func _start_demo_burn() -> void:
+	p0 = Vector3(-0.5, 0.0, -0.5)
+	p1 = Vector3(0.5, 0.0, 0.5)
+	box_h = 1.4
+	has_box = true
+	_redraw_wire()
+	var b := _box_bounds()
+	req_min = b[0]
+	req_size = b[1]
+	pitch = -0.08
+	yaw = 0.0
+	cam.position = Vector3(0.35, 0.85, 2.0)
+	cam.rotation = Vector3(pitch, yaw, 0.0)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	DirAccess.make_dir_recursive_absolute(demo_out)
+	demo_state = "start"
+	_set_status("demo: %s" % demo_prompt)
+
+
+## A real key press (down and up) through the input system, so the same _unhandled_input that handles the keyboard runs.
+func _press_key(code: Key) -> void:
+	var down := InputEventKey.new()
+	down.keycode = code
+	down.physical_keycode = code
+	down.pressed = true
+	Input.parse_input_event(down)
+	var up := InputEventKey.new()
+	up.keycode = code
+	up.physical_keycode = code
+	up.pressed = false
+	Input.parse_input_event(up)
+
+
+## --demo-keys: X once, then C (continuous burn: load, play to the end, play back), pause, [ twice, ] once; a screenshot of
+## the whole window (status line included) at each point. Steps wait for events, not timers.
+func _keys_tick() -> void:
+	demo_f += 1
+	if demo_f % 120 == 1:
+		_demo_log("tick f=%d fps=%d" % [demo_f, Engine.get_frames_per_second()])
+	if demo_state != demo_last_state:
+		demo_last_state = demo_state
+		_demo_log("state %s strip=%d gen_done=%s" % [demo_state, strip.count(), gen_done])
+	if clock > 120.0:  # safety: leave (and flush the log) instead of hanging
+		_demo_log("giving up in state %s strip=%d status: %s" % [demo_state, strip.count(), status.text if status != null else "?"])
+		get_tree().quit()
+	match demo_state:
+		"start":
+			if clock >= 1.0:
+				_send_request(demo_prompt)
+				demo_state = "gen"
+		"gen":
+			if gen_done and strip.count() > 0 and reveal_t < 0.0 and pacer.drained():
+				demo_f = 0
+				demo_state = "settle0"
+		"settle0":
+			if demo_f >= 20:
+				_demo_shot("k00_intact")
+				demo_got_damage = false
+				_press_key(KEY_X)
+				demo_state = "x_wait"
+		"x_wait":
+			if demo_got_damage and reveal_t < 0.0:
+				demo_f = 0
+				demo_state = "x_settle"
+		"x_settle":
+			if demo_f >= 25:
+				_demo_shot("k01_X_25")
+				_press_key(KEY_C)
+				demo_state = "c_load"
+		"c_load":
+			if burn_frames.size() >= BURN_FRAMES:
+				demo_state = "c_play"
+		"c_play":
+			for k in [6, 12, 18]:
+				if burn_idx >= k and not demo_shots.has(k):
+					demo_shots[k] = true
+					_demo_shot("k02_C_playing_%03d" % roundi(100.0 * k / float(BURN_FRAMES - 1)))
+			if burn_idx >= BURN_FRAMES - 1 and burn_dir == 0:
+				_demo_shot("k03_C_end_100")
+				_press_key(KEY_C)  # reverse
+				demo_state = "c_back"
+		"c_back":
+			if burn_idx <= 12 and burn_dir == -1:
+				_demo_shot("k04_C_reverse_%03d" % roundi(100.0 * burn_idx / float(BURN_FRAMES - 1)))
+				_press_key(KEY_C)  # pause
+				demo_f = 0
+				demo_state = "paused"
+		"paused":
+			if demo_f >= 6:
+				var at := burn_idx
+				_demo_shot("k05_C_paused_%03d" % roundi(100.0 * at / float(BURN_FRAMES - 1)))
+				_press_key(KEY_BRACKETLEFT)
+				_press_key(KEY_BRACKETLEFT)
+				demo_f = 0
+				demo_state = "left"
+		"left":
+			if demo_f >= 6:
+				_demo_shot("k06_bracket_left_x2_%03d" % roundi(100.0 * burn_idx / float(BURN_FRAMES - 1)))
+				_press_key(KEY_BRACKETRIGHT)
+				demo_f = 0
+				demo_state = "right"
+		"right":
+			if demo_f >= 6:
+				_demo_shot("k07_bracket_right_%03d" % roundi(100.0 * burn_idx / float(BURN_FRAMES - 1)))
+				demo_f = 0
+				demo_state = "end"
+		"end":
+			if demo_f >= 20:
+				print("demo done")
+				get_tree().quit()
+	if demo_f > 6000:  # safety
+		get_tree().quit()
+
+
+## Append a line to <demo-out>/demo.log and flush at once (stdout is buffered when redirected and lost if the process is killed).
+func _demo_log(text: String) -> void:
+	print(text)
+	if demo_out == "":
+		return
+	var f := FileAccess.open(demo_out + "/demo.log", FileAccess.READ_WRITE if FileAccess.file_exists(demo_out + "/demo.log") else FileAccess.WRITE)
+	if f == null:
+		return
+	f.seek_end()
+	f.store_line("%.2f %s" % [clock, text])
+	f.flush()
+
+
+## --demo-turn="a wooden barrel@0.75,0.95,0.75": the box is w x h x d metres (footprint centred), the prompt is what is before the @.
+func _setup_turn_box() -> void:
+	var parts := demo_prompt.rsplit("@", true, 1)
+	if parts.size() == 2:
+		var dims := parts[1].split(",")
+		if dims.size() == 3:
+			demo_prompt = parts[0]
+			var w := float(dims[0])
+			var h := float(dims[1])
+			var d := float(dims[2])
+			p0 = Vector3(-w * 0.5, 0.0, -d * 0.5)
+			p1 = Vector3(w * 0.5, 0.0, d * 0.5)
+			box_h = h
+			_redraw_wire()
+			var b := _box_bounds()
+			req_min = b[0]
+			req_size = b[1]
+	for w in room_walls:
+		w.visible = false  # a clean backdrop: just the floor and the sky
+	wire.visible = false
+	_orbit(0.0)
+
+
+## The camera on a circle around the box centre, looking at it.
+func _orbit(angle: float) -> void:
+	var c := req_min + req_size * 0.5
+	var r := maxf(req_size.y * 0.95, maxf(req_size.x, req_size.z) * 1.4 + 0.1)  # the prop fills most of the frame
+	cam.position = c + Vector3(sin(angle) * r, req_size.y * 0.2 + 0.05, cos(angle) * r)
+	cam.look_at(c, Vector3.UP)
+
+
+const TURN_FRAMES := 240  # one full turn at 30 frames a second: 8 seconds
+
+
+## --demo-turn: generate, one full turn around the intact prop (a still every 45 degrees), then the burn (C) with the camera
+## still going round: stills at 0, 50 and 100 percent. Steps wait for events, not timers.
+func _turn_tick() -> void:
+	demo_f += 1
+	if demo_state != demo_last_state:
+		demo_last_state = demo_state
+		_demo_log("state %s strip=%d gen_done=%s" % [demo_state, strip.count(), gen_done])
+	if clock > 150.0:
+		_demo_log("giving up in state %s strip=%d" % [demo_state, strip.count()])
+		get_tree().quit()
+	match demo_state:
+		"start":
+			_orbit(0.0)
+			if clock >= 1.0:
+				_send_request(demo_prompt)
+				demo_state = "gen"
+		"gen":
+			_orbit(0.0)
+			if gen_done and strip.count() > 0 and reveal_t < 0.0 and pacer.drained():
+				demo_f = 0
+				demo_state = "settle"
+		"settle":
+			_orbit(0.0)
+			if demo_f >= 25:
+				demo_f = 0
+				demo_state = "orbit"
+		"orbit":
+			var f := demo_f - 1  # frame 0 is the starting angle
+			_orbit(TAU * f / float(TURN_FRAMES))
+			if f % 30 == 0 and f < TURN_FRAMES:
+				_demo_shot("t_%03d" % roundi(360.0 * f / float(TURN_FRAMES)))
+			if f >= TURN_FRAMES:
+				demo_f = 0
+				_press_key(KEY_C)
+				demo_state = "burn_load"
+		"burn_load":
+			_orbit(TAU * 0.0 + demo_f * 0.01)
+			if burn_frames.size() >= BURN_FRAMES:
+				demo_state = "burn"
+		"burn":
+			_orbit(demo_f * 0.012)
+			for k in [0, 12, 23]:
+				if burn_idx >= k and not demo_shots.has(k):
+					demo_shots[k] = true
+					_demo_shot("b_%03d" % roundi(100.0 * k / float(BURN_FRAMES - 1)))
+			if burn_idx >= BURN_FRAMES - 1 and burn_dir == 0:
+				demo_f = 0
+				demo_state = "hold"
+		"hold":
+			_orbit(demo_f * 0.012)
+			if demo_f >= 45:
+				_demo_log("demo done")
+				get_tree().quit()
+
+
+func _demo_shot(name: String) -> void:
+	get_viewport().get_texture().get_image().save_png("%s/%s.png" % [demo_out, name])
+	_demo_log("shot " + name)
+
+
+## Called every frame while the scripted run is going.
+func _demo_tick() -> void:
+	demo_f += 1
+	match demo_state:
+		"start":
+			if clock >= 1.0:
+				_send_request(demo_prompt)
+				demo_state = "gen"
+		"gen":
+			if gen_done and strip.count() > 0 and reveal_t < 0.0 and pacer.drained():
+				demo_f = 0
+				demo_state = "settle"
+		"settle":
+			if demo_f >= 20:
+				_demo_shot("00_intact")
+				demo_step = 1
+				demo_state = "press"
+		"press":
+			demo_got_damage = false
+			_damage_next()
+			demo_state = "wait"
+		"wait":
+			if demo_got_damage:
+				demo_f = 0
+				demo_state = "sweep"
+		"sweep":
+			# stills during the sweep (the old level shrinking away, the new burnt one assembling), then the settled one
+			for f in [3, 9, 18]:
+				if demo_f == f:
+					_demo_shot("%02d_burn%d_sweep%d" % [demo_step, demo_step * 25, f])
+			if demo_f >= 20 and reveal_t < 0.0:
+				_demo_shot("%02d_burn%d_done" % [demo_step, demo_step * 25])
+				demo_step += 1
+				demo_state = "press" if demo_step <= 4 else "cont"
+		"cont":
+			_burn_toggle()
+			demo_f = 0
+			demo_state = "cont_play"
+		"cont_play":
+			if burn_dir != 0 or (not burn_frames.is_empty() and burn_idx > 0):
+				for k in [3, 9, 16, 23]:
+					if burn_idx >= k and not demo_shots.has(k):
+						demo_shots[k] = true
+						_demo_shot("05_continuous_%03d" % roundi(100.0 * k / float(BURN_FRAMES - 1)))
+				if burn_idx >= BURN_FRAMES - 1 and burn_dir == 0:
+					demo_f = 0
+					demo_state = "end"
+			if demo_f > 1800:  # safety: about a minute of simulated time
+				demo_state = "end"
+		"end":
+			if demo_f >= 30:
+				print("demo done")
+				get_tree().quit()
+
+
 ## Every test prop side by side at 32 cells, for a visual regression shot. Needs tests/props/ (make_prop_fixtures.py).
 func _start_gallery() -> void:
+	var suffix := ""  # --gallery-set=burnt shows the burnt versions (tests/props/<name>_32_burnt.json)
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--gallery-set="):
+			suffix = "_" + a.substr(14)
 	var man = JSON.parse_string(FileAccess.get_file_as_string("res://tests/props/props.json"))
 	var cols := 5
 	var spacing := 2.4
@@ -141,7 +458,7 @@ func _start_gallery() -> void:
 		var e: Dictionary = man[i]
 		var sz := Vector3(e["size"][0], e["size"][1], e["size"][2])
 		sz *= 1.5 / maxf(sz.x, maxf(sz.y, sz.z))
-		var grid = JSON.parse_string(FileAccess.get_file_as_string("res://tests/props/%s_32.json" % e["name"]))
+		var grid = JSON.parse_string(FileAccess.get_file_as_string("res://tests/props/%s_32%s.json" % [e["name"], suffix]))
 		var center := Vector3((i % cols - (cols - 1) * 0.5) * spacing, 0.0, 1.2 - (i / cols) * spacing)
 		var mat := ShaderMaterial.new()
 		mat.shader = sweep_shader
@@ -159,7 +476,7 @@ func _start_gallery() -> void:
 	cam.position = Vector3(0.0, 5.5, 3.0)
 	cam.rotation = Vector3(pitch, 0.0, 0.0)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	_set_status("gallery: %d props at 32 cells" % man.size())
+	_set_status("gallery: %d props at 32 cells%s" % [man.size(), " (" + suffix.substr(1) + ")" if suffix != "" else ""])
 	if OS.get_cmdline_user_args().has("--open-settings"):
 		_toggle_settings()
 
@@ -404,6 +721,14 @@ func _unhandled_input(event: InputEvent) -> void:
 				_scrub(1)
 			KEY_L:
 				_lock_stage()
+			KEY_X:
+				_damage_next()
+			KEY_C:
+				_burn_toggle()
+			KEY_BRACKETLEFT:
+				_burn_step(-1)
+			KEY_BRACKETRIGHT:
+				_burn_step(1)
 			KEY_ENTER, KEY_KP_ENTER:
 				if has_box:
 					_open_prompt()
@@ -620,6 +945,100 @@ func _scrub(d: int) -> void:
 	_show_stage(strip.step(d), false)
 
 
+## X: burn the shown level a bit more (25%, 50%, 75%, 100%, then back to intact). The server does the burning and lets
+## unsupported parts fall; the same seed each press keeps the steps one story. Scrubbing or a new request resets it.
+func _damage_next() -> void:
+	if strip.count() == 0 or strip.selected < 0:
+		return
+	var grid: Dictionary = strip.stages[strip.selected]["grid"]
+	if grid.is_empty():
+		return
+	dmg_step = (dmg_step + 1) % 5
+	if dmg_step == 0:
+		_show_stage(strip.selected, true)
+		return
+	net.damage(grid, req_size, dmg_step * 0.25, 1, "burn")
+	_set_status("burning to %d%% ..." % (dmg_step * 25))
+
+
+func _on_damaged(grid: Dictionary, amount: float) -> void:
+	if grid.is_empty():
+		return
+	if burn_loading:
+		burn_frames.append(grid)
+		if burn_frames.size() >= BURN_FRAMES:
+			burn_loading = false
+			burn_idx = 0
+			burn_dir = 1
+			burn_t = 0.0
+			_burn_show()
+		else:
+			_set_status("loading the burn ... %d/%d" % [burn_frames.size(), BURN_FRAMES])
+		return
+	demo_got_damage = true
+	_show_grid(grid, true)
+	_set_status("burnt %d%% | X = more | <-/-> back to the intact level" % roundi(amount * 100.0))
+
+
+## C: burn the shown level continuously, 0 to 100 percent (24 keyframes from one server request, then played at 12 per
+## second). C again pauses or reverses; [ and ] step one keyframe (about 4 percent). Scrubbing levels or a new request resets it.
+func _burn_toggle() -> void:
+	if strip.count() == 0 or strip.selected < 0:
+		return
+	if burn_frames.is_empty():
+		var grid: Dictionary = strip.stages[strip.selected]["grid"]
+		if burn_loading or grid.is_empty():
+			return
+		var amounts := []
+		for k in BURN_FRAMES:
+			amounts.append(k / float(BURN_FRAMES - 1))
+		burn_loading = true
+		net.damage_burn(grid, req_size, amounts, 1, "burn")
+		_set_status("loading the burn ...")
+		return
+	if burn_dir != 0:
+		burn_dir = 0
+	else:
+		burn_dir = 1 if burn_idx < burn_frames.size() - 1 else -1
+	burn_t = 0.0
+
+
+func _burn_step(d: int) -> void:
+	if burn_frames.is_empty():
+		return
+	burn_dir = 0
+	burn_idx = clampi(burn_idx + d, 0, burn_frames.size() - 1)
+	_burn_show()
+
+
+func _burn_show() -> void:
+	_show_grid(burn_frames[burn_idx], false)
+	_set_status("burnt %d%% | C play/pause | [ ] step | <-/-> back to the levels" % roundi(100.0 * burn_idx / float(BURN_FRAMES - 1)))
+
+
+func _burn_reset() -> void:
+	burn_frames.clear()
+	burn_loading = false
+	burn_dir = 0
+	burn_idx = 0
+
+
+func _burn_tick(delta: float) -> void:
+	if burn_dir == 0 or burn_frames.is_empty():
+		return
+	burn_t += delta
+	var moved := false
+	while burn_t >= 1.0 / BURN_FPS and burn_dir != 0:
+		burn_t -= 1.0 / BURN_FPS
+		burn_idx += burn_dir
+		moved = true
+		if burn_idx >= burn_frames.size() - 1 or burn_idx <= 0:
+			burn_idx = clampi(burn_idx, 0, burn_frames.size() - 1)
+			burn_dir = 0  # holds at the end; C again plays it back
+	if moved:
+		_burn_show()
+
+
 func _lock_stage() -> void:
 	var p: String = strip.lock(cur_slug)
 	_set_status("locked: " + ProjectSettings.globalize_path(p) if p != "" else "nothing to lock yet")
@@ -628,11 +1047,21 @@ func _lock_stage() -> void:
 # ---------------------------------------------------------------- asset + reveal
 
 func _show_stage(i: int, animate: bool) -> void:
-	_end_transition()
 	var grid: Dictionary = strip.stages[i]["grid"]
 	if grid.is_empty():
+		_end_transition()
 		_set_status("level %d has no voxel grid" % (i + 1))
 		return
+	dmg_step = 0
+	_burn_reset()
+	_show_grid(grid, animate)
+	_update_pips()
+	_set_status("level %d/%d (%d cells a side) | <-/-> scrub | L lock | X burn" % [i + 1, strip.count(), int(grid["n"])])
+
+
+## Show a voxel grid in the box; with animate the old one shrinks away under the sweep line as this one assembles.
+func _show_grid(grid: Dictionary, animate: bool) -> void:
+	_end_transition()
 	var mat := ShaderMaterial.new()
 	mat.shader = sweep_shader
 	mat.set_shader_parameter("mode", 1.0)
@@ -663,8 +1092,6 @@ func _show_stage(i: int, animate: bool) -> void:
 	else:
 		cur_mat.set_shader_parameter("line_y", 1.0e6)  # fully passed: every brick at full size
 		_clear_placeholder()
-	_update_pips()
-	_set_status("level %d/%d (%d cells a side) | <-/-> scrub | L lock" % [i + 1, strip.count(), int(grid["n"])])
 
 
 func _drop_current() -> void:
@@ -783,6 +1210,14 @@ func _process(delta: float) -> void:
 			get_viewport().get_texture().get_image().save_png(shot_path)
 			get_tree().quit()
 	_update_transition(delta)
+	_burn_tick(delta)
+	if demo_state != "":
+		if demo_turn:
+			_turn_tick()
+		elif demo_keys:
+			_keys_tick()
+		else:
+			_demo_tick()
 	if smoke_pending and clock >= 0.5:
 		smoke_pending = false
 		for n in [4, 8, 16, 32]:
@@ -797,7 +1232,7 @@ func _process(delta: float) -> void:
 	if pacer.drained() and not gen_done:
 		gen_done = true
 		_update_pips()
-		_set_status("finished: %d levels | <-/-> scrub | L lock | B new box" % strip.count())
+		_set_status("finished: %d levels%s | <-/-> scrub | L lock | B new box" % [strip.count(), "" if net.last_skipped.is_empty() else " (%d skipped: the server could not build them)" % net.last_skipped.size()])
 	if prompt_open or settings_open:
 		return
 	var d := Vector3.ZERO

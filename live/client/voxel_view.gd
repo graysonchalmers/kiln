@@ -3,7 +3,7 @@ extends RefCounted
 
 const BRICK := 1.0  # resting bricks fill their cell (seamless); the shader opens a small gap while a brick is moving
 const FALLBACK := Color(0.6, 0.6, 0.6)
-const TAGS := ["default", "stone", "wood", "metal", "cloth", "glass", "emissive"]  # index = the tag number the shader reads
+const TAGS := ["default", "stone", "wood", "metal", "cloth", "glass", "emissive", "structural", "charred"]  # index = the tag number the shader reads (server/materials.py TAGS)
 const TEXTURED := ["stone", "wood", "metal", "cloth"]  # layers of the loom texture arrays (live/client/materials)
 
 static var _albedo: Texture2DArray

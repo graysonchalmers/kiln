@@ -1,4 +1,5 @@
 import asyncio
+import numpy as np
 import math
 import pathlib
 import tempfile
@@ -6,7 +7,7 @@ import unittest
 import _path  # noqa: F401
 from kiln_runner import BuildResult
 from ladder import LEVELS
-from pipeline import run_request
+from pipeline import run_damage, run_request
 from pool import PoolUnavailable
 
 PAL = 'pal({s:"#aa5522"})'
@@ -26,38 +27,39 @@ def reject8_build(script, workdir):
 
 
 class FakeLease:
-    def __init__(self, chunks, followup_chunks=()):
-        self.chunks, self.followup_chunks = chunks, followup_chunks
+    def __init__(self, chunks):
+        self.chunks = chunks
         self.released_kill = None
-        self.followups = []
+        self.notes = []
         self.gate = None
 
-    async def generate(self, prompt, size):
+    async def generate(self, prompt, size, note=""):
         self.prompt, self.size = prompt, size
+        self.notes.append(note)
         for c in self.chunks:
             if c is None:
                 await self.gate.wait()
             else:
                 yield c
 
-    async def followup(self, text):
-        self.followups.append(text)
-        for c in self.followup_chunks:
-            yield c
+    async def followup(self, text):  # the real process is dead after the first reply is read early: never usable
+        raise ConnectionResetError("Connection lost")
+        yield
 
     async def release(self, kill=False):
         self.released_kill = kill
 
 
 class FakePool:
-    def __init__(self, lease=None, exc=None):
-        self.lease, self.exc, self.acquired = lease, exc, 0
+    """acquire() hands out the leases in order (the last one repeats); `exc` is raised from the exc_at-th acquire on."""
+    def __init__(self, *leases, exc=None, exc_at=1):
+        self.leases, self.exc, self.exc_at, self.acquired = leases, exc, exc_at, 0
 
     async def acquire(self):
         self.acquired += 1
-        if self.exc:
+        if self.exc and self.acquired >= self.exc_at:
             raise self.exc
-        return self.lease
+        return self.leases[min(self.acquired, len(self.leases)) - 1]
 
 
 class Collector:
@@ -70,6 +72,98 @@ class Collector:
 
     def types(self):
         return [e["type"] for e in self.events]
+
+
+def _dgrid(n=8):
+    cells = np.full((n, n, n), ".")
+    cells[:, 2:6, 2:6] = "s"
+    cells[:, 3:5, 3:5] = "h"
+    return {"n": n, "cells": "".join(cells.reshape(-1)), "palette": {"s": "#aa5522", "h": "#3a3a3a"},
+            "materials": {"s": "wood", "h": "structural"}}
+
+
+class DamageProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def ask(self, req, build=ok_build):
+        c = Collector()
+        with tempfile.TemporaryDirectory() as d:
+            await run_damage(req, c, pathlib.Path(d), build=build)
+        return c
+
+    async def test_damaged_event_has_a_smaller_charred_grid_and_no_done(self):
+        c = await self.ask({"type": "damage", "grid": _dgrid(), "amount": 0.6, "seed": 5, "mode": "burn"})
+        self.assertEqual(c.types(), ["damaged"])
+        ev = c.events[0]
+        self.assertEqual((ev["amount"], ev["seed"], ev["mode"]), (0.6, 5, "burn"))
+        g = ev["grid"]
+        self.assertEqual((g["n"], len(g["cells"])), (8, 512))
+        self.assertLess(sum(ch != "." for ch in g["cells"]), 8 * 4 * 4 * 8 * 1 + 1)
+        char = [k for k, t in g["materials"].items() if t == "charred"]
+        self.assertEqual(len(char), 1)
+        self.assertIn(char[0], g["palette"])
+        self.assertIn(char[0], set(g["cells"]))
+        self.assertEqual(g["materials"]["s"], "wood")         # the request's tags are kept
+
+    async def test_amounts_stream_one_event_each_in_order_and_cells_only_get_fewer(self):
+        c = await self.ask({"type": "damage", "grid": _dgrid(16), "amounts": [0.0, 0.25, 0.5, 0.75, 1.0], "seed": 4})
+        self.assertEqual(c.types(), ["damaged"] * 5)
+        self.assertEqual([(e["index"], e["count"], e["amount"]) for e in c.events], [(i, 5, a) for i, a in enumerate([0.0, 0.25, 0.5, 0.75, 1.0])])
+        left = [sum(ch != "." for ch in e["grid"]["cells"]) for e in c.events]
+        self.assertEqual(left, sorted(left, reverse=True), "a burn only takes cells away")
+        self.assertLess(left[-1], left[0])
+
+    async def test_single_amount_events_carry_index_zero_of_one(self):
+        c = await self.ask({"type": "damage", "grid": _dgrid(), "amount": 0.3})
+        self.assertEqual((c.events[0]["index"], c.events[0]["count"]), (0, 1))
+
+    async def test_amounts_limits_and_glb_only_for_one(self):
+        for req in ({"amounts": []}, {"amounts": [0.1] * 65}, {"amounts": "x"}, {"amounts": [0.1, 2]}, {"amounts": [0.1, 0.2], "glb": True}):
+            c = await self.ask({"type": "damage", "grid": _dgrid(), **req})
+            self.assertEqual((c.types(), c.events[0]["code"]), (["error"], "bad_amount"), req)
+
+    async def test_work_budget_caps_big_grids_times_many_amounts(self):
+        c = await self.ask({"type": "damage", "grid": _dgrid(64), "amounts": [0.1, 0.2, 0.3, 0.4]})
+        self.assertEqual((c.types(), c.events[0]["code"]), (["error"], "too_big"))
+        self.assertIn("allows 3 amounts", c.events[0]["message"])
+        c = await self.ask({"type": "damage", "grid": _dgrid(64), "amounts": [0.1, 0.2, 0.3]})
+        self.assertEqual(c.types(), ["damaged"] * 3)
+        c = await self.ask({"type": "damage", "grid": _dgrid(32), "amounts": [k / 23 for k in range(24)]})   # the client's burn
+        self.assertEqual(len(c.events), 24)
+
+    async def test_n_may_arrive_as_a_whole_number_float(self):
+        c = await self.ask({"type": "damage", "grid": {**_dgrid(), "n": 8.0}, "amount": 0.3})
+        self.assertEqual((c.types(), c.events[0]["grid"]["n"]), (["damaged"], 8))
+
+    async def test_same_request_same_answer_and_zero_amount_is_a_no_op(self):
+        req = {"type": "damage", "grid": _dgrid(), "amount": 0.5, "seed": 9}
+        a, b = await self.ask(req), await self.ask(req)
+        self.assertEqual(a.events[0]["grid"]["cells"], b.events[0]["grid"]["cells"])
+        z = await self.ask({"type": "damage", "grid": _dgrid(), "amount": 0})
+        self.assertEqual(z.events[0]["grid"]["cells"], _dgrid()["cells"])
+
+    async def test_bad_requests_get_a_code(self):
+        bad = {"n": 4, "cells": "ss"}
+        for req, code in (({"grid": bad}, "bad_grid"), ({"grid": None}, "bad_grid"),
+                          ({"grid": _dgrid(), "amount": 2}, "bad_amount"), ({"grid": _dgrid(), "amount": "x"}, "bad_amount"),
+                          ({"grid": _dgrid(), "amount": 10 ** 400}, "bad_amount"), ({"grid": _dgrid(), "amount": float("nan")}, "bad_amount"),
+                          ({"grid": _dgrid(), "mode": "melt"}, "bad_mode"), ({"grid": _dgrid(), "size": [1, 1]}, "bad_size"),
+                          ({"grid": {**_dgrid(), "n": 65}}, "bad_grid")):
+            c = await self.ask({"type": "damage", **req})
+            self.assertEqual((c.types(), c.events[0]["code"]), (["error"], code), req)
+
+    async def test_glb_is_built_only_when_asked_and_without_live_only_keys(self):
+        scripts = []
+
+        def spy(script, workdir):
+            scripts.append(script)
+            return ok_build(script, workdir)
+        c = await self.ask({"type": "damage", "grid": _dgrid(), "amount": 0.4, "size": [1, 1, 1]}, build=spy)
+        self.assertEqual((c.blobs, scripts), ([None], []))
+        c = await self.ask({"type": "damage", "grid": _dgrid(), "amount": 0.4, "size": [1, 1, 1], "glb": True}, build=spy)
+        self.assertEqual(c.types(), ["damaged"])
+        self.assertEqual(c.blobs[0][:4], b"glTF")
+        self.assertEqual(c.events[0]["tris"], 100)
+        self.assertEqual(len(scripts), 1)
+        self.assertIn("pal(", scripts[0])
 
 
 class PipelineTests(unittest.IsolatedAsyncioTestCase):
@@ -91,6 +185,25 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(scripts), 4)
         for sc in scripts:  # kiln's pal() rejects unknown options: the mat tag must be stripped from its script
             self.assertNotIn('"mat"', sc)
+
+    async def test_repair_pulls_a_floating_part_back_to_the_body_when_on(self):
+        import config
+        from repair import floating_pieces
+        import numpy as np
+        two = ('pal({s:"#aa5522",t:"#2255aa"})\nfunction f(u,v,w){const x=u-.5,z=w-.5\n'
+               'if(Math.abs(x)<.25&&Math.abs(z)<.25&&v<.3)return "s"\nif(Math.abs(x)<.2&&Math.abs(z)<.2&&v>.5&&v<.8)return "t"\nreturn null}')   # a gap of 0.2 between two blocks
+
+        async def pieces(on):
+            config.REPAIR = on
+            c = await self.run_it(FakePool(FakeLease([two])))
+            g = [e for e in c.events if e["type"] == "stage" and e["level"] == 32][0]["grid"]
+            grid = np.array(list(g["cells"])).reshape(32, 32, 32)
+            return len(floating_pieces(grid, 12)[1])
+        try:
+            self.assertEqual(await pieces(False), 1)   # left as the model wrote it
+            self.assertEqual(await pieces(True), 0)    # attached
+        finally:
+            config.REPAIR = False
 
     async def test_emits_four_levels_in_order(self):
         lease = FakeLease([GOOD])
@@ -133,31 +246,53 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         stages = [e for e in c.events if e["type"] == "stage"]
         self.assertEqual([e["level"] for e in stages], [4, 16, 32])
         self.assertEqual([e["index"] for e in stages], [0, 1, 2])
-        self.assertEqual(c.events[-1], {"type": "done", "stages": 3})
+        self.assertEqual(c.events[-1]["stages"], 3)
+        self.assertEqual([x["level"] for x in c.events[-1]["skipped"]], [8])   # the failed level is reported, not silently dropped
+        self.assertIn("bad level", c.events[-1]["skipped"][0]["error"])
 
-    async def test_eval_error_retries_once_with_error_text(self):
-        lease = FakeLease([BAD_F], followup_chunks=[GOOD])
-        c = await self.run_it(FakePool(lease))
+    async def test_eval_error_retries_once_on_a_fresh_lease_with_the_error_text(self):
+        first, second = FakeLease([BAD_F]), FakeLease([GOOD])
+        pool = FakePool(first, second)
+        c = await self.run_it(pool)
         self.assertEqual(c.types()[-1], "done")
-        self.assertEqual(len(lease.followups), 1)
-        self.assertIn("boom", lease.followups[0])
+        self.assertEqual(pool.acquired, 2)
+        self.assertTrue(first.released_kill)                      # its process is dead after the early read
+        self.assertEqual(second.prompt, "barrel")                # the retry carries the original request
+        self.assertIn("boom", second.notes[0])                   # and says what failed
 
-    async def test_retry_also_fails_emits_the_error_code(self):
-        lease = FakeLease([BAD_F], followup_chunks=[BAD_F])
-        c = await self.run_it(FakePool(lease))
+    async def test_retry_also_fails_emits_the_real_error_code_and_message(self):
+        c = await self.run_it(FakePool(FakeLease([BAD_F]), FakeLease([BAD_F])))
         self.assertEqual(c.types(), ["error"])
         self.assertEqual(c.events[0]["code"], "eval_error")
+        self.assertIn("boom", c.events[0]["message"])            # not "ConnectionResetError: Connection lost"
 
     async def test_no_function_in_reply_emits_bad_reply(self):
-        lease = FakeLease(["Sorry, I cannot do that."], followup_chunks=["still no"])
-        c = await self.run_it(FakePool(lease))
+        first = FakeLease(["Sorry, I cannot do that."])
+        c = await self.run_it(FakePool(first, FakeLease(["still no"])))
         self.assertEqual(c.events[0]["code"], "bad_reply")
-        self.assertIsNotNone(lease.released_kill)
+        self.assertIsNotNone(first.released_kill)
+
+    async def test_retry_with_the_real_pool_and_a_process_that_dies_when_its_reply_is_cut_short(self):
+        import sys
+        from pool import Pool
+        fake = [sys.executable, str(pathlib.Path(__file__).parent / "fake_claude_retry.py")]
+        pool = Pool(size=2, system_prompt_path=__file__, command=fake)
+        await pool.start()
+        try:
+            c = await self.run_it(pool)
+        finally:
+            await pool.close()
+        self.assertEqual(c.types()[-1], "done", c.events[-1])
+        self.assertEqual(sum(1 for e in c.events if e["type"] == "stage"), 4)
 
     async def test_pool_unavailable_emits_generator_unavailable(self):
         c = await self.run_it(FakePool(exc=PoolUnavailable("quota")))
         self.assertEqual(c.events[0]["code"], "generator_unavailable")
         self.assertIn("quota", c.events[0]["message"])
+
+    async def test_pool_unavailable_for_the_retry_emits_generator_unavailable(self):
+        c = await self.run_it(FakePool(FakeLease([BAD_F]), exc=PoolUnavailable("quota"), exc_at=2))
+        self.assertEqual(c.events[0]["code"], "generator_unavailable")
 
     async def test_cancel_kills_lease(self):
         lease = FakeLease(["pal({s:", None])
