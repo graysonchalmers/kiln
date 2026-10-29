@@ -1135,7 +1135,7 @@ func _process(delta: float) -> void:
 	if pacer.drained() and not gen_done:
 		gen_done = true
 		_update_pips()
-		_set_status("finished: %d levels | <-/-> scrub | L lock | B new box" % strip.count())
+		_set_status("finished: %d levels%s | <-/-> scrub | L lock | B new box" % [strip.count(), "" if net.last_skipped.is_empty() else " (%d skipped: the server could not build them)" % net.last_skipped.size()])
 	if prompt_open or settings_open:
 		return
 	var d := Vector3.ZERO

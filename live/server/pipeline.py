@@ -20,6 +20,7 @@ MAX_DIM_M = 20.0
 MAX_GRID_N = 64
 DAMAGE_MODES = ("burn", "break")
 MAX_AMOUNTS = 64
+MAX_WORK = 1_000_000   # n^3 cells x amounts per request: a 32-cell burn of 24 steps is 786k; the worst 64-cell step costs about 3 s
 BUILD_PARALLEL = 2
 Emit = Callable[[dict, "bytes | None"], Awaitable[None]]
 
@@ -69,6 +70,7 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
     t_function = 0.0
     sem = asyncio.Semaphore(BUILD_PARALLEL)
     tasks: list[asyncio.Task] = []
+    skipped: list[dict] = []  # levels whose kiln build failed: reported in the done event, never silently dropped
 
     async def build_level(script: str, d: pathlib.Path):
         d.mkdir(parents=True, exist_ok=True)
@@ -78,6 +80,7 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
     async def make_levels(pal_src: str, f_src: str) -> str | None:
         """Build and emit every level; returns an error message if nothing could be emitted."""
         nonlocal emitted, attempt, t_function
+        skipped.clear()
         t_function = round(time.time() - t0, 3)  # the model's function is complete: levels can start
         attempt += 1
         master = await asyncio.to_thread(eval_master, pal_src, f_src)
@@ -108,6 +111,7 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
                 emitted += 1
             else:
                 first_error = first_error or r.error
+                skipped.append({"level": n, "error": (r.error or "")[-160:]})
         return None if emitted else (first_error or "no level could be built")
 
     try:
@@ -134,7 +138,7 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
                 await emit({"type": "error", "code": code,
                             "message": error.message if isinstance(error, LadderError) else error}, None)
                 return
-        await emit({"type": "done", "stages": emitted}, None)
+        await emit({"type": "done", "stages": emitted, **({"skipped": skipped} if skipped else {})}, None)
     except PoolUnavailable as e:
         await emit({"type": "error", "code": "generator_unavailable", "message": e.reason}, None)
     finally:
@@ -166,12 +170,14 @@ def _parse_damage(req: dict):
     try:
         amounts = [float(a) for a in raw]
         seed = int(req.get("seed", 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise ValueError(("bad_amount", "amount must be a number and seed an integer")) from None
     if any(not math.isfinite(a) or not 0.0 <= a <= 1.0 for a in amounts):
         raise ValueError(("bad_amount", "amount must be between 0 and 1"))
     if len(amounts) > 1 and req.get("glb"):
         raise ValueError(("bad_amount", "glb is only for a single amount"))
+    if n ** 3 * len(amounts) > MAX_WORK:
+        raise ValueError(("too_big", f"too much work: n^3 x amounts must be at most {MAX_WORK} (n={n} allows {max(1, MAX_WORK // n ** 3)} amounts)"))
     mode = req.get("mode", "burn")
     if mode not in DAMAGE_MODES:
         raise ValueError(("bad_mode", f"mode must be one of {', '.join(DAMAGE_MODES)}"))

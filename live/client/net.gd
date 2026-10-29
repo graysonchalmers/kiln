@@ -11,10 +11,12 @@ var url := "ws://envy:8795"
 var _ws: WebSocketPeer = null
 var _request := ""
 var _pending_stage: Dictionary = {}
+var last_skipped: Array = []  # levels the server could not build in the last request: [{level, error}]
 
 
 func generate(prompt: String, size: Vector3) -> void:
 	_close()
+	last_skipped = []
 	_request = JSON.stringify({"type": "generate", "prompt": prompt, "size": [size.x, size.y, size.z]})
 	_pending_stage = {}
 	_ws = WebSocketPeer.new()
@@ -73,6 +75,7 @@ func ingest(is_text: bool, data: PackedByteArray) -> void:
 					_close()  # the last event ends the reply (no `done`); closed first so a handler may start the next request
 				damaged_received.emit(dg if typeof(dg) == TYPE_DICTIONARY else {}, float(ev.get("amount", 0.0)))
 			"done":
+				last_skipped = ev.get("skipped", []) if typeof(ev.get("skipped", [])) == TYPE_ARRAY else []
 				_close()  # closed before the signal: a handler may start the next request on a new connection
 				finished.emit(int(ev.get("stages", 0)))
 			"error":

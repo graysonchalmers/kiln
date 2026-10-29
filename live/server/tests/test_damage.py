@@ -1,7 +1,11 @@
+import asyncio
+import os
+import pathlib
+import tempfile
 import unittest
 import numpy as np
 import _path  # noqa: F401
-from damage import CHAR, EMBER, damage, settle
+from damage import damage, settle
 from ladder import AIR, eval_master, level_cells, solidify
 
 HOLLOW = ('function f(u,v,w){if(u<.1||u>.9||v<.1||v>.9||w<.1||w>.9)return null;'
@@ -111,12 +115,46 @@ class DamageTests(unittest.TestCase):
     def test_burn_chars_and_adds_palette_keys_break_does_not(self):
         c = grid()
         out, pal, mats = damage(c, MATS, 0.5, seed=3, mode="burn")
-        self.assertIn(CHAR, set(out.reshape(-1)))
-        self.assertEqual(mats[CHAR], "charred")
-        self.assertEqual(mats[EMBER], "emissive")
+        char = [k for k, t in mats.items() if t == "charred"]
+        ember = [k for k, t in mats.items() if t == "emissive"]
+        self.assertEqual((len(char), len(ember)), (1, 1))
+        self.assertIn(char[0], set(out.reshape(-1)))
+        self.assertTrue(set(pal) == {char[0], ember[0]} and not ({char[0], ember[0]} & {"s", "h"}), "free keys")
+        for k in (char[0], ember[0]):
+            self.assertRegex(k, r"^[A-Za-z0-9_]$", "kiln's pal() accepts only letters, digits and _")
         out2, pal2, _ = damage(c, MATS, 0.5, seed=3, mode="break")
-        self.assertNotIn(CHAR, set(out2.reshape(-1)))
         self.assertEqual(pal2, {})
+        self.assertFalse({"Z", "Y"} & set(out2.reshape(-1)))
+
+    def test_charred_keys_avoid_keys_the_grid_already_uses(self):
+        c = grid()
+        c[0, 0, 0] = "Z"
+        _, pal, _ = damage(c, {**MATS, "Y": "metal"}, 0.5, seed=3)
+        self.assertFalse({"Z", "Y"} & set(pal))
+
+
+@unittest.skipIf(os.environ.get("SKIP_KILN"), "SKIP_KILN set")
+class KilnDamageTests(unittest.TestCase):
+    """The damaged grid must really build in kiln (a fake build once hid that kiln refuses '~' as a palette key)."""
+    def test_burn_break_and_every_level_build_a_glb(self):
+        from pipeline import run_damage
+        pal = {"s": "#9c6a4d", "h": "#3a3a3a"}
+        mats = {"s": "wood", "h": "structural"}
+        for n in (4, 16):
+            c = np.full((n, n, n), ".")
+            c[:, 1:n - 1, 1:n - 1] = "s"
+            c[:, n // 2 - 1:n // 2 + 1, n // 2 - 1:n // 2 + 1] = "h"
+            grid = {"n": n, "cells": "".join(c.reshape(-1)), "palette": pal, "materials": mats}
+            for mode in ("burn", "break"):
+                ev = []
+
+                async def emit(e, b=None):
+                    ev.append((e, b))
+                with tempfile.TemporaryDirectory() as d:
+                    asyncio.run(run_damage({"type": "damage", "grid": grid, "amount": 0.3, "mode": mode, "glb": True,
+                                            "size": [1, 1, 1]}, emit, pathlib.Path(d)))
+                self.assertEqual(ev[0][0]["type"], "damaged", (n, mode, ev[0][0]))
+                self.assertEqual(ev[0][1][:4], b"glTF")
 
 
 if __name__ == "__main__":

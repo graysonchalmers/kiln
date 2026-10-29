@@ -17,7 +17,16 @@ class BuildResult:
     seconds: float
 
 
-def build_glb(script: str, workdir: pathlib.Path, timeout: float = 10.0) -> BuildResult:
+def build_glb(script: str, workdir: pathlib.Path, timeout: float = 10.0, retry_factor: float = 4.0) -> BuildResult:
+    """One kiln build. A timeout is retried once with `retry_factor` times the time: on a loaded box (load average 40+) a build
+    that normally takes half a second can miss 10 s, and a dropped level is worse than a slow one."""
+    r = _build_once(script, workdir, timeout)
+    if not r.ok and r.error and r.error.startswith("kiln timed out") and retry_factor > 1:
+        r = _build_once(script, workdir, timeout * retry_factor)
+    return r
+
+
+def _build_once(script: str, workdir: pathlib.Path, timeout: float) -> BuildResult:
     t0 = time.time()
     workdir = pathlib.Path(workdir)
     src, out = workdir / "script.kx.js", workdir / "out"

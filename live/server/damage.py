@@ -10,7 +10,7 @@ from collections import deque
 
 import numpy as np
 
-CHAR, EMBER = "~", "^"                       # palette keys added by damage(); ordinary keys are letters/digits
+CHAR_KEYS = "ZYXWVUTSRQPONMLKJIHGFEDCBA9876543210"   # candidates for the charred and ember keys: letters and digits only (kiln's pal() rejects anything else)
 CHAR_COLOR, EMBER_COLOR = "#1c1511", "#ff6a1a"
 STURDY = ("structural", "metal")             # tags that survive damage better than skin
 
@@ -103,6 +103,15 @@ def settle(cells: np.ndarray, y0: int = 0, max_rounds: int = 64) -> np.ndarray:
     return out
 
 
+def _free_keys(cells: np.ndarray, materials: dict[str, str]) -> tuple[str, str]:
+    """Two palette keys the grid does not use, for charred and ember cells."""
+    used = set(np.unique(cells)) | set(materials)
+    free = [k for k in CHAR_KEYS if k not in used]
+    if len(free) < 2:  # 34 other keys in one prop: never seen; fall back to symbols (kiln would refuse them for a GLB)
+        free = (free + ["~", "^"])[:2]
+    return free[0], free[1]
+
+
 def damage(cells: np.ndarray, materials: dict[str, str], amount: float, seed: int = 0, mode: str = "burn", fall: bool = True):
     """cells: (n,n,n) keys (y, z, x), '.' empty. Returns (cells, palette_extra, materials_extra).
     mode 'burn': fire climbs from the top and chars what it leaves; 'break': even, ragged breakage with no char.
@@ -127,6 +136,7 @@ def damage(cells: np.ndarray, materials: dict[str, str], amount: float, seed: in
     out = np.where(alive & (nb == 0), ".", out)                            # drop single floating voxels
     pal, mats = {}, {}
     if mode == "burn":
+        CHAR, EMBER = _free_keys(cells, materials)
         alive = out != "."
         near = _dilate(gone, 2) & alive & ~sturdy
         out = np.where(near, CHAR, out)
