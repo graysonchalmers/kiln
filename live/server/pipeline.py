@@ -9,7 +9,9 @@ from typing import Awaitable, Callable
 
 import numpy as np
 
+import config
 from damage import damage
+from repair import bridge_floating
 from kiln_runner import build_glb
 from ladder import (LEVELS, LadderError, eval_master, eval_materials, eval_palette, kiln_pal, level_cells, level_script, master_runs,
                     parse_reply, solidify)
@@ -85,6 +87,8 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
         attempt += 1
         master = await asyncio.to_thread(eval_master, pal_src, f_src)
         master = await asyncio.to_thread(solidify, master)  # no sealed voids: every shape is built solid
+        if config.REPAIR:  # parts floating beside the body slide back to it (sizes scaled from the 32-cell values: x8 volume at 64)
+            master, _ = await asyncio.to_thread(bridge_floating, master, 96, 0.3, 24)
         palette = await asyncio.to_thread(eval_palette, pal_src)
         materials = await asyncio.to_thread(eval_materials, pal_src)
         grids: dict[int, dict] = {}

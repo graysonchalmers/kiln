@@ -33,17 +33,25 @@ def _hits(words, text: str) -> list[int]:
 STEMS = {"flower", "fish", "tree", "bird"}  # also match inside compounds: wildflower, goldfish, pinetree, songbird
 
 
+# The main subject is the noun phrase before the first of these: "mushroom house: big red cap, a door" -> "mushroom house";
+# "knight in plate armour holding a sword" -> "knight"; "wooden barrel with a vine" -> "wooden barrel". Parts, clothes and tools
+# after the cut ("armour", "sword", "door", "vine") must not decide what the thing is.
+_CUT = re.compile(r"[:,;(]|\b(with|in|on|at|holding|wearing|carrying|covered|next|beside|sitting|standing|that|which|having|featuring|containing|made|and)\b")
+
+
+def subject(prompt: str) -> str:
+    """The main subject phrase of a prompt (the text before the first cut word), lower-cased and without 'stylised'."""
+    text = re.sub(r"\b(stylised|stylized|cartoon|low[- ]poly|a|an|the|small|big|tiny|giant|old)\b", " ", (prompt or "").lower())
+    return _CUT.split(text, maxsplit=1)[0].strip() or (prompt or "").lower()
+
+
 def classify(prompt: str) -> tuple[str, bool]:
-    """('organic'|'manmade', confident) from keywords: more keywords wins; on a tie the thing named first wins (the head noun comes
-    first: "mushroom house with a round door", "barrel with a vine"). Confident only when one side has at least two more
-    hits (one stray word is not enough: "bird house", "oak writing desk"); anything less is a guess, and the router then asks the model."""
-    text = (prompt or "").lower()
+    """('organic'|'manmade', confident) from keywords in the main SUBJECT only. Confident only when one side has at least two more hits
+    ("bird house" and "oak writing desk" are one stray word each); a tie or no hits is a guess and the router asks the model."""
+    text = subject(prompt)
     org, man = _hits(ORGANIC, text), _hits(MANMADE, text)
     if len(org) != len(man):
-        kind_ = "organic" if len(org) > len(man) else "manmade"
-        return kind_, abs(len(org) - len(man)) >= 2
-    if org and man:
-        return ("organic" if min(org) < min(man) else "manmade"), False
+        return ("organic" if len(org) > len(man) else "manmade"), abs(len(org) - len(man)) >= 2
     return "manmade", False
 
 
@@ -65,7 +73,7 @@ class Router:
             return k
         self.asked += 1
         try:
-            answer = (await asyncio.wait_for(self.ask(prompt), self.timeout) or "").strip().lower()
+            answer = (await asyncio.wait_for(self.ask(subject(prompt)), self.timeout) or "").strip().lower()
         except Exception:
             return k
         return answer if answer in ("organic", "manmade") else k

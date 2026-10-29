@@ -63,9 +63,11 @@ if __name__ == "__main__":
     ap.add_argument("--port", type=int, default=config.PORT)
     ap.add_argument("--host", default=None)
     ap.add_argument("--prompt", type=pathlib.Path, default=config.PROMPT_PATH)
+    ap.add_argument("--repair", action="store_true", help="pull parts that float beside the body back to it (server/repair.py)")
     ap.add_argument("--organic-prompt", type=pathlib.Path, default=None, help="a second prompt for organic things (plants, creatures, characters); needs the router")
     a = ap.parse_args()
     a.host = a.host or default_host()
+    config.REPAIR = a.repair
     try:
         asyncio.run(amain(a))
     except KeyboardInterrupt:

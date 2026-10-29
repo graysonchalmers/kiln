@@ -186,6 +186,25 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         for sc in scripts:  # kiln's pal() rejects unknown options: the mat tag must be stripped from its script
             self.assertNotIn('"mat"', sc)
 
+    async def test_repair_pulls_a_floating_part_back_to_the_body_when_on(self):
+        import config
+        from repair import floating_pieces
+        import numpy as np
+        two = ('pal({s:"#aa5522",t:"#2255aa"})\nfunction f(u,v,w){const x=u-.5,z=w-.5\n'
+               'if(Math.abs(x)<.25&&Math.abs(z)<.25&&v<.3)return "s"\nif(Math.abs(x)<.2&&Math.abs(z)<.2&&v>.5&&v<.8)return "t"\nreturn null}')   # a gap of 0.2 between two blocks
+
+        async def pieces(on):
+            config.REPAIR = on
+            c = await self.run_it(FakePool(FakeLease([two])))
+            g = [e for e in c.events if e["type"] == "stage" and e["level"] == 32][0]["grid"]
+            grid = np.array(list(g["cells"])).reshape(32, 32, 32)
+            return len(floating_pieces(grid, 12)[1])
+        try:
+            self.assertEqual(await pieces(False), 1)   # left as the model wrote it
+            self.assertEqual(await pieces(True), 0)    # attached
+        finally:
+            config.REPAIR = False
+
     async def test_emits_four_levels_in_order(self):
         lease = FakeLease([GOOD])
         c = await self.run_it(FakePool(lease))
