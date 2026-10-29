@@ -30,7 +30,7 @@ sparks, scatter, implode (the reverse-particle one), dissolve.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s live/server/tests          # 73 tests, no network (SKIP_KILN=1 skips the slow kiln builds)
+python3 -m unittest discover -s live/server/tests          # 93 tests, no network (SKIP_KILN=1 skips the slow kiln builds)
 LIVE_CLAUDE=1 python3 -m unittest test_pool.LivePoolTests   # run from live/server/tests; uses the real claude
 ```
 
@@ -118,6 +118,15 @@ between bricks, and multiplies the palette colour by loom textures for stone, wo
 albedo + normal; rebuild with loom from `brick_mats.tx.js`). Projection is per brick face (boxes are axis aligned, so triplanar reduces to
 the dominant axis) with a random offset per brick. Glass gets fresnel glint, emissive self-light below the bloom threshold.
 
+## Two prompts, a router and repair (default since 2026-10-28)
+
+The server keeps two warm prompts: man-made (barrels, crates, lamps: shell plus internal structure) and organic (plants, mushrooms, creatures,
+characters: full rounded volumes, structural trunks and bones, no hollow bodies). `server/prompt_router.py` picks one per request from the MAIN
+SUBJECT of the prompt (text before "with", "in", "holding" or a colon): keywords decide only with a margin of two, otherwise one cheap model call
+answers `organic` or `manmade`. Then `server/repair.py` slides any floating part back to the body before the levels are pooled. Server start-up now keeps
+4 warm Haiku processes (2 man-made, 1 organic, 1 router). `--single-prompt` turns the router and organic prompt off (the baseline for evals),
+`--no-repair` turns repair off. Eval (6 props x 2 runs, criteria fixed beforehand): see `handoff-log/2026-10-28-organic-prompt-and-router.md`.
+
 ## Insides and destruction (2026-10-28)
 
 A shape returns `"_"` for deliberate interior air; `solidify` keeps it hollow (plain sealed voids are still filled solid), so walls, heads and
@@ -125,6 +134,16 @@ ribs around it show when the prop is cut or damaged. The model marks load-bearin
 `damage()` (`server/damage.py`: `burn` chars from the top, `break` is ragged; adds charred `~` and ember `^` keys). The stage prompt teaches both,
 with closed lids and caps over the hollow. Parts that lose their support fall (`settle` in `damage.py`: anything not connected face to face to the ground layer drops until it rests). Eval: 6 props x 2 runs, hollow insides on 8 of 12 (2 of 11 before). Design and open items:
 `docs/superpowers/specs/2026-10-28-insides-and-destruction-design.md`; demo: `live/tools/insides_demo.py`. Protocol: `{type:"damage", grid:{n,cells,palette,materials}, amount:0..1, seed, mode:"burn"|"break", size?, glb?}` -> one `damaged` event (same grid shape, plus `tris` and a GLB frame when `glb:true`), no `done`; stateless, so any client holding a grid can use it. `amounts:[0..1, up to 64]` instead of `amount` streams one `damaged` event per amount (a burn, same seed); every event has `index` and `count`, the last ends the reply; n^3 x amounts is capped at 1,000,000 (`too_big`). Client: **X** burns the shown level 25% more each press (100% then back to intact); **C** loads 24 keyframes of a continuous burn and plays it at 12 per second (C again pauses or reverses), **[** and **]** step one keyframe. Scripted run on Stealth with a screenshot per step and a video: `live/tools/stealth_demo_burn.sh OUTDIR ["prompt"]`. Gallery: `--gallery-set=burnt` / `SET=burnt live/tools/gallery_check_stealth.sh` (own baseline).
+
+## Showcase and real-window runs (Envy GPU)
+
+`live/tools/envy_showcase.sh OUTDIR` (through `envy-heavy -n showcase --envy-only --`): a real server and real Godot windows on the Envy's own display
+(MX250 via Vulkan; windows open for about half a minute each) film a full turn around seven props and then their burn (`--demo-turn="prompt@w,h,d"`,
+Movie Maker), then render the two 13-prop galleries on that GPU and compare them with the Stealth baselines (SSIM 0.982 and 0.991: a real GPU and the
+software renderer differ in the last pixels). `ONLY="potion chest"` runs just those props; `PROP_TIMEOUT` is the wall-clock limit per prop (a busy
+box needs 400+). `live/tools/envy_demo_keys.sh` does the key-driven run (X, C, [ and ] as key events). The Godot 4.7.2 Linux binary lives at
+`~/.cache/live-blockout-render/godot` (the same file as on Stealth). Stealth has no display, so it only renders with the software renderer.
+`live/tools/legion_diag.ps1` is a read-only diagnostic for the Legion's windowed-Godot hang (starts nothing, opens no window).
 
 ## How it works
 
