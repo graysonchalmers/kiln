@@ -12,6 +12,7 @@ import numpy as np
 import config
 from damage import damage
 from repair import bridge_floating
+from parts import PARTS_TAG, compile_parts, parse_parts, parse_plan_reply
 from silhouette import silhouettes
 from validate import score, validate
 from kiln_runner import build_glb
@@ -46,10 +47,13 @@ async def _read_function(text_stream) -> tuple[str, str]:
             try:
                 return parse_reply(text)
             except LadderError:
+                got = parse_plan_reply(text) if config.PLAN else None
+                if got:
+                    return got
                 continue
     finally:
         await text_stream.aclose()
-    return parse_reply(text)  # raises bad_reply
+    return (parse_plan_reply(text, final=True) if config.PLAN else None) or parse_reply(text)  # raises bad_reply
 
 
 async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Path, build=build_glb) -> None:
@@ -86,7 +90,12 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
         nonlocal attempt, t_function
         attempt += 1
         t_function = round(time.time() - t0, 3)  # the model's function is complete: levels can start
-        master = await asyncio.to_thread(eval_master, pal_src, f_src)
+        if f_src.startswith(PARTS_TAG):  # a part list: compiled by numpy, nothing the model wrote is executed
+            master = await asyncio.to_thread(lambda: compile_parts(parse_parts(f_src[len(PARTS_TAG):]))[0])
+            if not (master != ".").any():
+                raise LadderError("empty", "the part list produced nothing inside the unit cube")
+        else:
+            master = await asyncio.to_thread(eval_master, pal_src, f_src)
         master = await asyncio.to_thread(solidify, master)  # no sealed voids: every shape is built solid
         if config.REPAIR or config.VALIDATE:  # parts floating beside the body slide back to it (sizes scaled from the 32-cell values: x8 volume at 64)
             master, _ = await asyncio.to_thread(bridge_floating, master, 96, 0.3, 24)
@@ -188,7 +197,8 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
 
 
 def _reply_hint() -> str:
-    return "Reply with only a corrected pal({...}) and function f(u,v,w){...}."
+    return ("Reply with only a corrected pal({...}) and part list ending with a line `end`." if config.PLAN
+            else "Reply with only a corrected pal({...}) and function f(u,v,w){...}.")
 
 
 def retry_note(problems: list[dict], master) -> str:

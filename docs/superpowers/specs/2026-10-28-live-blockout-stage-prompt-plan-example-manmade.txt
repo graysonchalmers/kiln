@@ -1,0 +1,10 @@
+(stone well)
+pal({s:"#8a8a8a",p:"#6b4a2f",r:"#a0442c",b:"#b8864b",w:"#3b7fc4"})
+ring | cylinder | .5,.2,.5 | .84,.4,.84 | s | ground
+hole | cylinder | .5,.34,.5 | .58,.2,.58 | _ | ring
+water | cylinder | .5,.28,.5 | .58,.04,.58 | w | ring
+post | box | .12,.64,.5 | .08,.5,.08 | p | ring | x
+beam | cylinder-x | .5,.88,.5 | .84,.07,.07 | p | post
+roof | cone | .5,.97,.5 | .94,.16,.6 | r | beam
+bucket | cylinder | .5,.7,.5 | .18,.16,.18 | b | beam
+end

@@ -1,0 +1,14 @@
+Output ONLY: first `pal({...})`, then a part list, one part per line, then a line `end`. No prose, fences or comments.
+You build the prop from simple parts inside a unit cube: u = left to right, v = bottom to top, w = back to front, all 0..1 (scaled to the real box later). Fill the cube: base at v=0, top near v=1. A program turns the list into voxels; you only choose parts, places and sizes.
+Line: name | shape | centre u,v,w | size u,v,w | key | attach | mirror | smooth
+- shape: box, cylinder, cone, ellipsoid, capsule, torus. Cylinder, cone and capsule stand upright (axis v); cylinder-x / cylinder-z (same for capsule, cone) lie along u or w; a cone's point is at the high end. A torus is a flat ring: size u,w = outer width, size v = tube thickness.
+- centre = middle of the part. size = FULL extent along u, v, w (a ball of radius .1 is .2,.2,.2).
+- key = one palette character. Every distinct material or feature (door, windows, handle, bands, lock, eyes, nose, hat) is its own part with its own key, so it shows as the model sharpens.
+- attach = the part this one grows from (defined earlier), or `ground`, or `-`. It slides toward that part until they overlap, so give EVERY part except the first an attach: nothing may float.
+- mirror = x (copy at 1-u), z (copy at 1-w), xz (three copies), or `-`: use it for every pair (legs, arms, eyes, posts, handles, wheels).
+- smooth = `smooth` blends the part into the other smooth parts for rounded bodies; `-` keeps hard edges. Smooth parts form the body; the rest sit on top, later parts winning overlaps.
+Open or hollow things (bucket, cup, well, bowl, chest inside) get a part with key `_`, which carves away what it overlaps; put it after the part it hollows. Parts thinner than .07 are thickened to .07. Use 8 to 16 parts, biggest first, short names.
+pal values: "#hex" or {color:"#hex",mat:"stone|wood|metal|cloth|glass|emissive|structural",rough:0..1,metal:0..1,emit:"#hex",glow:3}. Add mat when it is not obvious from the colour; mark the load-bearing parts that survive fire (trunks, bones, ribs, frames, horns) mat:"structural".
+Only if the object truly cannot be made from these parts, reply pal({...}) then function f(u,v,w){...} returning a palette key or null for each point of the cube.
+Examples:
+{{EXAMPLE}}

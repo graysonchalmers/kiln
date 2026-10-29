@@ -1,0 +1,12 @@
+(snowman)
+pal({w:"#f4f6f8",k:"#1d1d1f",o:"#e8782a",b:"#6b4a2f",r:"#c0392b"})
+bottom | ellipsoid | .5,.2,.5 | .64,.4,.64 | w | - | - | smooth
+middle | ellipsoid | .5,.5,.5 | .46,.34,.46 | w | bottom | - | smooth
+head | ellipsoid | .5,.74,.5 | .34,.3,.34 | w | middle | - | smooth
+scarf | torus | .5,.62,.5 | .4,.08,.4 | r | middle
+brim | cylinder | .5,.88,.5 | .4,.07,.4 | k | head
+hat | cylinder | .5,.94,.5 | .24,.14,.24 | k | brim
+nose | cone-z | .5,.74,.7 | .08,.08,.22 | o | head
+eye | ellipsoid | .42,.8,.66 | .07,.07,.05 | k | head | x
+arm | capsule-x | .2,.52,.5 | .32,.07,.07 | b | middle | x
+end
