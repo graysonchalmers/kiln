@@ -43,3 +43,9 @@ had at least one trigger problem under the first trigger list. Over a third of r
   remain, so the retry fires on far fewer.) `thin` (11/24) and `key_missing` (8/24) are advisory: named in the retry message when one of the three
   starts it, never starting one. M3 counts runs with a trigger problem in the delivered volume under THIS list.
 - Flag names: `--validate`, `--ascii`, `--plan` (not `--plan-prompt`), `--observe` for the measuring-only arm.
+
+## Round 2 of step 4 (2026-10-29), fixed BEFORE the runs
+Changes to `--plan`: reworked prompt (compact, hollow `_` carve rule, 8 to 16 parts), two NEW examples (stone well, snowman) both in ONE prompt, no router.
+Arms (same 12 props x 2): **C2** = `--validate --ascii --single-prompt` (the current best, rerun now so load and model drift are shared) vs
+**D2** = `--validate --ascii --plan`. Pass rules, same as step 4 above against C2: M1 D2 <= C2+1; M2, M3 D2 <= C2; M4 D2 >= C2 - 0.03; M5 median D2 <= C2 (no
+router now); M6 blind (24 pairs, picks before mapping) D2 wins >= 14 (tie = half), loses <= 6. Misses stay on `lb-validate`.

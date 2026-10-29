@@ -1,11 +1,12 @@
-(duck)
-pal({y:"#f5d44a",o:{color:"#f08a24",mat:"structural"},k:"#1a1a1a"})
-body | ellipsoid | .5,.27,.46 | .62,.46,.76 | y | - | - | smooth
-neck | capsule | .5,.55,.68 | .22,.42,.22 | y | body | - | smooth
-head | ellipsoid | .5,.74,.72 | .4,.34,.4 | y | neck | - | smooth
-tail | ellipsoid | .5,.34,.08 | .22,.2,.3 | y | body | - | smooth
-wing | ellipsoid | .2,.32,.46 | .1,.28,.5 | y | body | x
-beak | ellipsoid | .5,.72,.93 | .2,.08,.18 | o | head
-eye | ellipsoid | .4,.8,.88 | .07,.07,.05 | k | head | x
-foot | box | .36,.03,.6 | .12,.06,.16 | o | body | x
+(snowman)
+pal({w:"#f4f6f8",k:"#1d1d1f",o:"#e8782a",b:"#6b4a2f",r:"#c0392b"})
+bottom | ellipsoid | .5,.2,.5 | .64,.4,.64 | w | - | - | smooth
+middle | ellipsoid | .5,.5,.5 | .46,.34,.46 | w | bottom | - | smooth
+head | ellipsoid | .5,.74,.5 | .34,.3,.34 | w | middle | - | smooth
+scarf | torus | .5,.62,.5 | .4,.08,.4 | r | middle
+brim | cylinder | .5,.88,.5 | .4,.07,.4 | k | head
+hat | cylinder | .5,.94,.5 | .24,.14,.24 | k | brim
+nose | cone-z | .5,.74,.7 | .08,.08,.22 | o | head
+eye | ellipsoid | .42,.8,.66 | .07,.07,.05 | k | head | x
+arm | capsule-x | .2,.52,.5 | .32,.07,.07 | b | middle | x
 end
