@@ -33,3 +33,9 @@ on a creature is not a cavity, and re-run with fresh criteria.
 - With `--repair` the floating pieces are 0 of 9 and 0 of 10 (8 cells lost). Not merged: waiting for Grayson to look at the blind sheet
   (`.proof/20261028-organic-eval2/blind_sheet2.png`) and decide between merging with repair on by default or leaving it.
 - New: `server/repair.py` (+ `--repair`), `docs/superpowers/specs/2026-10-28-better-builds-design.md` (the systemic plan).
+
+## Merged (Grayson, 2026-10-28 late): organic prompt + router + repair on by default
+Decision: merge with repair on, since the floating-piece criterion passes only with repair (0 of 10 vs 0 of 9). `--single-prompt` is the baseline for evals;
+`--no-repair` turns repair off. Gates at merge: 93 tests pass (1 skipped), both Stealth galleries SSIM 1.000, a real request each for a frog (organic,
+20.1 s, 4 levels) and a barrel (man-made, 9.6 s, 4 levels). Costs: 4 warm Haiku processes instead of 2, and one extra model call per request when the keywords
+are not clear (most prompts), about 2-5 s. Next: the validators and part-list compiler session (lb-part-compiler) builds on this.

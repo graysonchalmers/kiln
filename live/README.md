@@ -30,7 +30,7 @@ sparks, scatter, implode (the reverse-particle one), dissolve.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s live/server/tests          # 73 tests, no network (SKIP_KILN=1 skips the slow kiln builds)
+python3 -m unittest discover -s live/server/tests          # 93 tests, no network (SKIP_KILN=1 skips the slow kiln builds)
 LIVE_CLAUDE=1 python3 -m unittest test_pool.LivePoolTests   # run from live/server/tests; uses the real claude
 ```
 
@@ -110,6 +110,15 @@ as MultiMesh custom data) to roughness, metallic, grain, rim and seam AO, adds p
 between bricks, and multiplies the palette colour by loom textures for stone, wood, metal and cloth (`client/materials/*.png`, 256 px,
 albedo + normal; rebuild with loom from `brick_mats.tx.js`). Projection is per brick face (boxes are axis aligned, so triplanar reduces to
 the dominant axis) with a random offset per brick. Glass gets fresnel glint, emissive self-light below the bloom threshold.
+
+## Two prompts, a router and repair (default since 2026-10-28)
+
+The server keeps two warm prompts: man-made (barrels, crates, lamps: shell plus internal structure) and organic (plants, mushrooms, creatures,
+characters: full rounded volumes, structural trunks and bones, no hollow bodies). `server/prompt_router.py` picks one per request from the MAIN
+SUBJECT of the prompt (text before "with", "in", "holding" or a colon): keywords decide only with a margin of two, otherwise one cheap model call
+answers `organic` or `manmade`. Then `server/repair.py` slides any floating part back to the body before the levels are pooled. Server start-up now keeps
+4 warm Haiku processes (2 man-made, 1 organic, 1 router). `--single-prompt` turns the router and organic prompt off (the baseline for evals),
+`--no-repair` turns repair off. Eval (6 props x 2 runs, criteria fixed beforehand): see `handoff-log/2026-10-28-organic-prompt-and-router.md`.
 
 ## Insides and destruction (2026-10-28)
 
