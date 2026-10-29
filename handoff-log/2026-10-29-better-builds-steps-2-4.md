@@ -1,6 +1,6 @@
 # Better builds, steps 2 to 4 (2026-10-28/29, branch `lb-validate`, NOT merged)
 
-**Update 2026-10-29: steps 2 and 3 (`--validate`, `--ascii`, `--observe`) were merged to `grayson` on the mechanical numbers (Grayson's call, overriding the step-2 blind bar). Step 4 (`--plan`, `parts.py`, plan prompts) stays only on branch `lb-validate`.**
+**Update 2026-10-29: steps 2 and 3 (`--validate`, `--ascii`, `--observe`) were merged to `grayson` on the mechanical numbers (Grayson's call, overriding the step-2 blind bar). Step 4 (`--plan`, `parts.py`, plan prompt) was merged later as an opt-in flag, off by default, after round 2 (fastest arm, blind bar still short).**
 
 Built validators + typed retry, ASCII silhouettes, and the part-list compiler, each behind a flag that is off by default (`ladder.py` untouched).
 Judged on the 12 props x 2 runs of `prompt_eval.py`, real isolated Haiku through the server pool, criteria committed first

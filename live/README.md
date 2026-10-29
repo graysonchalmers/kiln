@@ -61,7 +61,7 @@ overrides it for one run; `T` cycles styles.
 
 Repair (floating parts slide to the body) is on by default, `--no-repair` turns it off. `--validate` adds checks on the sampled shape (floating, short, no ground, thin, unused palette key) and
 ONE retry that names the problems (the better attempt is delivered); `--ascii` puts 24x24 front/side/top silhouettes of the model's own shape in that
-retry. `--plan` (branch `lb-validate` only) has the model write a part list that `server/parts.py` compiles. `--observe` only reports the checks in `done`. Eval: `tools/run_arm.sh`, `eval_stats.py`, `blind_pairs.py`.
+retry. `--plan` has the model write a part list that `server/parts.py` compiles (box, cylinder, cone, ellipsoid, capsule, torus; attach, mirror, smooth), one prompt with two examples and no router; `function f` stays as the escape hatch. `--observe` only reports the checks in `done`. Eval: `tools/run_arm.sh`, `eval_stats.py`, `blind_pairs.py`.
 
 ## Regression set
 
