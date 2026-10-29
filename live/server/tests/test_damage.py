@@ -133,6 +133,27 @@ class DamageTests(unittest.TestCase):
         self.assertFalse({"Z", "Y"} & set(pal))
 
 
+class RepairTests(unittest.TestCase):
+    def test_a_gap_is_closed_a_touching_piece_and_a_far_piece_are_left_and_specks_go(self):
+        from repair import bridge_floating, floating_pieces
+        c = np.full((32, 32, 32), ".")
+        c[0:6, 10:20, 10:20] = "a"          # body
+        c[9:13, 10:20, 10:20] = "b"          # a piece 3 cells above it
+        c[0:5, 0:5, 0:5] = "c"               # a piece 5+ cells away to the side (a gap of ~5)
+        c[28, 28, 28] = "d"                  # a single-cell speck
+        out, rep = bridge_floating(c)
+        self.assertEqual(len(rep["moved"]), 2)
+        self.assertEqual(rep["specks"], 1)
+        self.assertEqual(out[28, 28, 28], ".")
+        self.assertEqual(len(floating_pieces(out, 12)[1]), 0)
+        self.assertEqual(int((out == "b").sum()), int((c == "b").sum()), "moved, not changed")
+        far = np.full((32, 32, 32), ".")
+        far[0:6, 10:14, 10:14] = "a"
+        far[0:6, 28:31, 28:31] = "b"          # ~25 cells away: a separate design, not a gap
+        out2, rep2 = bridge_floating(far, max_shift=0.3)
+        self.assertEqual((len(rep2["moved"]), len(rep2["left"])), (0, 1))
+
+
 @unittest.skipIf(os.environ.get("SKIP_KILN"), "SKIP_KILN set")
 class KilnDamageTests(unittest.TestCase):
     """The damaged grid must really build in kiln (a fake build once hid that kiln refuses '~' as a palette key)."""
