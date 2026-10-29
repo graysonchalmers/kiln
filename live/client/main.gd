@@ -132,6 +132,10 @@ func _start_smoke() -> void:
 
 ## Every test prop side by side at 32 cells, for a visual regression shot. Needs tests/props/ (make_prop_fixtures.py).
 func _start_gallery() -> void:
+	var suffix := ""  # --gallery-set=burnt shows the burnt versions (tests/props/<name>_32_burnt.json)
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--gallery-set="):
+			suffix = "_" + a.substr(14)
 	var man = JSON.parse_string(FileAccess.get_file_as_string("res://tests/props/props.json"))
 	var cols := 5
 	var spacing := 2.4
@@ -141,7 +145,7 @@ func _start_gallery() -> void:
 		var e: Dictionary = man[i]
 		var sz := Vector3(e["size"][0], e["size"][1], e["size"][2])
 		sz *= 1.5 / maxf(sz.x, maxf(sz.y, sz.z))
-		var grid = JSON.parse_string(FileAccess.get_file_as_string("res://tests/props/%s_32.json" % e["name"]))
+		var grid = JSON.parse_string(FileAccess.get_file_as_string("res://tests/props/%s_32%s.json" % [e["name"], suffix]))
 		var center := Vector3((i % cols - (cols - 1) * 0.5) * spacing, 0.0, 1.2 - (i / cols) * spacing)
 		var mat := ShaderMaterial.new()
 		mat.shader = sweep_shader
@@ -159,7 +163,7 @@ func _start_gallery() -> void:
 	cam.position = Vector3(0.0, 5.5, 3.0)
 	cam.rotation = Vector3(pitch, 0.0, 0.0)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	_set_status("gallery: %d props at 32 cells" % man.size())
+	_set_status("gallery: %d props at 32 cells%s" % [man.size(), " (" + suffix.substr(1) + ")" if suffix != "" else ""])
 	if OS.get_cmdline_user_args().has("--open-settings"):
 		_toggle_settings()
 

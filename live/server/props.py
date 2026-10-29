@@ -80,3 +80,7 @@ PROPS = {
         "pal": 'pal({s:"#9a9a9a",a:"#6a6a7a"})',
         "f": 'function f(u,v,w){const k=Math.floor(u*5);return v<(k+1)/5?((k%2)?"a":"s"):null}'},
 }
+
+
+# Palette keys that hold the prop together (they survive fire). Used for the burnt gallery set only; the regression gallery keeps its tags.
+STRUCTURAL = {"barrel": ["h"], "mailbox": ["p"], "lamp": ["p", "k"], "chest": ["i"], "vending": ["k"], "table": ["l"]}

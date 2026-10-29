@@ -7,9 +7,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 THRESHOLD="${THRESHOLD:-0.985}"
-BASE=live/client/tests/baselines/gallery_stealth.png
+SET="${SET:-}"   # SET=burnt checks the burnt gallery against its own baseline
+BASE=live/client/tests/baselines/gallery_stealth${SET:+_$SET}.png
 NEW="$(mktemp -d)/gallery.png"
-live/tools/stealth_render.sh "$NEW" --resolution 1280x720 --quit-after 300 -- --gallery --style=flip "--shot=@OUT@"
+live/tools/stealth_render.sh "$NEW" --resolution 1280x720 --quit-after 300 -- --gallery ${SET:+--gallery-set=$SET} --style=flip "--shot=@OUT@"
 if [ "${1:-}" = "--update" ]; then cp "$NEW" "$BASE"; echo "baseline updated"; exit 0; fi
 ssim=$(ffmpeg -loglevel info -i "$NEW" -i "$BASE" -lavfi ssim -f null - 2>&1 | sed -n 's/.*All:\([0-9.]*\).*/\1/p' | tail -1)
 echo "SSIM $ssim (threshold $THRESHOLD)"
