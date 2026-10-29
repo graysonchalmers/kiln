@@ -26,7 +26,7 @@ Draw a box in a Godot level, type a prompt, watch a voxel asset dial in. Haiku w
 - Next: systemic plan `docs/superpowers/specs/2026-10-28-better-builds-design.md` (validators + typed retry, ASCII silhouettes, part-list compiler), being built by session `lb-part-compiler`. Owed: Grayson on the Legion (diagnostic output), `--demo` time-lapse and five-prop acceptance run (plan Task 8), whole-branch review. Gates: 93 server tests, Stealth galleries `gallery_check_stealth.sh` and `SET=burnt` both SSIM 1.000.
 
 ## ▶️ Next concrete step
-**Image to blockout round 12:** r11 done (crate_r11a, canvas flap removed, won 6-5; the boulder right-lobe widening lost 5.5-6 and crevices tied, so boulder_r10a stays). Next: raise the boulder's upper-left mass (the judges' real gap), crate rope handles, then Grayson's own references or a new object class. Swamp residuals (paused): hut glow, log underside V12-13, mangrove canopy, knees mat (never enlarge).
+**Image to blockout round 13:** r12 done (night shift 2026-10-29): boulder_r12b (taller upper-left hull) won 6-5, crate_r12a (thin rope end loops) won 6-5 narrowly; thick loops lost. Next: boulder surface fracture/overhang on the upper right, crate \"12\" in the triangle and lid lettering, then Grayson's own references or a new object class. Swamp residuals (paused): hut glow, log underside V12-13, mangrove canopy, knees mat (never enlarge).
 - Alt: **image → blockout**: reference image → image-decomp → recipe picks/proportions → kiln scene → grade against the image with the same loop.
 - Alt: package the loop as a Workflow script (needs Grayson's "use a workflow").
 

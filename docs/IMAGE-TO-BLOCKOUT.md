@@ -267,3 +267,17 @@ tiebreak (order swapped) where every margin was half a point.
 - Crevices 6-8 cm wide still read as faint creases at judging distance (same lesson as r5-r6): mass beats cuts.
 - Removing a part the reference lacks wins as much as fixing it; on a tie, keep the build with fewer parts.
 - Remaining crate gaps per judges: "12" in the triangle, lid lettering, and rope handles.
+
+## Round 12: upper-left mass, rope handles (2026-10-29, night shift)
+
+Same cameras and backdrop. One fresh blind judge (sonnet subagent, shuffled X/Y, reference beside) per pair vs the kept build; no tiebreaks run.
+
+| Object | Variant | vs kept | Kept now |
+|---|---|---|---|
+| boulder | r12a: r10a + two-blob hull stacked on the upper left | **4.5-4** (marginal; "upper left more filled in") | |
+| boulder | r12b: taller, further-left three-blob hull | **6-5** ("tall rounded dome upper left, peak then slopes right") | boulder_r12b |
+| crate | r12a: crate_r11a + thin rope loops on both end faces | **6-5** (narrow) | crate_r12a |
+| crate | r12b: thicker, larger rope loops | lost 5-7 ("reads deeper, handles not in the reference") | |
+
+- Raising the upper-left mass worked where widening the right lobe (r11) did not; more height won more than less.
+- Handles: thin and close to the end face won narrowly, big loops lost. Judges still name the strap latches, "12" and lettering as gaps. The reference's visible end shows no handles, so this win is weak.
