@@ -19,6 +19,7 @@ MAX_PROMPT = 500
 MAX_DIM_M = 20.0
 MAX_GRID_N = 64
 DAMAGE_MODES = ("burn", "break")
+MAX_AMOUNTS = 64
 BUILD_PARALLEL = 2
 Emit = Callable[[dict, "bytes | None"], Awaitable[None]]
 
@@ -145,7 +146,7 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
 
 
 def _parse_damage(req: dict):
-    """(cells (n,n,n), palette, materials, amount, seed, mode, size, want_glb) from a damage request; ValueError(code, msg) if bad."""
+    """(cells (n,n,n), palette, materials, amounts, seed, mode, size, want_glb) from a damage request; ValueError(code, msg) if bad."""
     g = req.get("grid")
     n = g.get("n") if isinstance(g, dict) else None
     if isinstance(n, float) and n.is_integer():  # Godot's JSON has only floats
@@ -159,13 +160,18 @@ def _parse_damage(req: dict):
     mats = g.get("materials", {})
     if not isinstance(pal, dict) or not isinstance(mats, dict):
         raise ValueError(("bad_grid", "grid.palette and grid.materials must be objects"))
+    raw = req.get("amounts", [req.get("amount", 0.5)])
+    if not isinstance(raw, list) or not 1 <= len(raw) <= MAX_AMOUNTS:
+        raise ValueError(("bad_amount", f"amounts must be a list of 1 to {MAX_AMOUNTS} numbers"))
     try:
-        amount = float(req.get("amount", 0.5))
+        amounts = [float(a) for a in raw]
         seed = int(req.get("seed", 0))
     except (TypeError, ValueError):
         raise ValueError(("bad_amount", "amount must be a number and seed an integer")) from None
-    if not math.isfinite(amount) or not 0.0 <= amount <= 1.0:
+    if any(not math.isfinite(a) or not 0.0 <= a <= 1.0 for a in amounts):
         raise ValueError(("bad_amount", "amount must be between 0 and 1"))
+    if len(amounts) > 1 and req.get("glb"):
+        raise ValueError(("bad_amount", "glb is only for a single amount"))
     mode = req.get("mode", "burn")
     if mode not in DAMAGE_MODES:
         raise ValueError(("bad_mode", f"mode must be one of {', '.join(DAMAGE_MODES)}"))
@@ -173,32 +179,34 @@ def _parse_damage(req: dict):
     if size is not None and _bad_size(size):
         raise ValueError(("bad_size", f"size must be 3 numbers in (0, {MAX_DIM_M:g}] metres"))
     arr = np.array(list(cells)).reshape(n, n, n)
-    return arr, pal, mats, amount, seed & 0x7FFFFFFF, mode, tuple(float(v) for v in size) if size else (1.0, 1.0, 1.0), bool(req.get("glb"))
+    return arr, pal, mats, amounts, seed & 0x7FFFFFFF, mode, tuple(float(v) for v in size) if size else (1.0, 1.0, 1.0), bool(req.get("glb"))
 
 
 async def run_damage(req: dict, emit: Emit, workdir: pathlib.Path, build=build_glb) -> None:
-    """Stateless damage: the request carries the grid, the reply is ONE `damaged` event (plus the GLB when asked for
-    with "glb": true), no `done`. Used by any client that holds a grid, so nothing is kept per connection."""
+    """Stateless damage: the request carries the grid. `amount` gives ONE `damaged` event; `amounts` (up to 64, same seed)
+    gives one per amount, in order, streamed as each is ready: a burn the client can scrub or play. Every event has
+    `index` and `count`; the last one ends the reply (no `done`). "glb": true adds the GLB frame (single amount only)."""
     try:
-        arr, pal, mats, amount, seed, mode, size, want_glb = _parse_damage(req)
+        arr, pal, mats, amounts, seed, mode, size, want_glb = _parse_damage(req)
     except ValueError as e:
         code, msg = e.args[0]
         await emit({"type": "error", "code": code, "message": msg}, None)
         return
-    out, pal2, mats2 = await asyncio.to_thread(damage, arr, mats, amount, seed, mode)
-    grid = {"n": arr.shape[0], "cells": "".join(out.reshape(-1)), "palette": {**pal, **pal2}, "materials": {**mats, **mats2}}
-    ev = {"type": "damaged", "amount": amount, "seed": seed, "mode": mode, "grid": grid}
-    blob = None
-    if want_glb:
-        if not (out != ".").any():
-            await emit({"type": "error", "code": "empty", "message": "nothing is left to build a model from"}, None)
-            return
-        pal_src = "pal(" + json.dumps({k: v for k, v in grid["palette"].items() if re.fullmatch(r"#[0-9a-fA-F]{6}", str(v))}) + ")"
-        workdir = pathlib.Path(workdir)
-        workdir.mkdir(parents=True, exist_ok=True)
-        r = await asyncio.to_thread(build, level_script("prop", pal_src, out, arr.shape[0], size), workdir)
-        if not r.ok:
-            await emit({"type": "error", "code": "build_failed", "message": r.error or "kiln build failed"}, None)
-            return
-        ev["tris"], blob = r.tris, r.glb
-    await emit(ev, blob)
+    for i, amount in enumerate(amounts):
+        out, pal2, mats2 = await asyncio.to_thread(damage, arr, mats, amount, seed, mode)
+        grid = {"n": arr.shape[0], "cells": "".join(out.reshape(-1)), "palette": {**pal, **pal2}, "materials": {**mats, **mats2}}
+        ev = {"type": "damaged", "index": i, "count": len(amounts), "amount": amount, "seed": seed, "mode": mode, "grid": grid}
+        blob = None
+        if want_glb:
+            if not (out != ".").any():
+                await emit({"type": "error", "code": "empty", "message": "nothing is left to build a model from"}, None)
+                return
+            pal_src = "pal(" + json.dumps({k: v for k, v in grid["palette"].items() if re.fullmatch(r"#[0-9a-fA-F]{6}", str(v))}) + ")"
+            workdir = pathlib.Path(workdir)
+            workdir.mkdir(parents=True, exist_ok=True)
+            r = await asyncio.to_thread(build, level_script("prop", pal_src, out, arr.shape[0], size), workdir)
+            if not r.ok:
+                await emit({"type": "error", "code": "build_failed", "message": r.error or "kiln build failed"}, None)
+                return
+            ev["tris"], blob = r.tris, r.glb
+        await emit(ev, blob)
