@@ -30,7 +30,7 @@ sparks, scatter, implode (the reverse-particle one), dissolve.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s live/server/tests          # 63 tests, no network (SKIP_KILN=1 skips the slow kiln builds)
+python3 -m unittest discover -s live/server/tests          # 73 tests, no network (SKIP_KILN=1 skips the slow kiln builds)
 LIVE_CLAUDE=1 python3 -m unittest test_pool.LivePoolTests   # run from live/server/tests; uses the real claude
 ```
 
@@ -116,9 +116,8 @@ the dominant axis) with a random offset per brick. Glass gets fresnel glint, emi
 A shape returns `"_"` for deliberate interior air; `solidify` keeps it hollow (plain sealed voids are still filled solid), so walls, heads and
 ribs around it show when the prop is cut or damaged. The model marks load-bearing parts `mat:"structural"` (hoops, frames, battens), which survive
 `damage()` (`server/damage.py`: `burn` chars from the top, `break` is ragged; adds charred `~` and ember `^` keys). The stage prompt teaches both,
-with closed lids and caps over the hollow. Eval: 6 props x 2 runs, hollow insides on 8 of 12 (2 of 11 before). Design and open items:
-`docs/superpowers/specs/2026-10-28-insides-and-destruction-design.md`; demo: `live/tools/insides_demo.py`. Not done: client shader looks for
-`structural` and `charred`, a damage request in the protocol, parts dropping when their support goes.
+with closed lids and caps over the hollow. Parts that lose their support fall (`settle` in `damage.py`: anything not connected face to face to the ground layer drops until it rests). Eval: 6 props x 2 runs, hollow insides on 8 of 12 (2 of 11 before). Design and open items:
+`docs/superpowers/specs/2026-10-28-insides-and-destruction-design.md`; demo: `live/tools/insides_demo.py`. Protocol: `{type:"damage", grid:{n,cells,palette,materials}, amount:0..1, seed, mode:"burn"|"break", size?, glb?}` -> one `damaged` event (same grid shape, plus `tris` and a GLB frame when `glb:true`), no `done`; stateless, so any client holding a grid can use it. Client: **X** burns the shown level 25% more each press (100% then back to intact). Gallery: `--gallery-set=burnt` / `SET=burnt live/tools/gallery_check_stealth.sh` (own baseline).
 
 ## How it works
 

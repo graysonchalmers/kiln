@@ -35,6 +35,8 @@ def main(out):
     render(grid(cut), out / "2_cutaway.png")
     burnt, p2, m2 = damage(cells, mats, 0.55, seed=3)
     render(grid(burnt, {**pal, **p2}), out / "3_burnt.png")
+    floating, _, _ = damage(cells, mats, 0.55, seed=3, fall=False)   # same burn, parts left hanging in the air
+    render(grid(floating, {**pal, **p2}), out / "3b_burnt_no_fall.png")
     cut2 = burnt.copy(); cut2[:, n // 2:, :] = "."
     render(grid(cut2, {**pal, **p2}), out / "4_burnt_cutaway.png")
     print("cells kept:", {k: int((cells == k).sum()) for k in np.unique(cells) if k != "."}, "| burnt:", {k: int((burnt == k).sum()) for k in np.unique(burnt) if k != "."})

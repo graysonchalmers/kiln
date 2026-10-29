@@ -1,10 +1,15 @@
 """One generate request: the model writes a shape function, the server builds the 4/8/16/32-cell levels."""
 import asyncio
+import json
 import math
+import re
 import pathlib
 import time
 from typing import Awaitable, Callable
 
+import numpy as np
+
+from damage import damage
 from kiln_runner import build_glb
 from ladder import (LEVELS, LadderError, eval_master, eval_materials, eval_palette, kiln_pal, level_cells, level_script, master_runs,
                     parse_reply, solidify)
@@ -12,6 +17,8 @@ from pool import PoolUnavailable
 
 MAX_PROMPT = 500
 MAX_DIM_M = 20.0
+MAX_GRID_N = 64
+DAMAGE_MODES = ("burn", "break")
 BUILD_PARALLEL = 2
 Emit = Callable[[dict, "bytes | None"], Awaitable[None]]
 
@@ -135,3 +142,63 @@ async def run_request(pool, prompt: str, size_m, emit: Emit, workdir: pathlib.Pa
                 t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         await lease.release(kill=True)
+
+
+def _parse_damage(req: dict):
+    """(cells (n,n,n), palette, materials, amount, seed, mode, size, want_glb) from a damage request; ValueError(code, msg) if bad."""
+    g = req.get("grid")
+    n = g.get("n") if isinstance(g, dict) else None
+    if isinstance(n, float) and n.is_integer():  # Godot's JSON has only floats
+        n = int(n)
+    if not isinstance(n, int) or isinstance(n, bool) or not 1 <= n <= MAX_GRID_N:
+        raise ValueError(("bad_grid", f"grid needs n between 1 and {MAX_GRID_N}"))
+    cells = g.get("cells")
+    if not isinstance(cells, str) or len(cells) != n ** 3:
+        raise ValueError(("bad_grid", f"grid.cells must be a string of {n ** 3} characters"))
+    pal = g.get("palette", {})
+    mats = g.get("materials", {})
+    if not isinstance(pal, dict) or not isinstance(mats, dict):
+        raise ValueError(("bad_grid", "grid.palette and grid.materials must be objects"))
+    try:
+        amount = float(req.get("amount", 0.5))
+        seed = int(req.get("seed", 0))
+    except (TypeError, ValueError):
+        raise ValueError(("bad_amount", "amount must be a number and seed an integer")) from None
+    if not math.isfinite(amount) or not 0.0 <= amount <= 1.0:
+        raise ValueError(("bad_amount", "amount must be between 0 and 1"))
+    mode = req.get("mode", "burn")
+    if mode not in DAMAGE_MODES:
+        raise ValueError(("bad_mode", f"mode must be one of {', '.join(DAMAGE_MODES)}"))
+    size = req.get("size")
+    if size is not None and _bad_size(size):
+        raise ValueError(("bad_size", f"size must be 3 numbers in (0, {MAX_DIM_M:g}] metres"))
+    arr = np.array(list(cells)).reshape(n, n, n)
+    return arr, pal, mats, amount, seed & 0x7FFFFFFF, mode, tuple(float(v) for v in size) if size else (1.0, 1.0, 1.0), bool(req.get("glb"))
+
+
+async def run_damage(req: dict, emit: Emit, workdir: pathlib.Path, build=build_glb) -> None:
+    """Stateless damage: the request carries the grid, the reply is ONE `damaged` event (plus the GLB when asked for
+    with "glb": true), no `done`. Used by any client that holds a grid, so nothing is kept per connection."""
+    try:
+        arr, pal, mats, amount, seed, mode, size, want_glb = _parse_damage(req)
+    except ValueError as e:
+        code, msg = e.args[0]
+        await emit({"type": "error", "code": code, "message": msg}, None)
+        return
+    out, pal2, mats2 = await asyncio.to_thread(damage, arr, mats, amount, seed, mode)
+    grid = {"n": arr.shape[0], "cells": "".join(out.reshape(-1)), "palette": {**pal, **pal2}, "materials": {**mats, **mats2}}
+    ev = {"type": "damaged", "amount": amount, "seed": seed, "mode": mode, "grid": grid}
+    blob = None
+    if want_glb:
+        if not (out != ".").any():
+            await emit({"type": "error", "code": "empty", "message": "nothing is left to build a model from"}, None)
+            return
+        pal_src = "pal(" + json.dumps({k: v for k, v in grid["palette"].items() if re.fullmatch(r"#[0-9a-fA-F]{6}", str(v))}) + ")"
+        workdir = pathlib.Path(workdir)
+        workdir.mkdir(parents=True, exist_ok=True)
+        r = await asyncio.to_thread(build, level_script("prop", pal_src, out, arr.shape[0], size), workdir)
+        if not r.ok:
+            await emit({"type": "error", "code": "build_failed", "message": r.error or "kiln build failed"}, None)
+            return
+        ev["tris"], blob = r.tris, r.glb
+    await emit(ev, blob)

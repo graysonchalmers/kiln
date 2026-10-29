@@ -1,4 +1,5 @@
 import asyncio
+import numpy as np
 import math
 import pathlib
 import tempfile
@@ -6,7 +7,7 @@ import unittest
 import _path  # noqa: F401
 from kiln_runner import BuildResult
 from ladder import LEVELS
-from pipeline import run_request
+from pipeline import run_damage, run_request
 from pool import PoolUnavailable
 
 PAL = 'pal({s:"#aa5522"})'
@@ -71,6 +72,69 @@ class Collector:
 
     def types(self):
         return [e["type"] for e in self.events]
+
+
+def _dgrid(n=8):
+    cells = np.full((n, n, n), ".")
+    cells[:, 2:6, 2:6] = "s"
+    cells[:, 3:5, 3:5] = "h"
+    return {"n": n, "cells": "".join(cells.reshape(-1)), "palette": {"s": "#aa5522", "h": "#3a3a3a"},
+            "materials": {"s": "wood", "h": "structural"}}
+
+
+class DamageProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def ask(self, req, build=ok_build):
+        c = Collector()
+        with tempfile.TemporaryDirectory() as d:
+            await run_damage(req, c, pathlib.Path(d), build=build)
+        return c
+
+    async def test_damaged_event_has_a_smaller_charred_grid_and_no_done(self):
+        c = await self.ask({"type": "damage", "grid": _dgrid(), "amount": 0.6, "seed": 5, "mode": "burn"})
+        self.assertEqual(c.types(), ["damaged"])
+        ev = c.events[0]
+        self.assertEqual((ev["amount"], ev["seed"], ev["mode"]), (0.6, 5, "burn"))
+        g = ev["grid"]
+        self.assertEqual((g["n"], len(g["cells"])), (8, 512))
+        self.assertLess(sum(ch != "." for ch in g["cells"]), 8 * 4 * 4 * 8 * 1 + 1)
+        self.assertEqual(g["materials"]["~"], "charred")
+        self.assertIn("~", g["palette"])
+        self.assertEqual(g["materials"]["s"], "wood")         # the request's tags are kept
+
+    async def test_n_may_arrive_as_a_whole_number_float(self):
+        c = await self.ask({"type": "damage", "grid": {**_dgrid(), "n": 8.0}, "amount": 0.3})
+        self.assertEqual((c.types(), c.events[0]["grid"]["n"]), (["damaged"], 8))
+
+    async def test_same_request_same_answer_and_zero_amount_is_a_no_op(self):
+        req = {"type": "damage", "grid": _dgrid(), "amount": 0.5, "seed": 9}
+        a, b = await self.ask(req), await self.ask(req)
+        self.assertEqual(a.events[0]["grid"]["cells"], b.events[0]["grid"]["cells"])
+        z = await self.ask({"type": "damage", "grid": _dgrid(), "amount": 0})
+        self.assertEqual(z.events[0]["grid"]["cells"], _dgrid()["cells"])
+
+    async def test_bad_requests_get_a_code(self):
+        bad = {"n": 4, "cells": "ss"}
+        for req, code in (({"grid": bad}, "bad_grid"), ({"grid": None}, "bad_grid"),
+                          ({"grid": _dgrid(), "amount": 2}, "bad_amount"), ({"grid": _dgrid(), "amount": "x"}, "bad_amount"),
+                          ({"grid": _dgrid(), "mode": "melt"}, "bad_mode"), ({"grid": _dgrid(), "size": [1, 1]}, "bad_size"),
+                          ({"grid": {**_dgrid(), "n": 65}}, "bad_grid")):
+            c = await self.ask({"type": "damage", **req})
+            self.assertEqual((c.types(), c.events[0]["code"]), (["error"], code), req)
+
+    async def test_glb_is_built_only_when_asked_and_without_live_only_keys(self):
+        scripts = []
+
+        def spy(script, workdir):
+            scripts.append(script)
+            return ok_build(script, workdir)
+        c = await self.ask({"type": "damage", "grid": _dgrid(), "amount": 0.4, "size": [1, 1, 1]}, build=spy)
+        self.assertEqual((c.blobs, scripts), ([None], []))
+        c = await self.ask({"type": "damage", "grid": _dgrid(), "amount": 0.4, "size": [1, 1, 1], "glb": True}, build=spy)
+        self.assertEqual(c.types(), ["damaged"])
+        self.assertEqual(c.blobs[0][:4], b"glTF")
+        self.assertEqual(c.events[0]["tris"], 100)
+        self.assertEqual(len(scripts), 1)
+        self.assertIn("pal(", scripts[0])
 
 
 class PipelineTests(unittest.IsolatedAsyncioTestCase):

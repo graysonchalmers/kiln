@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import _path  # noqa: F401
-from damage import CHAR, EMBER, damage
+from damage import CHAR, EMBER, damage, settle
 from ladder import AIR, eval_master, level_cells, solidify
 
 HOLLOW = ('function f(u,v,w){if(u<.1||u>.9||v<.1||v>.9||w<.1||w>.9)return null;'
@@ -37,6 +37,44 @@ class AirTests(unittest.TestCase):
         cells = level_cells(m, 16)
         self.assertEqual(cells[8, 8, 8], ".")
         self.assertNotEqual(cells[2, 8, 8], ".")
+
+
+class SettleTests(unittest.TestCase):
+    def test_floating_slab_lands_on_the_base_and_a_loose_post_reaches_the_ground(self):
+        c = np.full((8, 8, 8), ".")
+        c[0:2, 3:5, 3:5] = "a"      # base on the ground
+        c[5, 3:5, 3:5] = "b"        # slab hanging in the air above it
+        c[6:8, 0, 0] = "c"          # post off to the side
+        o = settle(c)
+        self.assertEqual(sorted(set(int(y) for y in np.argwhere(o == "b")[:, 0])), [2])
+        self.assertEqual(sorted(set(int(y) for y in np.argwhere(o == "c")[:, 0])), [0, 1])
+        self.assertEqual(int((o == "a").sum()), int((c == "a").sum()))
+        self.assertEqual(int((o != ".").sum()), int((c != ".").sum()), "nothing is lost or duplicated")
+
+    def test_supported_parts_stay_and_stacks_fall_together(self):
+        c = np.full((8, 8, 8), ".")
+        c[0:3, 1, 1] = "a"          # a standing post: untouched
+        c[4:6, 5, 5] = "b"          # a two-cell stack in the air: falls as one piece
+        o = settle(c)
+        self.assertTrue((o[0:3, 1, 1] == "a").all())
+        self.assertTrue((o[0:2, 5, 5] == "b").all() and o[2, 5, 5] == ".")
+
+    def test_ground_is_the_lowest_occupied_layer_not_y_zero(self):
+        c = np.full((8, 8, 8), ".")
+        c[2:4, 3, 3] = "a"          # a prop that sits on layer 2
+        self.assertTrue((settle(c, y0=2) == c).all())
+
+    def test_a_snapped_ring_lands_on_what_is_left_and_damage_runs_it(self):
+        c = np.full((16, 16, 16), ".")
+        c[0:8, 4:12, 4:12] = "s"                 # a solid body
+        c[11, 3:13, 3:13] = "h"                  # a ring-ish slab above it, not touching
+        MAT = {"s": "wood", "h": "structural"}
+        out, _, _ = damage(c, MAT, 0.3, seed=1)
+        self.assertEqual(sorted(set(int(y) for y in np.argwhere(out == "h")[:, 0]))[0] > 0, True)
+        ys = [int(y) for y in np.argwhere(out == "h")[:, 0]]
+        self.assertTrue(max(ys) < 11, "the slab fell")
+        no_fall, _, _ = damage(c, MAT, 0.3, seed=1, fall=False)
+        self.assertEqual(max(int(y) for y in np.argwhere(no_fall == "h")[:, 0]), 11)
 
 
 class PaletteAirTests(unittest.TestCase):
