@@ -8,7 +8,7 @@ const VV := preload("res://voxel_view.gd")
 const SLOT := Vector3(0.114, 0.0, 0.0)  # the v2 slot of the lineup; v2 is hidden
 const T0 := 0.4        # empty plinth
 const STEP := 0.9      # one level change
-const LEVELS := [4, 8, 16, 32]
+const LEVELS := [8, 16, 32]
 const SWAP := 0.8      # bricks dissolve off the textured mesh
 const HOLD := 1.0
 const FPS := 30.0
@@ -59,8 +59,8 @@ func _init() -> void:
 	for m in real.find_children("*", "MeshInstance3D", true, false):
 		var mi := m as MeshInstance3D
 		for i in mi.mesh.get_surface_count():
-			var sm := mi.mesh.surface_get_material(i)
-			if sm is StandardMaterial3D:
+			var sm := mi.get_active_material(i)
+			if sm is BaseMaterial3D:
 				sm = sm.duplicate()
 				sm.emission_enabled = true
 				sm.emission = Color(0.3, 0.9, 1.0)
@@ -123,4 +123,4 @@ func apply(t: float) -> void:
 	real.visible = t >= swap0
 	var e: float = clamp(1.0 - (t - swap0 - 0.2) / FADE, 0.0, 1.0)
 	for sm in fade_mats:
-		(sm as StandardMaterial3D).emission_energy_multiplier = 1.6 * e * e
+		(sm as BaseMaterial3D).emission_energy_multiplier = 3.0 * e * e

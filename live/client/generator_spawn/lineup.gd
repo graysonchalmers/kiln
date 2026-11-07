@@ -6,7 +6,7 @@ const VV := preload("res://voxel_view.gd")
 const T0 := 0.4
 const STAGGER := 0.6
 const STEP := 0.9
-const LEVELS := [4, 8, 16, 32]
+const LEVELS := [8, 16, 32]
 const SWAP := 0.8
 const FADE_DELAY := 0.2
 const FADE := 0.4
@@ -60,7 +60,7 @@ func _init() -> void:
 			var mi := m as MeshInstance3D
 			for k in mi.mesh.get_surface_count():
 				var sm := mi.get_active_material(k)
-				if sm is StandardMaterial3D:
+				if sm is BaseMaterial3D:
 					sm = sm.duplicate()
 					sm.emission_enabled = true
 					sm.emission = Color(0.3, 0.9, 1.0)
@@ -71,7 +71,7 @@ func _init() -> void:
 	root.add_child(c)
 	c.current = true
 	c.fov = 40
-	c.look_at_from_position(Vector3(0.35, 1.9, 7.4), Vector3(0.35, 0.8, 0))
+	c.look_at_from_position(Vector3(0.3, 1.45, 5.3), Vector3(0.3, 0.72, 0))
 	if args[0] == "still":
 		apply(float(args[1]))
 		for f in 40: await process_frame
@@ -119,4 +119,4 @@ func apply(t: float) -> void:
 		(it.real as Node3D).visible = t >= swap0
 		var e: float = clamp(1.0 - (t - swap0 - FADE_DELAY) / FADE, 0.0, 1.0)
 		for sm in it.fade_mats:
-			(sm as StandardMaterial3D).emission_energy_multiplier = 1.6 * e * e
+			(sm as BaseMaterial3D).emission_energy_multiplier = 3.0 * e * e
