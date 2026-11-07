@@ -60,7 +60,10 @@ static func tag_index(grid: Dictionary, key: String) -> int:
 static func _layers(suffix: String) -> Texture2DArray:
 	var imgs: Array[Image] = []
 	for t in TEXTURED:
-		var img := Image.load_from_file("res://materials/%s_%s.png" % [t, suffix])  # raw PNG: no editor import step needed
+		var path := "res://materials/%s_%s.png" % [t, suffix]
+		# Imported texture when there is one (exported builds pack only the imported copy), else the raw PNG (no import step).
+		var img: Image = (load(path) as Texture2D).get_image() if ResourceLoader.exists(path) else Image.load_from_file(path)
+		if img.is_compressed(): img.decompress()
 		img.convert(Image.FORMAT_RGBA8)
 		img.generate_mipmaps()
 		imgs.append(img)
