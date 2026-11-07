@@ -16,6 +16,8 @@ const FPS := 30.0
 var levels: Array = []   # [{inst, mat}]
 var final_mat: ShaderMaterial
 var real: Node3D
+var fade_mats: Array = []
+const FADE := 0.4
 var y0 := 0.0
 var y1 := 1.0
 var band := 0.35
@@ -29,8 +31,7 @@ func _init() -> void:
 	var s: Node3D = (load("res://main.tscn") as PackedScene).instantiate()
 	root.add_child(s)
 	for p in L.props:
-		if String(p.id) == "v2":
-			(s.get_node(String(p.id)) as Node3D).visible = false
+		(s.get_node(String(p.id)) as Node3D).visible = false  # generator alone on the lineup
 	var D: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://generator_spawn/grids.json"))
 	var bmin := Vector3(D.box_min[0], D.box_min[1], D.box_min[2])
 	var bsize := Vector3(D.box_size[0], D.box_size[1], D.box_size[2])
@@ -55,11 +56,21 @@ func _init() -> void:
 	real = doc.generate_scene(st)
 	root.add_child(real)
 	real.position = SLOT + Vector3(0, lift, 0)
+	for m in real.find_children("*", "MeshInstance3D", true, false):
+		var mi := m as MeshInstance3D
+		for i in mi.mesh.get_surface_count():
+			var sm := mi.mesh.surface_get_material(i)
+			if sm is StandardMaterial3D:
+				sm = sm.duplicate()
+				sm.emission_enabled = true
+				sm.emission = Color(0.3, 0.9, 1.0)
+				mi.set_surface_override_material(i, sm)
+				fade_mats.append(sm)
 	var c := Camera3D.new()
 	root.add_child(c)
 	c.current = true
-	c.fov = 30
-	c.look_at_from_position(SLOT + Vector3(1.2, 1.35, 3.3), SLOT + Vector3(0, 0.5, 0))
+	c.fov = 32
+	c.look_at_from_position(SLOT + Vector3(0.95, 1.15, 2.9), SLOT + Vector3(0, 0.42, 0))
 	if args[0] == "still":
 		apply(float(args[1]))
 		for f in 40: await process_frame
@@ -110,3 +121,6 @@ func apply(t: float) -> void:
 			inst.visible = false
 	var swap0 := T0 + STEP * LEVELS.size()
 	real.visible = t >= swap0
+	var e: float = clamp(1.0 - (t - swap0) / FADE, 0.0, 1.0)
+	for sm in fade_mats:
+		(sm as StandardMaterial3D).emission_energy_multiplier = 1.6 * e * e

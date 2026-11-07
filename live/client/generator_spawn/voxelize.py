@@ -47,6 +47,9 @@ for n in (4, 8, 16, 32):
     need = filled & ~has
     if need.any():
         _, j = tree.query(c[need]); mean[need] = mean[np.nonzero(has)[0][j]]
+    # punch up: saturation x1.9, contrast x1.35 around mid-grey, slight lift so dark metal still reads
+    g_ = mean.mean(1, keepdims=True)
+    mean = np.clip((g_ + (mean - g_) * 1.9 - 110) * 1.35 + 125, 0, 255)
     # palette: k-means-ish quantize to <= 48 colours
     fc = mean[filled]
     q = (fc // 24).astype(int)
