@@ -4,21 +4,35 @@ import numpy as np, trimesh
 from scipy.spatial import cKDTree
 
 src, out = sys.argv[1], sys.argv[2]
+cool = "--cool" in sys.argv
 s = trimesh.load(src)
-m = s.to_geometry() if hasattr(s, "to_geometry") else s.dump(concatenate=True)
-# sample surface points with texture colour
-g = list(s.geometry.values())[0]
-pts, fi = trimesh.sample.sample_surface(m, 200000)
-uv_m = g.visual.uv
-# barycentric uv per sample
-tri = m.triangles[fi]
-bary = trimesh.triangles.points_to_barycentric(tri, pts)
-uvs = (uv_m[m.faces[fi]] * bary[:, :, None]).sum(1)
-img = np.asarray(g.visual.material.baseColorTexture.convert("RGB")) if g.visual.material.baseColorTexture is not None else None
-H, W = img.shape[:2]
-px = np.clip((uvs[:, 0] % 1) * (W - 1), 0, W - 1).astype(int)
-py = np.clip((1 - uvs[:, 1] % 1) * (H - 1), 0, H - 1).astype(int)
-cols = img[py, px].astype(float)
+geoms = s.dump() if hasattr(s, "dump") else [s]  # every part, in scene space
+P, C = [], []
+for g in geoms:
+    if not isinstance(g, trimesh.Trimesh) or len(g.faces) == 0:
+        continue
+    k = max(2000, int(200000 * g.area / sum(x.area for x in geoms if isinstance(x, trimesh.Trimesh))))
+    pts, fi = trimesh.sample.sample_surface(g, k)
+    col = np.full((len(pts), 3), 150.0)
+    v = g.visual
+    mat = getattr(v, "material", None)
+    tex = getattr(mat, "baseColorTexture", None) if mat is not None else None
+    if tex is None and mat is not None and hasattr(mat, "image"):
+        tex = mat.image
+    if getattr(v, "uv", None) is not None and tex is not None:
+        bary = trimesh.triangles.points_to_barycentric(g.triangles[fi], pts)
+        uvs = (v.uv[g.faces[fi]] * bary[:, :, None]).sum(1)
+        img = np.asarray(tex.convert("RGB")); H, W = img.shape[:2]
+        px = ((uvs[:, 0] % 1) * (W - 1)).astype(int); py = ((1 - uvs[:, 1] % 1) * (H - 1)).astype(int)
+        col = img[py, px].astype(float)
+        f = getattr(mat, "baseColorFactor", None)
+        if f is not None:
+            col *= np.asarray(f[:3], float) / (255.0 if np.max(f) > 1 else 1.0)
+    elif mat is not None and getattr(mat, "baseColorFactor", None) is not None:
+        f = np.asarray(mat.baseColorFactor[:3], float); col[:] = f if f.max() > 1 else f * 255
+    P.append(pts); C.append(col)
+pts = np.concatenate(P); cols = np.concatenate(C)
+m = trimesh.util.concatenate([x for x in geoms if isinstance(x, trimesh.Trimesh)])
 lo, hi = m.bounds
 size = (hi - lo).max() * 1.02
 center = (lo + hi) / 2
@@ -50,6 +64,8 @@ for n in (4, 8, 16, 32):
     # punch up: saturation x1.9, contrast x1.35 around mid-grey, slight lift so dark metal still reads
     g_ = mean.mean(1, keepdims=True)
     mean = np.clip((g_ + (mean - g_) * 1.9 - 110) * 1.35 + 125, 0, 255)
+    if cool:
+        mean = np.clip(mean * np.array([0.9, 0.97, 1.1]), 0, 255)
     # palette: k-means-ish quantize to <= 48 colours
     fc = mean[filled]
     q = (fc // 24).astype(int)

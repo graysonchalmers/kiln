@@ -70,7 +70,7 @@ func _init() -> void:
 	root.add_child(c)
 	c.current = true
 	c.fov = 32
-	c.look_at_from_position(SLOT + Vector3(0.95, 1.15, 2.9), SLOT + Vector3(0, 0.42, 0))
+	c.look_at_from_position(SLOT + Vector3(1.19, 1.44, 3.63), SLOT + Vector3(0, 0.42, 0))
 	if args[0] == "still":
 		apply(float(args[1]))
 		for f in 40: await process_frame
@@ -121,6 +121,6 @@ func apply(t: float) -> void:
 			inst.visible = false
 	var swap0 := T0 + STEP * LEVELS.size()
 	real.visible = t >= swap0
-	var e: float = clamp(1.0 - (t - swap0) / FADE, 0.0, 1.0)
+	var e: float = clamp(1.0 - (t - swap0 - 0.2) / FADE, 0.0, 1.0)
 	for sm in fade_mats:
 		(sm as StandardMaterial3D).emission_energy_multiplier = 1.6 * e * e
